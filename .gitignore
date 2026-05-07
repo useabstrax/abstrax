@@ -1,0 +1,49 @@
+# Binary output
+abstrax
+dist/
+
+# Go build cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency vendor directory (if not vendoring)
+vendor/
+
+# Test coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# GoReleaser
+dist/
+
+# Editor and IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride

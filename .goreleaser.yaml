@@ -1,0 +1,86 @@
+version: 2
+
+project_name: abstrax
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: abstrax
+    main: ./cmd/abstrax
+    binary: abstrax
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X abstrax/internal/version.Version={{.Version}}
+      - -X abstrax/internal/version.Commit={{.Commit}}
+      - -X abstrax/internal/version.BuildDate={{.Date}}
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: abstrax
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - packaging/systemd/abstrax-agent.service
+
+nfpms:
+  - id: abstrax-packages
+    package_name: abstrax
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
+    homepage: https://github.com/abstrax-io/abstrax
+    maintainer: Abstrax <hello@abstrax.io>
+    description: Server management CLI for Linux
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: packaging/systemd/abstrax-agent.service
+        dst: /etc/systemd/system/abstrax-agent.service
+        type: config
+        file_info:
+          mode: 0644
+      - dst: /etc/abstrax
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/lib/abstrax
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /var/log/abstrax
+        type: dir
+        file_info:
+          mode: 0750
+    scripts:
+      postinstall: packaging/scripts/postinstall.sh
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: abstrax-io
+    name: abstrax
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  draft: false
+  prerelease: auto

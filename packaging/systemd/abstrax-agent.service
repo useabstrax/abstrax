@@ -1,0 +1,31 @@
+[Unit]
+Description=Abstrax Agent
+Documentation=https://github.com/abstrax-io/abstrax
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/abstrax agent run
+Restart=on-failure
+RestartSec=5s
+User=root
+Group=root
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abstrax-agent
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/abstrax /var/log/abstrax /etc/abstrax
+
+[Install]
+WantedBy=multi-user.target
+
+# NOTE: The Abstrax agent is not yet implemented.
+# This service file is included for future use.
+# Do not enable or start this service until the agent is implemented.
