@@ -9,9 +9,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
 
     steps:
       - name: Checkout
@@ -20,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: cli/go.mod
+          go-version-file: go.mod
           cache: true
 
       - name: Check formatting
