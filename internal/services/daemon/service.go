@@ -36,8 +36,15 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*DaemonInfo, error)
 			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: "supervisor"}); err != nil {
 				return nil, fmt.Errorf("installing supervisor: %w", err)
 			}
-			if _, err := executil.New(false, false).Run(ctx, "systemctl", "enable", "--now", "supervisor"); err != nil {
-				return nil, fmt.Errorf("enabling supervisor: %w", err)
+			r := executil.New(false, false)
+			if executil.SystemctlWorks() {
+				if _, err := r.Run(ctx, "systemctl", "enable", "--now", "supervisor"); err != nil {
+					return nil, fmt.Errorf("enabling supervisor: %w", err)
+				}
+			} else if executil.Exists("service") {
+				if _, err := r.Run(ctx, "service", "supervisor", "start"); err != nil {
+					return nil, fmt.Errorf("starting supervisor: %w", err)
+				}
 			}
 		} else {
 			return nil, fmt.Errorf("supervisor is not installed; pass --install-supervisor to install it")

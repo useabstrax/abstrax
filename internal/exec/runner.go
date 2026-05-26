@@ -105,3 +105,25 @@ func Which(name string) string {
 	}
 	return p
 }
+
+// systemctlAvailable caches the result of the systemctl connectivity check.
+var systemctlChecked bool
+var systemctlOK bool
+
+// SystemctlWorks reports whether systemctl is installed AND can communicate
+// with a running systemd instance.  The result is cached after the first call.
+func SystemctlWorks() bool {
+	if systemctlChecked {
+		return systemctlOK
+	}
+	systemctlChecked = true
+	if !Exists("systemctl") {
+		return false
+	}
+	cmd := exec.Command("systemctl", "is-system-running")
+	out, _ := cmd.Output()
+	state := strings.TrimSpace(string(out))
+	// "running", "degraded", "starting" all mean systemd is alive.
+	systemctlOK = state == "running" || state == "degraded" || state == "starting" || state == "initializing"
+	return systemctlOK
+}
