@@ -191,7 +191,7 @@ func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 		lines = opts.Lines
 	}
 	res, err := s.runner.RunSilent(ctx, "supervisorctl", "tail",
-		fmt.Sprintf("%d", lines), opts.Name)
+		fmt.Sprintf("-%d", lines), opts.Name)
 	if err != nil {
 		return "", err
 	}
@@ -229,6 +229,10 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 		numprocs = 1
 	}
 	sb.WriteString(fmt.Sprintf("numprocs=%d\n", numprocs))
+
+	if numprocs > 1 {
+		sb.WriteString(fmt.Sprintf("process_name=%%(program_name)s_%%(process_num)02d\n"))
+	}
 
 	autostart := "true"
 	if !opts.Autostart {

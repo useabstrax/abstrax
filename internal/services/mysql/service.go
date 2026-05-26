@@ -219,13 +219,24 @@ func (s *Service) UserList(ctx context.Context) ([]UserInfo, error) {
 
 // UserInfo returns info about a MySQL user.
 func (s *Service) UserInfo(ctx context.Context, name string) (*UserInfo, error) {
-	res, err := s.query(ctx,
-		fmt.Sprintf("SHOW GRANTS FOR '%s'@'%%'", name))
+	// Try common host values: localhost first (default for most setups),
+	// then the wildcard '%'.
+	var res string
+	var err error
+	var matchedHost string
+	for _, host := range []string{"localhost", "%"} {
+		res, err = s.query(ctx,
+			fmt.Sprintf("SHOW GRANTS FOR '%s'@'%s'", name, host))
+		if err == nil {
+			matchedHost = host
+			break
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("mysql user %q not found: %w", name, err)
 	}
 
-	info := &UserInfo{Name: name}
+	info := &UserInfo{Name: name, Host: matchedHost}
 	for _, line := range strings.Split(res, "\n") {
 		if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "Grants") {
 			info.Grants = append(info.Grants, strings.TrimSpace(line))
