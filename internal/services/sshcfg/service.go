@@ -106,21 +106,33 @@ func (s *Service) EnablePasswordAuth(ctx context.Context, dryRun bool) error {
 
 // Reload reloads sshd.
 func (s *Service) Reload(ctx context.Context, opts ReloadOptions) error {
-	_, err := s.runner.Run(ctx, "systemctl", "reload", "ssh")
-	if err != nil {
-		// Some systems use sshd.
-		_, err = s.runner.Run(ctx, "systemctl", "reload", "sshd")
-	}
-	return err
+	return s.sshAction(ctx, "reload")
 }
 
 // Restart restarts sshd.
 func (s *Service) Restart(ctx context.Context, opts ReloadOptions) error {
-	_, err := s.runner.Run(ctx, "systemctl", "restart", "ssh")
-	if err != nil {
-		_, err = s.runner.Run(ctx, "systemctl", "restart", "sshd")
+	return s.sshAction(ctx, "restart")
+}
+
+// sshAction runs a lifecycle action against the SSH service, trying systemctl
+// first and falling back to the service command.  Both "ssh" and "sshd" names
+// are tried because distributions differ.
+func (s *Service) sshAction(ctx context.Context, action string) error {
+	if executil.SystemctlWorks() {
+		_, err := s.runner.Run(ctx, "systemctl", action, "ssh")
+		if err != nil {
+			_, err = s.runner.Run(ctx, "systemctl", action, "sshd")
+		}
+		return err
 	}
-	return err
+	if executil.Exists("service") {
+		_, err := s.runner.Run(ctx, "service", "ssh", action)
+		if err != nil {
+			_, err = s.runner.Run(ctx, "service", "sshd", action)
+		}
+		return err
+	}
+	return fmt.Errorf("no supported init system found (need systemctl or service)")
 }
 
 // writeDirective writes or updates a directive in the managed include file.

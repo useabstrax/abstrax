@@ -52,7 +52,17 @@ func (s *Service) Reload(ctx context.Context, backend string) error {
 func (s *Service) Restart(ctx context.Context, backend string) error {
 	switch backend {
 	case "nginx", "":
-		_, err := s.runner.Run(ctx, "systemctl", "restart", "nginx")
+		if executil.SystemctlWorks() {
+			_, err := s.runner.Run(ctx, "systemctl", "restart", "nginx")
+			return err
+		}
+		if executil.Exists("service") {
+			_, err := s.runner.Run(ctx, "service", "nginx", "restart")
+			return err
+		}
+		// Last resort: stop and start nginx directly.
+		s.runner.Run(ctx, "nginx", "-s", "stop")
+		_, err := s.runner.Run(ctx, "nginx")
 		return err
 	case "apache":
 		return fmt.Errorf("Apache support is not yet implemented")

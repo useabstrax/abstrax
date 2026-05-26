@@ -290,8 +290,15 @@ func parseGB(s string) float64 {
 	return v
 }
 
-// Services returns running/failed systemd services.
+// Services returns running/failed services.
 func (s *Service) Services(ctx context.Context, failed bool) ([]string, error) {
+	if executil.SystemctlWorks() {
+		return s.servicesSystemctl(ctx, failed)
+	}
+	return s.servicesLegacy(ctx, failed)
+}
+
+func (s *Service) servicesSystemctl(ctx context.Context, failed bool) ([]string, error) {
 	args := []string{"list-units", "--type=service", "--no-pager", "--no-legend"}
 	if failed {
 		args = append(args, "--state=failed")
@@ -311,6 +318,33 @@ func (s *Service) Services(ctx context.Context, failed bool) ([]string, error) {
 			continue
 		}
 		services = append(services, line)
+	}
+	return services, nil
+}
+
+func (s *Service) servicesLegacy(ctx context.Context, failed bool) ([]string, error) {
+	if !executil.Exists("service") {
+		return nil, fmt.Errorf("listing services: no supported init system found")
+	}
+	res, err := s.runner.RunSilent(ctx, "service", "--status-all")
+	if err != nil {
+		return nil, fmt.Errorf("listing services: %w", err)
+	}
+
+	var services []string
+	for _, line := range strings.Split(res.Stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// service --status-all output: " [ + ]  servicename" or " [ - ]  servicename"
+		if failed {
+			if strings.Contains(line, "[ - ]") {
+				services = append(services, line)
+			}
+		} else {
+			services = append(services, line)
+		}
 	}
 	return services, nil
 }

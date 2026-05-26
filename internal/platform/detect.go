@@ -112,6 +112,9 @@ func detectServiceManager() string {
 	if binExists("systemctl") {
 		return "systemd"
 	}
+	if binExists("service") {
+		return "sysvinit"
+	}
 	return "unknown"
 }
 

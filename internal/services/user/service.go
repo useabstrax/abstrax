@@ -60,8 +60,18 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) 
 	}
 	if opts.NoCreateHome {
 		args = append(args, "--no-create-home")
-	} else if opts.CreateHome || !opts.System {
-		args = append(args, "--create-home")
+	}
+
+	// adduser on Debian/Ubuntu requires --disabled-password to avoid
+	// interactive password prompts when no password is being set.
+	if !opts.DisabledPassword && opts.Password == "" {
+		args = append(args, "--disabled-password")
+	}
+
+	// Provide an empty GECOS field to suppress the interactive prompt
+	// for full name / room / phone etc.
+	if opts.Comment == "" {
+		args = append(args, "--gecos", "")
 	}
 	if len(opts.Groups) > 0 {
 		args = append(args, "--add-extra-groups")
@@ -117,8 +127,6 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	args := []string{}
 	if opts.DeleteHome {
 		args = append(args, "--remove-home")
-	} else {
-		args = append(args, "--keep-home")
 	}
 	args = append(args, opts.Username)
 
