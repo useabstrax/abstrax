@@ -55,11 +55,11 @@ Abstrax detects unsupported platforms and returns a clear error rather than atte
 
 ### From release binaries
 
-Download the latest binary from the [releases page](https://github.com/abstrax-io/abstrax/releases):
+Download the latest binary from the [releases page](https://github.com/useabstrax/abstrax/releases):
 
 ```bash
 # amd64
-curl -Lo abstrax https://github.com/abstrax-io/abstrax/releases/latest/download/abstrax_linux_amd64
+curl -Lo abstrax https://github.com/useabstrax/abstrax/releases/latest/download/abstrax_linux_amd64
 chmod +x abstrax
 sudo mv abstrax /usr/local/bin/abstrax
 ```
@@ -76,7 +76,7 @@ dpkg -i abstrax_<version>_amd64.deb
 Requirements: Go 1.22+
 
 ```bash
-git clone https://github.com/abstrax-io/abstrax
+git clone https://github.com/useabstrax/abstrax
 cd abstrax/cli
 go mod download
 go test ./...

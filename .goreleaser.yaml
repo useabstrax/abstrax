@@ -36,8 +36,8 @@ nfpms:
   - id: abstrax-packages
     package_name: abstrax
     file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
-    homepage: https://github.com/abstrax-io/abstrax
-    maintainer: Abstrax <hello@abstrax.io>
+    homepage: https://github.com/useabstrax/abstrax
+    maintainer: Abstrax <hello@useabstrax.com>
     description: Server management CLI for Linux
     license: MIT
     formats:
