@@ -1,6 +1,6 @@
 [Unit]
 Description=Abstrax Agent
-Documentation=https://github.com/abstrax-io/abstrax
+Documentation=https://github.com/useabstrax/abstrax
 After=network-online.target
 Wants=network-online.target
 

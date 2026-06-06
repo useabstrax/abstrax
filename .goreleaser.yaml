@@ -30,6 +30,7 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
+      - CHANGELOG.md
       - packaging/systemd/abstrax-agent.service
 
 nfpms:
@@ -79,7 +80,7 @@ changelog:
 
 release:
   github:
-    owner: abstrax-io
+    owner: useabstrax
     name: abstrax
   name_template: "{{.ProjectName}} v{{.Version}}"
   draft: false
