@@ -115,7 +115,7 @@ func (s *Service) Status(ctx context.Context, projectName string) ([]CertStatus,
 		return nil, fmt.Errorf("certbot certificates: %w", err)
 	}
 
-	// Very basic parsing – certbot output is human-readable.
+	// Very basic parsing - certbot output is human-readable.
 	var statuses []CertStatus
 	var current *CertStatus
 	for _, line := range strings.Split(res.Stdout, "\n") {

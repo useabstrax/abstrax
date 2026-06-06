@@ -105,7 +105,7 @@ abstrax server status
 sudo abstrax user add deploy --grant-sudo --dry-run
 ```
 
-`abstrax doctor` does not require root and makes no changes — it is a safe first command. Most commands that change system state require `sudo`.
+`abstrax doctor` does not require root and makes no changes - it is a safe first command. Most commands that change system state require `sudo`.
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 

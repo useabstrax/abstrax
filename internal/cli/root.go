@@ -24,7 +24,7 @@ Run 'abstrax doctor' to inspect the current system.
 Run 'abstrax --help' for a list of commands.`,
 		Version: version.String(),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			// Nothing to do here – flags are read directly from globals.Flags.
+			// Nothing to do here - flags are read directly from globals.Flags.
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,

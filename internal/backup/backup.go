@@ -15,7 +15,7 @@ import (
 // /etc/ssh/sshd_config.abstrax-bak.20240101T120000.
 //
 // Returns the backup path, or an error. If the source file does not exist the
-// function returns ("", nil) – nothing to back up.
+// function returns ("", nil) - nothing to back up.
 func File(src string) (string, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
 		return "", nil

@@ -35,7 +35,7 @@ func Detect() (*Info, *Tools, error) {
 func parseOSRelease(info *Info) error {
 	f, err := os.Open("/etc/os-release")
 	if err != nil {
-		// Not a Linux system – still try to continue.
+		// Not a Linux system - still try to continue.
 		info.OSName = "unknown"
 		info.OSVersion = "unknown"
 		info.OSPrettyName = "unknown"

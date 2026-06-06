@@ -137,7 +137,7 @@ const (
 	ServerLoad     = "server.load"
 	ServerServices = "server.services"
 
-	// Agent actions (placeholder – not yet implemented).
+	// Agent actions (placeholder - not yet implemented).
 	AgentConnect = "agent.connect"
 	AgentStatus  = "agent.status"
 	AgentRun     = "agent.run"

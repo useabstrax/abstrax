@@ -21,7 +21,7 @@ func New(dryRun, verbose bool) *Service {
 	return &Service{runner: executil.New(dryRun, verbose)}
 }
 
-// Add creates a Linux user. The operation is idempotent – if the user already
+// Add creates a Linux user. The operation is idempotent - if the user already
 // exists a success result is returned with AlreadyExisted=true.
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) {
 	if exists, _ := s.exists(ctx, opts.Username); exists {
@@ -120,7 +120,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if opts.KillProcesses {
-		// Best effort – ignore errors.
+		// Best effort - ignore errors.
 		_, _ = s.runner.Run(ctx, "pkill", "-u", opts.Username)
 	}
 

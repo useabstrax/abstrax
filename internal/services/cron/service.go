@@ -16,7 +16,7 @@ import (
 
 const (
 	metaPrefix    = "# abstrax:cron"
-	headerComment = "# Managed by Abstrax – do not edit manually"
+	headerComment = "# Managed by Abstrax - do not edit manually"
 )
 
 // Service manages cron jobs.

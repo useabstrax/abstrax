@@ -36,7 +36,7 @@ func (s *Service) SetConfig(_ context.Context, cfg Config) error {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("# Abstrax MySQL config – root readable only\n")
+	sb.WriteString("# Abstrax MySQL config - root readable only\n")
 	sb.WriteString(fmt.Sprintf("host = %q\n", cfg.Host))
 	sb.WriteString(fmt.Sprintf("port = %d\n", cfg.Port))
 	sb.WriteString(fmt.Sprintf("user = %q\n", cfg.User))
@@ -90,7 +90,7 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if opts.Secure {
-		// Run mysql_secure_installation non-interactively is complex –
+		// Run mysql_secure_installation non-interactively is complex -
 		// TODO: implement secure setup with predefined options.
 		fmt.Println("NOTE: Run 'mysql_secure_installation' manually to harden the installation.")
 	}

@@ -214,7 +214,7 @@ func readConfigFile(path string) ([]ConfigEntry, error) {
 
 func writeConfigFile(path string, entries []ConfigEntry) error {
 	var sb strings.Builder
-	sb.WriteString("# Managed by Abstrax – do not edit manually\n")
+	sb.WriteString("# Managed by Abstrax - do not edit manually\n")
 	for _, e := range entries {
 		sb.WriteString(fmt.Sprintf("%s %s\n", e.Key, e.Value))
 	}
