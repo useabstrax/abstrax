@@ -117,7 +117,7 @@ The README covers installation and a quick start. For the full command reference
 - [Getting started](https://useabstrax.com/docs/getting-started)
 - [Command reference](https://useabstrax.com/docs/commands)
 - [Configuration](https://useabstrax.com/docs/configuration)
-- [Guides](https://useabstrax.com/docs/guides/creating-a-user)
+- [Guides](https://useabstrax.com/docs/guides)
 
 ## Contributing
 
