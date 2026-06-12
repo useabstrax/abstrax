@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/actions"
@@ -85,7 +87,45 @@ func NewWebCmd() *cobra.Command {
 	reloadCmd.Flags().StringVar(&backend, "nginx", "nginx", "Use nginx")
 	restartCmd.Flags().StringVar(&backend, "nginx", "nginx", "Use nginx")
 
-	cmd.AddCommand(testCmd, reloadCmd, restartCmd)
+	cmd.AddCommand(newWebInstallCmd(), testCmd, reloadCmd, restartCmd)
+	return cmd
+}
+
+func newWebInstallCmd() *cobra.Command {
+	opts := web.InstallOptions{Backend: web.BackendNginx, Enable: true, Start: true}
+	var apacheFlag bool
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install and configure a web server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if apacheFlag {
+				opts.Backend = web.BackendApache
+			}
+			opts.DryRun = globals.Flags.DryRun
+
+			if err := platform.RequireRoot(); err != nil {
+				return err
+			}
+
+			svc := web.New(opts.DryRun, globals.Flags.Verbose)
+			if err := svc.Install(cmd.Context(), opts); err != nil {
+				return err
+			}
+
+			backend := "nginx"
+			if opts.Backend == web.BackendApache {
+				backend = "apache"
+			}
+			return printSimpleResult(actions.WebInstall,
+				fmt.Sprintf("%s installed.", backend), nil)
+		},
+	}
+
+	cmd.Flags().BoolVar(&apacheFlag, "apache", false, "Install Apache (not yet implemented)")
+	cmd.Flags().BoolVar(&opts.Enable, "enable", true, "Enable service at boot")
+	cmd.Flags().BoolVar(&opts.Start, "start", true, "Start service after install")
+
 	return cmd
 }
 

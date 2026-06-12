@@ -84,6 +84,7 @@ const (
 	ProjectReload  = "project.reload"
 
 	// Web actions.
+	WebInstall = "web.install"
 	WebTest    = "web.test"
 	WebReload  = "web.reload"
 	WebRestart = "web.restart"

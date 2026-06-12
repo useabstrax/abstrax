@@ -13,6 +13,7 @@ import (
 	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform/debian"
+	"abstrax/internal/services/web"
 )
 
 // Service manages projects.
@@ -37,6 +38,11 @@ func New(dryRun, verbose bool) *Service {
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 	if opts.WebServer == WebServerApache {
 		return nil, fmt.Errorf("Apache support is not yet implemented")
+	}
+
+	if opts.WebServer != WebServerNone && !opts.NoVhost && !web.Installed(string(opts.WebServer)) {
+		return nil, fmt.Errorf("%s is not installed; install it first with: %s",
+			opts.WebServer, web.InstallCommand(string(opts.WebServer)))
 	}
 
 	if _, err := s.loadState(opts.Name); err == nil {
