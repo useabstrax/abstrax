@@ -218,21 +218,43 @@ func replaceExecutable(src, dest string) error {
 		return err
 	}
 
-	mode := srcInfo.Mode().Perm()
-	if err := os.Chmod(src, mode|0o111); err != nil {
+	mode := srcInfo.Mode().Perm() | 0o111
+	if err := os.Chmod(src, mode); err != nil {
 		return err
 	}
 
+	// Same-filesystem rename is atomic and works even when dest is running.
 	if err := os.Rename(src, dest); err == nil {
 		return nil
 	}
 
-	// Fall back to copy when rename fails (e.g. cross-device move).
-	data, err := os.ReadFile(src)
+	// Cross-filesystem move: write a temp file next to dest, then rename over it.
+	// Writing directly to dest fails with ETXTBSY when dest is the running binary.
+	destDir := filepath.Dir(dest)
+	tmpDest := filepath.Join(destDir, fmt.Sprintf(".%s.new.%d", filepath.Base(dest), os.Getpid()))
+
+	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(dest, data, mode|0o111); err != nil {
+	defer in.Close()
+
+	out, err := os.OpenFile(tmpDest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return fmt.Errorf("writing updated binary to %s: %w", tmpDest, err)
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(tmpDest)
+		return fmt.Errorf("writing updated binary to %s: %w", tmpDest, err)
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(tmpDest)
+		return fmt.Errorf("writing updated binary to %s: %w", tmpDest, err)
+	}
+
+	if err := os.Rename(tmpDest, dest); err != nil {
+		os.Remove(tmpDest)
 		return fmt.Errorf("installing updated binary to %s: %w", dest, err)
 	}
 	return nil
