@@ -11,11 +11,11 @@ import (
 var semverPrefix = regexp.MustCompile(`^v?(\d+\.\d+\.\d+)`)
 
 type resolveInput struct {
-	current         *semver.Version
-	requested       string
-	allowBreaking   bool
-	published       []*semver.Version
-	currentRaw      string
+	current       *semver.Version
+	requested     string
+	allowBreaking bool
+	published     []*semver.Version
+	currentRaw    string
 }
 
 type resolveOutput struct {
