@@ -106,6 +106,31 @@ func TestCronID(t *testing.T) {
 	}
 }
 
+func TestProjectName(t *testing.T) {
+	cases := []struct {
+		input string
+		valid bool
+	}{
+		{"myapp", true},
+		{"my-app", true},
+		{"my_app", true},
+		{"example.com", true},
+		{"sub.example.co.uk", true},
+		{"", false},
+		{"has space", false},
+		{"has/slash", false},
+	}
+	for _, c := range cases {
+		err := validate.ProjectName(c.input)
+		if c.valid && err != nil {
+			t.Errorf("ProjectName(%q) expected valid, got error: %v", c.input, err)
+		}
+		if !c.valid && err == nil {
+			t.Errorf("ProjectName(%q) expected error, got nil", c.input)
+		}
+	}
+}
+
 func TestDatabaseName(t *testing.T) {
 	if err := validate.DatabaseName("myapp_db"); err != nil {
 		t.Errorf("myapp_db should be valid: %v", err)

@@ -18,6 +18,7 @@ var (
 	dbNameRe      = regexp.MustCompile(`^[a-zA-Z0-9_]{1,64}$`)
 	cronIDRe      = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	daemonNameRe  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+	projectNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
 	domainRe      = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
 )
 
@@ -188,13 +189,13 @@ func Shell(shell string) error {
 	return nil
 }
 
-// ProjectName validates an Abstrax project name (alphanumeric, hyphens).
+// ProjectName validates an Abstrax project name (alphanumeric, hyphens, periods).
 func ProjectName(name string) error {
 	if name == "" {
 		return fmt.Errorf("project name cannot be empty")
 	}
-	if !daemonNameRe.MatchString(name) {
-		return fmt.Errorf("invalid project name %q: must contain only letters, digits, underscores and hyphens", name)
+	if !projectNameRe.MatchString(name) {
+		return fmt.Errorf("invalid project name %q: must contain only letters, digits, underscores, hyphens and periods", name)
 	}
 	return nil
 }

@@ -146,4 +146,7 @@ const (
 	// Doctor / version.
 	DoctorCheck = "doctor.check"
 	VersionShow = "version.show"
+
+	// Self-update.
+	SelfUpdate = "self.update"
 )
