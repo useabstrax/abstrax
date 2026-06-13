@@ -42,6 +42,7 @@ Run 'abstrax --help' for a list of commands.`,
 	root.AddCommand(NewVersionCmd())
 	root.AddCommand(NewSelfCmd())
 	root.AddCommand(NewDoctorCmd())
+	root.AddCommand(NewConfigCmd())
 	root.AddCommand(NewUserCmd())
 	root.AddCommand(NewSSHKeyCmd())
 	root.AddCommand(NewSSHCmd())

@@ -9,6 +9,7 @@ import (
 
 	"abstrax/internal/confirm"
 	executil "abstrax/internal/exec"
+	"abstrax/internal/services/config"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
 )
@@ -133,13 +134,18 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 
 	switch spec.Runtime {
 	case RuntimePHP:
-		fpmPkg := fmt.Sprintf("php%s-fpm", spec.Version)
-		cliPkg := fmt.Sprintf("php%s-cli", spec.Version)
-		for _, pkg := range []string{fpmPkg, cliPkg} {
+		cfg := config.New()
+		extensions, err := cfg.PHPExtensions()
+		if err != nil {
+			return fmt.Errorf("loading PHP extension config: %w", err)
+		}
+		pkgs := config.PHPPackages(spec.Version, extensions)
+		for _, pkg := range pkgs {
 			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
 				return fmt.Errorf("installing %s: %w", pkg, err)
 			}
 		}
+		fpmPkg := fmt.Sprintf("php%s-fpm", spec.Version)
 		if err := svc.Enable(ctx, fpmPkg); err != nil {
 			return err
 		}

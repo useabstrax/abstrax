@@ -32,6 +32,9 @@ const (
 	// AbstraxConfigDir is the main config directory.
 	AbstraxConfigDir = "/etc/abstrax"
 
+	// AbstraxConfig stores general Abstrax settings.
+	AbstraxConfig = "/etc/abstrax/config.json"
+
 	// MySQLConfig stores Abstrax MySQL connection config.
 	MySQLConfig = "/etc/abstrax/mysql.toml"
 

@@ -1,6 +1,10 @@
 package project
 
-import "testing"
+import (
+	"testing"
+
+	"abstrax/internal/services/config"
+)
 
 func TestNodeMajor(t *testing.T) {
 	tests := []struct {
@@ -45,5 +49,15 @@ func TestRuntimeSpecFromAddDefaults(t *testing.T) {
 	spec := runtimeSpecFromAdd(AddOptions{Runtime: RuntimeNode})
 	if spec.Version != DefaultNodeVersion {
 		t.Fatalf("version = %q, want %q", spec.Version, DefaultNodeVersion)
+	}
+}
+
+func TestPHPPackagesFromConfig(t *testing.T) {
+	pkgs := config.PHPPackages("8.5", config.DefaultPHPExtensions)
+	if len(pkgs) < 3 {
+		t.Fatalf("expected fpm, cli, and extensions, got %#v", pkgs)
+	}
+	if pkgs[0] != "php8.5-fpm" || pkgs[1] != "php8.5-cli" {
+		t.Fatalf("base packages = %#v", pkgs[:2])
 	}
 }

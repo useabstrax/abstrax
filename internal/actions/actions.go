@@ -150,4 +150,12 @@ const (
 
 	// Self-update.
 	SelfUpdate = "self.update"
+
+	// Config actions.
+	ConfigShow   = "config.show"
+	ConfigGet    = "config.get"
+	ConfigSet    = "config.set"
+	ConfigAdd    = "config.add"
+	ConfigRemove = "config.remove"
+	ConfigReset  = "config.reset"
 )
