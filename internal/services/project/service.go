@@ -53,6 +53,19 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		return nil, fmt.Errorf("creating project path: %w", err)
 	}
 
+	switch opts.Runtime {
+	case RuntimePHP:
+		opts.PHPVersion = normalizePHPVersion(opts.PHPVersion)
+	case RuntimeNode:
+		opts.NodeVersion = normalizeNodeVersion(opts.NodeVersion)
+	case RuntimeRuby:
+		opts.RubyVersion = normalizeRubyVersion(opts.RubyVersion)
+	}
+
+	if err := s.ensureRuntime(ctx, runtimeSpecFromAdd(opts), opts.Yes, opts.DryRun); err != nil {
+		return nil, err
+	}
+
 	state := &State{
 		Name:      opts.Name,
 		Path:      opts.Path,
@@ -62,6 +75,18 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		Owner:     opts.User,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+	}
+
+	switch opts.Runtime {
+	case RuntimePHP:
+		state.PHPVersion = opts.PHPVersion
+		state.PublicDir = opts.PublicDir
+	case RuntimeNode:
+		state.NodeVersion = opts.NodeVersion
+		state.ProxyPort = opts.ProxyPort
+	case RuntimeRuby:
+		state.RubyVersion = opts.RubyVersion
+		state.ProxyPort = opts.ProxyPort
 	}
 
 	if opts.WebServer == WebServerNginx && !opts.NoVhost {
@@ -113,6 +138,10 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 		return nil, fmt.Errorf("project %q not found", opts.Name)
 	}
 
+	if err := s.ensureRuntime(ctx, runtimeSpecFromState(state, opts), opts.Yes, opts.DryRun); err != nil {
+		return nil, err
+	}
+
 	if opts.Path != "" {
 		state.Path = opts.Path
 	}
@@ -134,20 +163,28 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	if opts.Runtime != "" {
 		state.Runtime = opts.Runtime
 	}
+	if opts.PHPVersion != "" {
+		state.PHPVersion = normalizePHPVersion(opts.PHPVersion)
+	}
+	if opts.NodeVersion != "" {
+		state.NodeVersion = normalizeNodeVersion(opts.NodeVersion)
+	}
+	if opts.RubyVersion != "" {
+		state.RubyVersion = normalizeRubyVersion(opts.RubyVersion)
+	}
+	if opts.PublicDir != "" {
+		state.PublicDir = opts.PublicDir
+	}
+	if opts.ProxyPort != 0 {
+		state.ProxyPort = opts.ProxyPort
+	}
 	state.UpdatedAt = time.Now()
 
 	if state.VhostPath != "" && state.WebServer == WebServerNginx {
-		addOpts := AddOptions{
-			Name:      state.Name,
-			Path:      state.Path,
-			WebServer: state.WebServer,
-			Domains:   state.Domains,
-			Runtime:   state.Runtime,
-		}
 		if _, err := backup.File(state.VhostPath); err != nil {
 			return nil, err
 		}
-		if _, err := s.createNginxVhost(ctx, addOpts); err != nil {
+		if _, err := s.createNginxVhost(ctx, state.vhostOptions()); err != nil {
 			return nil, err
 		}
 	}
@@ -292,10 +329,7 @@ func buildNginxConfig(opts AddOptions) string {
 
 	switch opts.Runtime {
 	case RuntimePHP:
-		phpVersion := opts.PHPVersion
-		if phpVersion == "" {
-			phpVersion = "8.2"
-		}
+		phpVersion := normalizePHPVersion(opts.PHPVersion)
 		sb.WriteString("    location / {\n")
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		sb.WriteString("    }\n\n")
@@ -327,6 +361,21 @@ func buildNginxConfig(opts AddOptions) string {
 
 	sb.WriteString("}\n")
 	return sb.String()
+}
+
+func (s *State) vhostOptions() AddOptions {
+	return AddOptions{
+		Name:        s.Name,
+		Path:        s.Path,
+		WebServer:   s.WebServer,
+		Domains:     s.Domains,
+		Runtime:     s.Runtime,
+		PHPVersion:  s.PHPVersion,
+		NodeVersion: s.NodeVersion,
+		RubyVersion: s.RubyVersion,
+		PublicDir:   s.PublicDir,
+		ProxyPort:   s.ProxyPort,
+	}
 }
 
 func (s *Service) statePath(name string) string {

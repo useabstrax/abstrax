@@ -35,6 +35,7 @@ type AddOptions struct {
 	PHPFpm       bool
 	PublicDir    string
 	NodePort     int
+	NodeVersion  string
 	ProxyPort    int
 	StartCommand string
 	RubyVersion  string
@@ -49,6 +50,7 @@ type AddOptions struct {
 	GitRepo      string
 	Branch       string
 	DeployKey    bool
+	Yes          bool
 	DryRun       bool
 }
 
@@ -75,24 +77,32 @@ type ModifyOptions struct {
 	WebServer    WebServer
 	Runtime      Runtime
 	PHPVersion   string
+	NodeVersion  string
+	RubyVersion  string
 	PublicDir    string
 	ProxyPort    int
 	SSL          bool
 	RemoveSSL    bool
 	RedirectHTTP bool
+	Yes          bool
 	DryRun       bool
 }
 
 // State holds persisted project state.
 type State struct {
-	Name       string    `json:"name"`
-	Path       string    `json:"path"`
-	Domains    []string  `json:"domains"`
-	WebServer  WebServer `json:"web_server"`
-	Runtime    Runtime   `json:"runtime"`
-	SSLEnabled bool      `json:"ssl_enabled"`
-	VhostPath  string    `json:"vhost_path"`
-	Owner      string    `json:"owner"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Name        string    `json:"name"`
+	Path        string    `json:"path"`
+	Domains     []string  `json:"domains"`
+	WebServer   WebServer `json:"web_server"`
+	Runtime     Runtime   `json:"runtime"`
+	PHPVersion  string    `json:"php_version,omitempty"`
+	NodeVersion string    `json:"node_version,omitempty"`
+	RubyVersion string    `json:"ruby_version,omitempty"`
+	PublicDir   string    `json:"public_dir,omitempty"`
+	ProxyPort   int       `json:"proxy_port,omitempty"`
+	SSLEnabled  bool      `json:"ssl_enabled"`
+	VhostPath   string    `json:"vhost_path"`
+	Owner       string    `json:"owner"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

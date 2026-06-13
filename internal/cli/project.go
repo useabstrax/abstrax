@@ -49,6 +49,7 @@ func newProjectAddCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			opts.DryRun = globals.Flags.DryRun
+			opts.Yes = globals.Flags.Yes
 
 			if err := validate.ProjectName(opts.Name); err != nil {
 				return err
@@ -124,7 +125,9 @@ func newProjectAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&nodeFlag, "node", false, "Node.js application")
 	cmd.Flags().BoolVar(&rubyFlag, "ruby", false, "Ruby application")
 	cmd.Flags().BoolVar(&staticFlag, "static", false, "Static site (default)")
-	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "8.2", "PHP version")
+	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", project.DefaultPHPVersion, "PHP version")
+	cmd.Flags().StringVar(&opts.NodeVersion, "node-version", project.DefaultNodeVersion, "Node.js version")
+	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", project.DefaultRubyVersion, "Ruby version")
 	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory relative to path")
 	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy to this local port (node/ruby)")
 
@@ -203,6 +206,7 @@ func newProjectModifyCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			opts.DryRun = globals.Flags.DryRun
+			opts.Yes = globals.Flags.Yes
 
 			if err := platform.RequireRoot(); err != nil {
 				return err
@@ -228,6 +232,8 @@ func newProjectModifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.AddDomain, "add-domain", "", "Add a domain")
 	cmd.Flags().StringVar(&opts.RemoveDomain, "remove-domain", "", "Remove a domain")
 	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "", "PHP version")
+	cmd.Flags().StringVar(&opts.NodeVersion, "node-version", "", "Node.js version")
+	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", "", "Ruby version")
 	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory")
 	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy port")
 
@@ -294,6 +300,29 @@ func newProjectInfoCmd() *cobra.Command {
 			p.Line("  %-14s %s", "Path:", state.Path)
 			p.Line("  %-14s %s", "Web server:", state.WebServer)
 			p.Line("  %-14s %s", "Runtime:", state.Runtime)
+			switch state.Runtime {
+			case project.RuntimePHP:
+				if state.PHPVersion != "" {
+					p.Line("  %-14s %s", "PHP version:", state.PHPVersion)
+				}
+				if state.PublicDir != "" {
+					p.Line("  %-14s %s", "Public dir:", state.PublicDir)
+				}
+			case project.RuntimeNode:
+				if state.NodeVersion != "" {
+					p.Line("  %-14s %s", "Node version:", state.NodeVersion)
+				}
+				if state.ProxyPort != 0 {
+					p.Line("  %-14s %s", "Proxy port:", fmt.Sprintf("%d", state.ProxyPort))
+				}
+			case project.RuntimeRuby:
+				if state.RubyVersion != "" {
+					p.Line("  %-14s %s", "Ruby version:", state.RubyVersion)
+				}
+				if state.ProxyPort != 0 {
+					p.Line("  %-14s %s", "Proxy port:", fmt.Sprintf("%d", state.ProxyPort))
+				}
+			}
 			p.Line("  %-14s %s", "Domains:", strings.Join(state.Domains, ", "))
 			ssl := "no"
 			if state.SSLEnabled {
