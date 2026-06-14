@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"abstrax/internal/session"
 	"abstrax/internal/services/sshcfg"
+	"abstrax/internal/session"
 )
 
 const sshProtectComment = "abstrax: ssh lockout protection"
