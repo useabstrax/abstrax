@@ -34,3 +34,11 @@ type Status struct {
 	Backend string `json:"backend"`
 	Rules   []Rule `json:"rules,omitempty"`
 }
+
+// SSHProtectResult describes the outcome of automatic SSH lockout protection.
+type SSHProtectResult struct {
+	Applied  bool   `json:"applied,omitempty"`
+	Added    bool   `json:"added,omitempty"`
+	ClientIP string `json:"client_ip,omitempty"`
+	SSHPort  int    `json:"ssh_port,omitempty"`
+}

@@ -108,11 +108,13 @@ func newFirewallEnableCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.Enable(cmd.Context(), opts); err != nil {
+			protect, err := svc.Enable(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.FirewallEnable, "Firewall enabled.", nil)
+			msg := firewallSSHProtectMessage("Firewall enabled.", protect)
+			return printSimpleResult(actions.FirewallEnable, msg, protect)
 		},
 	}
 
@@ -168,12 +170,14 @@ func newFirewallAllowCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.Allow(cmd.Context(), opts); err != nil {
+			protect, err := svc.Allow(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.FirewallAllow,
-				fmt.Sprintf("Port %s allowed.", opts.Port), nil)
+			msg := firewallSSHProtectMessage(
+				fmt.Sprintf("Port %s allowed.", opts.Port), protect)
+			return printSimpleResult(actions.FirewallAllow, msg, protect)
 		},
 	}
 
@@ -200,12 +204,14 @@ func newFirewallDenyCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.Deny(cmd.Context(), opts); err != nil {
+			protect, err := svc.Deny(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.FirewallDeny,
-				fmt.Sprintf("Port %s denied.", opts.Port), nil)
+			msg := firewallSSHProtectMessage(
+				fmt.Sprintf("Port %s denied.", opts.Port), protect)
+			return printSimpleResult(actions.FirewallDeny, msg, protect)
 		},
 	}
 
@@ -232,12 +238,14 @@ func newFirewallAllowIPCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.AllowIP(cmd.Context(), opts); err != nil {
+			protect, err := svc.AllowIP(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.FirewallAllowIP,
-				fmt.Sprintf("Traffic from %s allowed.", opts.From), nil)
+			msg := firewallSSHProtectMessage(
+				fmt.Sprintf("Traffic from %s allowed.", opts.From), protect)
+			return printSimpleResult(actions.FirewallAllowIP, msg, protect)
 		},
 	}
 
@@ -266,12 +274,14 @@ func newFirewallDenyIPCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.DenyIP(cmd.Context(), opts); err != nil {
+			protect, err := svc.DenyIP(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.FirewallDenyIP,
-				fmt.Sprintf("Traffic from %s denied.", opts.From), nil)
+			msg := firewallSSHProtectMessage(
+				fmt.Sprintf("Traffic from %s denied.", opts.From), protect)
+			return printSimpleResult(actions.FirewallDenyIP, msg, protect)
 		},
 	}
 }
@@ -327,4 +337,16 @@ func newFirewallRuleRemoveCmd() *cobra.Command {
 				fmt.Sprintf("Rule %s removed.", id), nil)
 		},
 	}
+}
+
+func firewallSSHProtectMessage(base string, protect firewall.SSHProtectResult) string {
+	if !protect.Applied {
+		printer().Warn("Could not detect your IP address; SSH lockout protection was skipped.")
+		return base
+	}
+	if protect.Added {
+		return fmt.Sprintf("%s SSH access from %s on port %d protected.",
+			base, protect.ClientIP, protect.SSHPort)
+	}
+	return base
 }

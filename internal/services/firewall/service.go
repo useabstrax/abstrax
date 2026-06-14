@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
+	"abstrax/internal/services/sshcfg"
 )
 
 // Service manages the firewall.
@@ -38,25 +39,35 @@ func (s *Service) GetStatus(ctx context.Context) (*Status, error) {
 }
 
 // Enable enables UFW.
-func (s *Service) Enable(ctx context.Context, opts EnableOptions) error {
+func (s *Service) Enable(ctx context.Context, opts EnableOptions) (SSHProtectResult, error) {
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
+	}
+
 	if !executil.Exists("ufw") {
-		return fmt.Errorf("ufw is not installed")
+		return protect, fmt.Errorf("ufw is not installed")
 	}
 
 	sshPort := opts.SSHPort
 	if sshPort == 0 {
 		sshPort = 22
 	}
+	if sshPort == 22 {
+		if configured, err := sshcfg.SSHPort(); err == nil {
+			sshPort = configured
+		}
+	}
 
 	if opts.AllowSSH {
 		if _, err := s.runner.Run(ctx, "ufw", "allow",
 			fmt.Sprintf("%d/tcp", sshPort)); err != nil {
-			return fmt.Errorf("allowing SSH port: %w", err)
+			return protect, fmt.Errorf("allowing SSH port: %w", err)
 		}
 	}
 
-	_, err := s.runner.Run(ctx, "ufw", "--force", "enable")
-	return err
+	_, err = s.runner.Run(ctx, "ufw", "--force", "enable")
+	return protect, err
 }
 
 // Disable disables UFW.
@@ -69,36 +80,39 @@ func (s *Service) Disable(ctx context.Context) error {
 }
 
 // Allow adds an allow rule.
-func (s *Service) Allow(ctx context.Context, opts AllowOptions) error {
-	return s.addRule(ctx, "allow", opts)
+func (s *Service) Allow(ctx context.Context, opts AllowOptions) (SSHProtectResult, error) {
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
+	}
+	return protect, s.addRule(ctx, "allow", opts)
 }
 
 // Deny adds a deny rule.
-func (s *Service) Deny(ctx context.Context, opts AllowOptions) error {
-	return s.addRule(ctx, "deny", opts)
+func (s *Service) Deny(ctx context.Context, opts AllowOptions) (SSHProtectResult, error) {
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
+	}
+	return protect, s.addRule(ctx, "deny", opts)
 }
 
 // AllowIP allows traffic from an IP or CIDR.
-func (s *Service) AllowIP(ctx context.Context, opts AllowOptions) error {
-	args := []string{"allow", "from", opts.From}
-	if opts.To != "" {
-		args = append(args, "to", opts.To)
+func (s *Service) AllowIP(ctx context.Context, opts AllowOptions) (SSHProtectResult, error) {
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
 	}
-	if opts.Port != "" {
-		args = append(args, "port", opts.Port)
-	}
-	_, err := s.runner.Run(ctx, "ufw", args...)
-	return err
+	return protect, s.allowIP(ctx, opts)
 }
 
 // DenyIP denies traffic from an IP or CIDR.
-func (s *Service) DenyIP(ctx context.Context, opts AllowOptions) error {
-	args := []string{"deny", "from", opts.From}
-	if opts.To != "" {
-		args = append(args, "to", opts.To)
+func (s *Service) DenyIP(ctx context.Context, opts AllowOptions) (SSHProtectResult, error) {
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
 	}
-	_, err := s.runner.Run(ctx, "ufw", args...)
-	return err
+	return protect, s.denyIP(ctx, opts)
 }
 
 // RuleList returns the current rules.
@@ -113,6 +127,27 @@ func (s *Service) RuleList(ctx context.Context) ([]Rule, error) {
 // RuleRemove removes a rule by number.
 func (s *Service) RuleRemove(ctx context.Context, id string) error {
 	_, err := s.runner.Run(ctx, "ufw", "--force", "delete", id)
+	return err
+}
+
+func (s *Service) allowIP(ctx context.Context, opts AllowOptions) error {
+	args := []string{"allow", "from", opts.From}
+	if opts.To != "" {
+		args = append(args, "to", opts.To)
+	}
+	if opts.Port != "" {
+		args = append(args, "port", opts.Port)
+	}
+	_, err := s.runner.Run(ctx, "ufw", args...)
+	return err
+}
+
+func (s *Service) denyIP(ctx context.Context, opts AllowOptions) error {
+	args := []string{"deny", "from", opts.From}
+	if opts.To != "" {
+		args = append(args, "to", opts.To)
+	}
+	_, err := s.runner.Run(ctx, "ufw", args...)
 	return err
 }
 
@@ -151,6 +186,7 @@ func parseUFWRules(output string) []Rule {
 		}
 
 		// Example: [ 1] 22/tcp ALLOW IN Anywhere
+		// Example: [ 2] 22/tcp ALLOW IN 203.0.113.5
 		closeBracket := strings.Index(line, "]")
 		if closeBracket < 0 {
 			continue
@@ -166,6 +202,12 @@ func parseUFWRules(output string) []Rule {
 		}
 		if len(parts) >= 2 {
 			r.Action = parts[1]
+		}
+		if len(parts) >= 4 && strings.EqualFold(parts[2], "IN") {
+			from := parts[3]
+			if from != "Anywhere" && !strings.HasPrefix(from, "(") {
+				r.From = from
+			}
 		}
 		rules = append(rules, r)
 	}
