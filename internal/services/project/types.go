@@ -47,9 +47,6 @@ type AddOptions struct {
 	Group        string
 	Chown        bool
 	Chmod        string
-	GitRepo      string
-	Branch       string
-	DeployKey    bool
 	Yes          bool
 	DryRun       bool
 }

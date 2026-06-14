@@ -116,8 +116,6 @@ func newProjectAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.SSL, "ssl", false, "Enable SSL (requires certbot)")
 	cmd.Flags().StringVar(&opts.Email, "email", "", "Email for SSL certificate")
 	cmd.Flags().BoolVar(&opts.RedirectHTTP, "redirect-http", true, "Redirect HTTP to HTTPS")
-	cmd.Flags().StringVar(&opts.GitRepo, "git", "", "Git repository URL")
-	cmd.Flags().StringVar(&opts.Branch, "branch", "main", "Git branch to deploy")
 
 	// Runtime flags.
 	var phpFlag, nodeFlag, rubyFlag, staticFlag bool
