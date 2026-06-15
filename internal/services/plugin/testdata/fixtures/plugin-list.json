@@ -1,0 +1,20 @@
+{
+  "plugins": [
+    {
+      "name": "example",
+      "display_name": "Example Plugin",
+      "description": "Reference plugin and SDK example for Abstrax",
+      "publisher": "useabstrax",
+      "trust_level": "official",
+      "status": "active",
+      "latest_version": "0.1.0",
+      "homepage": "https://plugins.useabstrax.com/plugins/example"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 1,
+    "per_page": 20,
+    "total": 1
+  }
+}

@@ -6,7 +6,7 @@ import (
 
 func TestIsBuiltinCommand(t *testing.T) {
 	cases := []struct {
-		name   string
+		name    string
 		builtin bool
 	}{
 		{"project", true},

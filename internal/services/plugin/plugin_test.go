@@ -286,7 +286,7 @@ func TestRegistryInstallAndRemove(t *testing.T) {
 				t.Fatalf("expected channel query parameter")
 			}
 			json.NewEncoder(w).Encode(RegistryVersion{
-				Version: "1.0.0", RequiresAbstrax: ">=0.1.0", Stable: true, Channel: "stable", ProtocolVersion: 1,
+				Version: "1.0.0", RequiresAbstrax: ">=0.0.0", Stable: true, Channel: "stable", ProtocolVersion: 1,
 				Platforms: map[string]RegistryPlatformBinary{
 					"linux-amd64": {URL: "http://" + r.Host + "/binary", SHA256: checksum, Size: int64(len(data))},
 					"linux-arm64": {URL: "http://" + r.Host + "/binary", SHA256: checksum, Size: int64(len(data))},

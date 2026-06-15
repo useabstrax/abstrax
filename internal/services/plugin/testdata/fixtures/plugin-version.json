@@ -1,0 +1,21 @@
+{
+  "version": "0.1.0",
+  "requires_abstrax": ">=0.1.0",
+  "platforms": {
+    "linux-amd64": {
+      "url": "https://github.com/useabstrax/abstrax-plugin-example/releases/download/v0.1.0/abstrax-example_0.1.0_linux_amd64.tar.gz",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 123456
+    },
+    "linux-arm64": {
+      "url": "https://github.com/useabstrax/abstrax-plugin-example/releases/download/v0.1.0/abstrax-example_0.1.0_linux_arm64.tar.gz",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "size": 123456
+    }
+  },
+  "stable": true,
+  "channel": "stable",
+  "protocol_version": 1,
+  "release_date": "2026-06-15T12:00:00+00:00",
+  "manifest_url": "https://github.com/useabstrax/abstrax-plugin-example/releases/download/v0.1.0/plugin-manifest.json"
+}

@@ -1,0 +1,23 @@
+{
+  "protocol_version": 1,
+  "name": "example",
+  "display_name": "Example Plugin",
+  "description": "Reference plugin and SDK example for Abstrax",
+  "version": "0.1.0",
+  "requires_abstrax": ">=0.1.0",
+  "homepage": "https://plugins.useabstrax.com/plugins/example",
+  "commands": [
+    {
+      "name": "hello",
+      "description": "Print a greeting"
+    },
+    {
+      "name": "project",
+      "description": "Read project information from Abstrax"
+    },
+    {
+      "name": "version",
+      "description": "Display plugin version information"
+    }
+  ]
+}

@@ -19,10 +19,10 @@ import (
 
 // InstallOptions configures plugin installation.
 type InstallOptions struct {
-	Name         string
-	ManifestURL  string
-	RegistryURL  string
-	Force        bool
+	Name        string
+	ManifestURL string
+	RegistryURL string
+	Force       bool
 }
 
 // InstallResult describes a completed installation.
@@ -343,19 +343,19 @@ type ListEntry struct {
 
 // InfoEntry describes detailed plugin information.
 type InfoEntry struct {
-	Name              string            `json:"name"`
-	DisplayName       string            `json:"display_name"`
-	Version           string            `json:"version"`
-	Description       string            `json:"description"`
-	Publisher         string            `json:"publisher"`
-	TrustLevel        string            `json:"trust_level"`
-	Source            string            `json:"source"`
-	Homepage          string            `json:"homepage,omitempty"`
-	RequiresAbstrax   string            `json:"requires_abstrax,omitempty"`
-	InstalledPath     string            `json:"installed_path"`
-	Commands          []MetadataCommand `json:"commands"`
-	RegistryStatus    string            `json:"registry_status"`
-	UpdateAvailable   string            `json:"update_available,omitempty"`
+	Name            string            `json:"name"`
+	DisplayName     string            `json:"display_name"`
+	Version         string            `json:"version"`
+	Description     string            `json:"description"`
+	Publisher       string            `json:"publisher"`
+	TrustLevel      string            `json:"trust_level"`
+	Source          string            `json:"source"`
+	Homepage        string            `json:"homepage,omitempty"`
+	RequiresAbstrax string            `json:"requires_abstrax,omitempty"`
+	InstalledPath   string            `json:"installed_path"`
+	Commands        []MetadataCommand `json:"commands"`
+	RegistryStatus  string            `json:"registry_status"`
+	UpdateAvailable string            `json:"update_available,omitempty"`
 }
 
 // Info returns detailed information about an installed plugin.

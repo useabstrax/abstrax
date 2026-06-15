@@ -168,7 +168,7 @@ const (
 	PluginRemove  = "plugin.remove"
 
 	// Project inspect and service actions.
-	ProjectInspect         = "project.inspect"
-	ProjectServiceRestart  = "project.service.restart"
-	ProjectServiceReload   = "project.service.reload"
+	ProjectInspect        = "project.inspect"
+	ProjectServiceRestart = "project.service.restart"
+	ProjectServiceReload  = "project.service.reload"
 )

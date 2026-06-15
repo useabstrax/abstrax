@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "plugin_not_found",
+    "message": "The requested plugin could not be found."
+  }
+}

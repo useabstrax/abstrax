@@ -2,53 +2,32 @@ package plugin
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
-func fixturePath(name string) string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("runtime.Caller failed")
-	}
-	return filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "openapi", "fixtures", name)
-}
-
-func loadFixture(t *testing.T, name string) json.RawMessage {
-	t.Helper()
-	data, err := os.ReadFile(fixturePath(name))
-	if err != nil {
-		t.Fatalf("read fixture %s: %v", name, err)
-	}
-	return data
-}
-
 func TestRegistryClientFixtures(t *testing.T) {
 	fixtures := map[string]string{
-		"/registry":                              "registry-metadata.json",
-		"/plugins":                               "plugin-list.json",
-		"/plugins/example":                       "plugin-detail.json",
-		"/plugins/example/versions/0.1.0":        "plugin-version.json",
-		"/plugins/example/versions/latest":       "plugin-version.json",
-		"/plugins/missing":                       "error-response.json",
+		"/registry":                        "registry-metadata.json",
+		"/plugins":                         "plugin-list.json",
+		"/plugins/example":                 "plugin-detail.json",
+		"/plugins/example/versions/0.1.0":  "plugin-version.json",
+		"/plugins/example/versions/latest": "plugin-version.json",
+		"/plugins/missing":                 "error-response.json",
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if path == "/plugins/example/versions/latest" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write(loadFixture(t, "plugin-version.json"))
+			w.Write(loadRegistryFixture(t, "plugin-version.json"))
 			return
 		}
 		if path == "/plugins/missing" {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write(loadFixture(t, "error-response.json"))
+			w.Write(loadRegistryFixture(t, "error-response.json"))
 			return
 		}
 		fixture, ok := fixtures[path]
@@ -57,7 +36,7 @@ func TestRegistryClientFixtures(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(loadFixture(t, fixture))
+		w.Write(loadRegistryFixture(t, fixture))
 	}))
 	defer srv.Close()
 

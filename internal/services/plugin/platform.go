@@ -1,8 +1,8 @@
 package plugin
 
 import (
-	"runtime"
 	"fmt"
+	"runtime"
 )
 
 // CurrentPlatform returns the registry platform identifier for this host.

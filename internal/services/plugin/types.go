@@ -85,12 +85,12 @@ type InstallRecord struct {
 
 // MetadataCacheEntry holds cached validated plugin metadata for help and listing.
 type MetadataCacheEntry struct {
-	Name        string    `json:"name"`
-	DisplayName string    `json:"display_name"`
-	Description string    `json:"description"`
-	Version     string    `json:"version"`
+	Name        string            `json:"name"`
+	DisplayName string            `json:"display_name"`
+	Description string            `json:"description"`
+	Version     string            `json:"version"`
 	Commands    []MetadataCommand `json:"commands"`
-	CachedAt    time.Time `json:"cached_at"`
+	CachedAt    time.Time         `json:"cached_at"`
 }
 
 // MetadataCache is the on-disk metadata cache file.
@@ -100,13 +100,13 @@ type MetadataCache struct {
 
 // RegistryPluginSummary is a concise registry plugin listing entry.
 type RegistryPluginSummary struct {
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	Publisher      string `json:"publisher"`
-	TrustLevel     string `json:"trust_level"`
-	Status         string `json:"status"`
-	LatestVersion  string `json:"latest_version"`
-	DisplayName    string `json:"display_name,omitempty"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Publisher     string `json:"publisher"`
+	TrustLevel    string `json:"trust_level"`
+	Status        string `json:"status"`
+	LatestVersion string `json:"latest_version"`
+	DisplayName   string `json:"display_name,omitempty"`
 }
 
 // RegistryPlugin is a full registry plugin record.

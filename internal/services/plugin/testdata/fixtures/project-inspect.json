@@ -1,0 +1,19 @@
+{
+  "api_version": "v1",
+  "project": {
+    "name": "example",
+    "path": "/var/www/example.com",
+    "user": "example",
+    "runtime": {
+      "type": "php",
+      "version": "8.5"
+    },
+    "domains": ["example.com"],
+    "services": [
+      {
+        "name": "example-worker",
+        "type": "worker"
+      }
+    ]
+  }
+}

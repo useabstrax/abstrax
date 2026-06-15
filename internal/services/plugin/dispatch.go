@@ -16,8 +16,8 @@ type DispatchOptions struct {
 
 // Dispatcher executes plugin binaries.
 type Dispatcher struct {
-	discoverer   *Discoverer
-	store        *Store
+	discoverer    *Discoverer
+	store         *Store
 	abstraxBinary string
 }
 

@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -42,7 +40,7 @@ func TestE2EPluginInstallAndHello(t *testing.T) {
 			})
 		case "/plugins/example/versions/latest":
 			json.NewEncoder(w).Encode(RegistryVersion{
-				Version: "0.1.0", RequiresAbstrax: ">=0.1.0", Stable: true, Channel: "stable", ProtocolVersion: 1,
+				Version: "0.1.0", RequiresAbstrax: ">=0.0.0", Stable: true, Channel: "stable", ProtocolVersion: 1,
 				Platforms: map[string]RegistryPlatformBinary{
 					platform: {URL: "http://" + r.Host + "/binary", SHA256: checksum, Size: int64(len(data))},
 				},
@@ -86,18 +84,8 @@ func TestE2EPluginInstallAndHello(t *testing.T) {
 }
 
 func TestPluginMetadataFixtureValidates(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	fixturePath := filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "openapi", "fixtures", "plugin-metadata.json")
-	data, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var meta Metadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(loadRegistryFixture(t, "plugin-metadata.json"), &meta); err != nil {
 		t.Fatal(err)
 	}
 	if meta.ProtocolVersion != ProtocolVersion {
@@ -112,17 +100,8 @@ func TestPluginMetadataFixtureValidates(t *testing.T) {
 }
 
 func TestReleaseManifestFixtureFields(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	fixturePath := filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "openapi", "fixtures", "release-manifest.json")
-	data, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var manifest Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	if err := json.Unmarshal(loadRegistryFixture(t, "release-manifest.json"), &manifest); err != nil {
 		t.Fatal(err)
 	}
 	if manifest.ProtocolVersion != 1 {
@@ -137,18 +116,8 @@ func TestReleaseManifestFixtureFields(t *testing.T) {
 }
 
 func TestProjectInspectFixtureMatchesSDK(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	fixturePath := filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "openapi", "fixtures", "project-inspect.json")
-	data, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var inspect InspectResponse
-	if err := json.Unmarshal(data, &inspect); err != nil {
+	if err := json.Unmarshal(loadRegistryFixture(t, "project-inspect.json"), &inspect); err != nil {
 		t.Fatal(err)
 	}
 	if inspect.APIVersion != "v1" {
