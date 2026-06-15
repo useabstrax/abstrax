@@ -18,6 +18,7 @@ var (
 	dbNameRe      = regexp.MustCompile(`^[a-zA-Z0-9_]{1,64}$`)
 	cronIDRe      = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	daemonNameRe  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+	pluginNameRe  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	projectNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
 	domainRe      = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
 )
@@ -196,6 +197,17 @@ func ProjectName(name string) error {
 	}
 	if !projectNameRe.MatchString(name) {
 		return fmt.Errorf("invalid project name %q: must contain only letters, digits, underscores, hyphens and periods", name)
+	}
+	return nil
+}
+
+// PluginName validates an Abstrax plugin command name.
+func PluginName(name string) error {
+	if name == "" {
+		return fmt.Errorf("plugin name cannot be empty")
+	}
+	if !pluginNameRe.MatchString(name) {
+		return fmt.Errorf("invalid plugin name %q: must start with a lowercase letter and contain only lowercase letters, digits and hyphens", name)
 	}
 	return nil
 }

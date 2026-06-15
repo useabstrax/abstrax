@@ -3,8 +3,18 @@ package config
 // Settings holds Abstrax configuration. Values in the on-disk file override
 // built-in defaults for the keys that are present.
 type Settings struct {
-	PHP *PHPSettings `json:"php,omitempty"`
+	PHP     *PHPSettings    `json:"php,omitempty"`
+	Plugins *PluginSettings `json:"plugins,omitempty"`
 }
+
+// PluginSettings holds plugin-related configuration.
+type PluginSettings struct {
+	RegistryURL  string   `json:"registry_url,omitempty"`
+	AllowBlocked []string `json:"allow_blocked,omitempty"`
+}
+
+// DefaultPluginRegistryURL is the default Abstrax plugin registry base URL.
+const DefaultPluginRegistryURL = "https://plugins.useabstrax.com/api/v1"
 
 // PHPSettings holds PHP-related configuration.
 type PHPSettings struct {

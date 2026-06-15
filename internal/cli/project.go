@@ -27,6 +27,8 @@ func NewProjectCmd() *cobra.Command {
 	cmd.AddCommand(newProjectModifyCmd())
 	cmd.AddCommand(newProjectListCmd())
 	cmd.AddCommand(newProjectInfoCmd())
+	cmd.AddCommand(newProjectInspectCmd())
+	cmd.AddCommand(newProjectServiceCmd())
 	cmd.AddCommand(newProjectEnableCmd())
 	cmd.AddCommand(newProjectDisableCmd())
 	cmd.AddCommand(newProjectReloadCmd())
@@ -335,6 +337,92 @@ func newProjectInfoCmd() *cobra.Command {
 			p.Line("  %-14s %s", "Updated:", state.UpdatedAt.Format("2006-01-02 15:04:05"))
 			p.Line("")
 			return nil
+		},
+	}
+}
+
+func newProjectInspectCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "inspect <name>",
+		Short: "Inspect a project (machine-readable API for plugins)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc := project.New(false, globals.Flags.Verbose)
+			resp, err := svc.Inspect(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if globals.Flags.JSON {
+				output.PrintJSON(resp)
+				return nil
+			}
+			p := printer()
+			p.Line("Project: %s", resp.Project.Name)
+			p.Line("  Path:    %s", resp.Project.Path)
+			p.Line("  User:    %s", resp.Project.User)
+			p.Line("  Runtime: %s %s", resp.Project.Runtime.Type, resp.Project.Runtime.Version)
+			p.Line("  Domains: %s", strings.Join(resp.Project.Domains, ", "))
+			if len(resp.Project.Services) > 0 {
+				p.Line("  Services:")
+				for _, s := range resp.Project.Services {
+					p.Line("    - %s (%s)", s.Name, s.Type)
+				}
+			}
+			return nil
+		},
+	}
+}
+
+func newProjectServiceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "service",
+		Short: "Manage project-owned services",
+	}
+	cmd.AddCommand(newProjectServiceRestartCmd())
+	cmd.AddCommand(newProjectServiceReloadCmd())
+	return cmd
+}
+
+func newProjectServiceRestartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart <project> <service>",
+		Short: "Restart a project-owned service",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := platform.RequireRoot(); err != nil {
+				return err
+			}
+			if err := validate.DaemonName(args[1]); err != nil {
+				return err
+			}
+			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.RestartService(cmd.Context(), args[0], args[1]); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.ProjectServiceRestart,
+				fmt.Sprintf("Restarted service %s for project %s.", args[1], args[0]), nil)
+		},
+	}
+}
+
+func newProjectServiceReloadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reload <project> <service>",
+		Short: "Reload a project-owned service",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := platform.RequireRoot(); err != nil {
+				return err
+			}
+			if err := validate.DaemonName(args[1]); err != nil {
+				return err
+			}
+			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.ReloadService(cmd.Context(), args[0], args[1]); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.ProjectServiceReload,
+				fmt.Sprintf("Reloaded service %s for project %s.", args[1], args[0]), nil)
 		},
 	}
 }

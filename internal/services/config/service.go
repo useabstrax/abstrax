@@ -234,16 +234,29 @@ func mergeDefaults(stored *Settings) *Settings {
 		PHP: &PHPSettings{
 			Extensions: slices.Clone(DefaultPHPExtensions),
 		},
+		Plugins: &PluginSettings{
+			RegistryURL: DefaultPluginRegistryURL,
+		},
 	}
-	if stored == nil || stored.PHP == nil || stored.PHP.Extensions == nil {
+	if stored == nil {
 		return effective
 	}
-	effective.PHP.Extensions = slices.Clone(stored.PHP.Extensions)
+	if stored.PHP != nil && stored.PHP.Extensions != nil {
+		effective.PHP.Extensions = slices.Clone(stored.PHP.Extensions)
+	}
+	if stored.Plugins != nil {
+		if stored.Plugins.RegistryURL != "" {
+			effective.Plugins.RegistryURL = stored.Plugins.RegistryURL
+		}
+		if len(stored.Plugins.AllowBlocked) > 0 {
+			effective.Plugins.AllowBlocked = slices.Clone(stored.Plugins.AllowBlocked)
+		}
+	}
 	return effective
 }
 
 func isEmptyStored(stored *Settings) bool {
-	return stored == nil || (stored.PHP == nil)
+	return stored == nil || (stored.PHP == nil && stored.Plugins == nil)
 }
 
 func dedupe(values []string) []string {

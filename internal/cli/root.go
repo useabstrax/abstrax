@@ -2,13 +2,15 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/globals"
-	"abstrax/internal/output"
+	"abstrax/internal/services/plugin"
 	"abstrax/internal/version"
 )
 
@@ -37,6 +39,7 @@ Run 'abstrax --help' for a list of commands.`,
 	root.PersistentFlags().BoolVar(&globals.Flags.Quiet, "quiet", false, "Reduce output")
 	root.PersistentFlags().BoolVar(&globals.Flags.Verbose, "verbose", false, "Increase output verbosity")
 	root.PersistentFlags().BoolVar(&globals.Flags.NoColor, "no-color", false, "Disable colour output")
+	root.PersistentFlags().StringSliceVar(&globals.Flags.AllowBlockedPlugin, "allow-blocked-plugin", nil, "Allow execution of blocked plugins (repeatable)")
 
 	// Subcommands.
 	root.AddCommand(NewVersionCmd())
@@ -59,6 +62,13 @@ Run 'abstrax --help' for a list of commands.`,
 	root.AddCommand(NewServerCmd())
 	root.AddCommand(NewLogCmd())
 	root.AddCommand(NewAgentCmd())
+	root.AddCommand(NewPluginCmd())
+
+	defaultHelp := root.HelpFunc()
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		defaultHelp(cmd, args)
+		appendPluginHelp()
+	})
 
 	return root
 }
@@ -66,14 +76,51 @@ Run 'abstrax --help' for a list of commands.`,
 // Execute runs the root command.
 func Execute() {
 	root := NewRootCmd()
-	if err := root.Execute(); err != nil {
-		p := output.NewPrinter(globals.Flags.JSON, globals.Flags.Quiet, globals.Flags.Verbose, globals.Flags.NoColor)
-		if globals.Flags.JSON {
-			output.PrintJSON(output.Failure("", "command_error", err.Error()))
-		} else {
-			p.Error("%v", err)
+	_, err := root.ExecuteC()
+	if err != nil {
+		if isUnknownCommand(err) {
+			exitCode, handled, dispatchErr := tryPluginDispatch(context.Background(), os.Args[1:])
+			if handled {
+				if dispatchErr != nil {
+					printCommandError(dispatchErr)
+					if code, ok := plugin.ExitCode(dispatchErr); ok {
+						os.Exit(code)
+					}
+					os.Exit(1)
+				}
+				os.Exit(exitCode)
+			}
 		}
-		fmt.Fprintln(os.Stderr)
+		printCommandError(err)
 		os.Exit(1)
+	}
+}
+
+func appendPluginHelp() {
+	if globals.Flags.Quiet {
+		return
+	}
+	svc, err := plugin.New()
+	if err != nil {
+		return
+	}
+	entries, err := svc.MetadataCache().ListEntries()
+	if err != nil || len(entries) == 0 {
+		return
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+	fmt.Println()
+	fmt.Println("Plugin commands:")
+	for _, e := range entries {
+		desc := e.Description
+		if desc == "" && len(e.Commands) > 0 {
+			desc = e.Commands[0].Description
+		}
+		if desc == "" {
+			desc = e.DisplayName
+		}
+		fmt.Printf("  %-10s %s\n", e.Name, desc)
 	}
 }

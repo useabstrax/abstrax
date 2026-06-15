@@ -31,6 +31,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Validate OpenAPI
+        run: |
+          chmod +x ../openapi/validate.sh
+          ../openapi/validate.sh
+
       - name: Test
         run: go test -v -race ./...
 

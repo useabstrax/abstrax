@@ -158,4 +158,17 @@ const (
 	ConfigAdd    = "config.add"
 	ConfigRemove = "config.remove"
 	ConfigReset  = "config.reset"
+
+	// Plugin actions.
+	PluginList    = "plugin.list"
+	PluginInfo    = "plugin.info"
+	PluginSearch  = "plugin.search"
+	PluginInstall = "plugin.install"
+	PluginUpdate  = "plugin.update"
+	PluginRemove  = "plugin.remove"
+
+	// Project inspect and service actions.
+	ProjectInspect         = "project.inspect"
+	ProjectServiceRestart  = "project.service.restart"
+	ProjectServiceReload   = "project.service.reload"
 )

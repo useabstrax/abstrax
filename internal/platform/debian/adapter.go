@@ -40,4 +40,19 @@ const (
 
 	// AbstraxLogDir is the log directory.
 	AbstraxLogDir = "/var/log/abstrax"
+
+	// AbstraxPluginsDir is the preferred system plugin installation directory.
+	AbstraxPluginsDir = "/usr/local/lib/abstrax/plugins"
+
+	// AbstraxPluginsDirAlt is the secondary system plugin search directory.
+	AbstraxPluginsDirAlt = "/usr/lib/abstrax/plugins"
+
+	// AbstraxPluginStateDir stores plugin installation records and caches.
+	AbstraxPluginStateDir = "/var/lib/abstrax/plugins"
+
+	// AbstraxPluginCacheDir stores plugin metadata and registry caches.
+	AbstraxPluginCacheDir = "/var/lib/abstrax/plugins/cache"
+
+	// AbstraxPluginRegistryCacheDir stores cached registry HTTP responses.
+	AbstraxPluginRegistryCacheDir = "/var/lib/abstrax/plugins/cache/registry"
 )

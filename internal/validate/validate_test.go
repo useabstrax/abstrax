@@ -58,6 +58,21 @@ func TestCronExpression(t *testing.T) {
 	}
 }
 
+func TestPluginName(t *testing.T) {
+	valid := []string{"deploy", "backup", "my-plugin", "a"}
+	for _, name := range valid {
+		if err := validate.PluginName(name); err != nil {
+			t.Errorf("PluginName(%q) should be valid: %v", name, err)
+		}
+	}
+	invalid := []string{"", "Deploy", "my_plugin", "1bad"}
+	for _, name := range invalid {
+		if err := validate.PluginName(name); err == nil {
+			t.Errorf("PluginName(%q) should be invalid", name)
+		}
+	}
+}
+
 func TestIPAddress(t *testing.T) {
 	if err := validate.IPAddress("127.0.0.1"); err != nil {
 		t.Errorf("127.0.0.1 should be valid: %v", err)

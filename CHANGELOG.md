@@ -8,4 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Plugin system with standalone executable binaries, registry-backed install/update/remove, command delegation, metadata protocol v1, and `abstrax plugin` management commands.
+- Machine-readable `abstrax project inspect --json` API (v1) for plugins.
+- `abstrax project service restart|reload` for project-owned supervisor services.
+- Reference plugin at `cli/cmd/abstrax-example`.
 - Initial open-source release of the Abstrax CLI.
