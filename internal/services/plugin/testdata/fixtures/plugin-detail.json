@@ -7,7 +7,7 @@
   "status": "active",
   "homepage": "https://plugins.useabstrax.com/plugins/example",
   "repository_url": "https://github.com/useabstrax/abstrax-plugin-example",
-  "documentation_url": "https://plugins.useabstrax.com/plugins/developers/getting-started",
+  "documentation_url": "https://useabstrax.com/docs/plugins/creating-a-plugin",
   "license": "MIT",
   "status_reason": null,
   "latest_version": "0.1.0",
