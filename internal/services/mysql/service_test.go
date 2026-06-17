@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +23,7 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 		Password: "secret",
 		Socket:   "/run/mysqld/mysqld.sock",
 	}
-	if err := svc.SetConfig(t.Context(), cfg); err != nil {
+	if err := svc.SetConfig(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
 
