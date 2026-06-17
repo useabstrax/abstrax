@@ -18,10 +18,10 @@ import (
 
 // Service manages MySQL operations.
 type Service struct {
-	runner            *executil.Runner
-	cfg               *Config
-	configPath        string
-	legacyConfigPath  string
+	runner           *executil.Runner
+	cfg              *Config
+	configPath       string
+	legacyConfigPath string
 }
 
 // New creates a Service.
