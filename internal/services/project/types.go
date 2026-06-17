@@ -25,6 +25,7 @@ const (
 type AddOptions struct {
 	Name         string
 	Path         string
+	UserExplicit bool
 	WebServer    WebServer
 	NoVhost      bool
 	Domains      []string
@@ -87,22 +88,31 @@ type ModifyOptions struct {
 
 // State holds persisted project state.
 type State struct {
-	Name        string           `json:"name"`
-	Path        string           `json:"path"`
-	Domains     []string         `json:"domains"`
-	WebServer   WebServer        `json:"web_server"`
-	Runtime     Runtime          `json:"runtime"`
-	PHPVersion  string           `json:"php_version,omitempty"`
-	NodeVersion string           `json:"node_version,omitempty"`
-	RubyVersion string           `json:"ruby_version,omitempty"`
-	PublicDir   string           `json:"public_dir,omitempty"`
-	ProxyPort   int              `json:"proxy_port,omitempty"`
-	SSLEnabled  bool             `json:"ssl_enabled"`
-	VhostPath   string           `json:"vhost_path"`
-	Owner       string           `json:"owner"`
-	Services    []ProjectService `json:"services,omitempty"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
+	Name          string           `json:"name"`
+	Path          string           `json:"path"`
+	Domains       []string         `json:"domains"`
+	WebServer     WebServer        `json:"web_server"`
+	Runtime       Runtime          `json:"runtime"`
+	PHPVersion    string           `json:"php_version,omitempty"`
+	NodeVersion   string           `json:"node_version,omitempty"`
+	RubyVersion   string           `json:"ruby_version,omitempty"`
+	PublicDir     string           `json:"public_dir,omitempty"`
+	ProxyPort     int              `json:"proxy_port,omitempty"`
+	SSLEnabled    bool             `json:"ssl_enabled"`
+	VhostPath     string           `json:"vhost_path"`
+	Owner         string           `json:"owner"`
+	Group         string           `json:"group,omitempty"`
+	OwnershipMode OwnershipMode    `json:"ownership_mode,omitempty"`
+	OwnerUID      int              `json:"owner_uid,omitempty"`
+	OwnerGID      int              `json:"owner_gid,omitempty"`
+	OwnerHome     string           `json:"owner_home,omitempty"`
+	ApprovedRoot  string           `json:"approved_root,omitempty"`
+	PHPPoolName   string           `json:"php_pool_name,omitempty"`
+	PHPSocketPath string           `json:"php_socket_path,omitempty"`
+	ManagedACLs   []ManagedACL     `json:"managed_acls,omitempty"`
+	Services      []ProjectService `json:"services,omitempty"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
 }
 
 // ProjectService describes a service associated with a project.

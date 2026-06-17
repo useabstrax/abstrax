@@ -54,6 +54,12 @@ func newConfigShowCmd() *cobra.Command {
 			for _, ext := range settings.PHP.Extensions {
 				p.Line("    - %s", ext)
 			}
+			if settings.Projects != nil && len(settings.Projects.ApprovedRoots) > 0 {
+				p.Line("  projects.approved_roots:")
+				for _, root := range settings.Projects.ApprovedRoots {
+					p.Line("    - %s", root)
+				}
+			}
 			p.Line("")
 			return nil
 		},

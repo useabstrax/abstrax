@@ -27,6 +27,8 @@ type InspectProject struct {
 	Name     string           `json:"name"`
 	Path     string           `json:"path"`
 	User     string           `json:"user"`
+	Group    string           `json:"group,omitempty"`
+	Mode     string           `json:"ownership_mode,omitempty"`
 	Runtime  InspectRuntime   `json:"runtime"`
 	Domains  []string         `json:"domains"`
 	Services []InspectService `json:"services"`
@@ -62,7 +64,16 @@ func (s *Service) Inspect(ctx context.Context, name string) (*InspectResponse, e
 
 	user := state.Owner
 	if user == "" {
-		user = "www-data"
+		user = SharedWebUser
+	}
+	group := state.Group
+	if group == "" {
+		group = SharedWebGroup
+	}
+
+	mode := string(state.OwnershipMode)
+	if mode == "" {
+		mode = string(OwnershipShared)
 	}
 
 	return &InspectResponse{
@@ -71,6 +82,8 @@ func (s *Service) Inspect(ctx context.Context, name string) (*InspectResponse, e
 			Name:     state.Name,
 			Path:     state.Path,
 			User:     user,
+			Group:    group,
+			Mode:     mode,
 			Runtime:  runtime,
 			Domains:  state.Domains,
 			Services: services,

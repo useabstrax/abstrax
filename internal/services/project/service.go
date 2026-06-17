@@ -12,13 +12,17 @@ import (
 
 	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
+	"abstrax/internal/identity"
 	"abstrax/internal/platform/debian"
+	"abstrax/internal/services/config"
 	"abstrax/internal/services/web"
 )
 
 // Service manages projects.
 type Service struct {
 	runner       *executil.Runner
+	dryRun       bool
+	identity     identity.Resolver
 	stateDir     string
 	nginxAvail   string
 	nginxEnabled string
@@ -26,14 +30,22 @@ type Service struct {
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
+	runner := executil.New(dryRun, verbose)
 	svc := &Service{
-		runner:       executil.New(dryRun, verbose),
+		runner:       runner,
+		dryRun:       dryRun,
+		identity:     identity.NewOSResolver(runner),
 		stateDir:     debian.AbstraxProjectsDir,
 		nginxAvail:   debian.NginxSitesAvailable,
 		nginxEnabled: debian.NginxSitesEnabled,
 	}
 	_ = svc.migrateLegacyProjects()
 	return svc
+}
+
+// SetIdentityResolver overrides the identity resolver (for tests).
+func (s *Service) SetIdentityResolver(resolver identity.Resolver) {
+	s.identity = resolver
 }
 
 // Add creates a new project and its web server configuration.
@@ -51,9 +63,40 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		return nil, fmt.Errorf("project %q already exists", opts.Name)
 	}
 
-	if err := os.MkdirAll(opts.Path, 0755); err != nil {
-		return nil, fmt.Errorf("creating project path: %w", err)
+	id, err := ResolveIdentity(ctx, s.identity, opts)
+	if err != nil {
+		return nil, err
 	}
+
+	projectPath, err := ResolveProjectPath(opts.Name, opts.Path, id)
+	if err != nil {
+		return nil, err
+	}
+
+	approvedRoots, err := loadApprovedRoots()
+	if err != nil {
+		return nil, err
+	}
+
+	homes, err := s.identity.ListHomes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	validated, err := ValidateProjectPath(PathValidateOptions{
+		RequestedPath: projectPath,
+		ProjectName:   opts.Name,
+		PublicDir:     opts.PublicDir,
+		WebRoot:       opts.WebRoot,
+		Identity:      id,
+		ApprovedRoots: approvedRoots,
+		Homes:         homes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rb := &addRollback{svc: s}
 
 	switch opts.Runtime {
 	case RuntimePHP:
@@ -68,15 +111,29 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		return nil, err
 	}
 
+	mkdirResult, err := mkdirProjectTree(validated, id, 0755)
+	if err != nil {
+		return nil, err
+	}
+	rb.trackDirs(mkdirResult.Created)
+
+	opts.Path = validated.ProjectPath
+
 	state := &State{
-		Name:      opts.Name,
-		Path:      opts.Path,
-		Domains:   opts.Domains,
-		WebServer: opts.WebServer,
-		Runtime:   opts.Runtime,
-		Owner:     opts.User,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Name:          opts.Name,
+		Path:          validated.ProjectPath,
+		Domains:       opts.Domains,
+		WebServer:     opts.WebServer,
+		Runtime:       opts.Runtime,
+		Owner:         id.User,
+		Group:         id.Group,
+		OwnershipMode: id.Mode,
+		OwnerUID:      id.UID,
+		OwnerGID:      id.GID,
+		OwnerHome:     id.Home,
+		ApprovedRoot:  validated.ApprovedRoot,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	switch opts.Runtime {
@@ -91,16 +148,50 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		state.ProxyPort = opts.ProxyPort
 	}
 
-	if opts.WebServer == WebServerNginx && !opts.NoVhost {
-		vhostPath, err := s.createNginxVhost(ctx, opts)
+	if id.Mode == OwnershipIsolated {
+		if err := ensureACLPackage(ctx, s.runner); err != nil {
+			rb.undo(ctx)
+			return nil, err
+		}
+		acls := RequiredACLs(validated, id)
+		aclMgr := newACLManager(s.runner)
+		if err := aclMgr.Apply(ctx, acls, id.WebServerUser); err != nil {
+			rb.undo(ctx)
+			return nil, fmt.Errorf("configuring nginx filesystem access: %w", err)
+		}
+		state.ManagedACLs = acls
+		rb.trackACLs(acls, id.WebServerUser)
+	}
+
+	if state.Runtime == RuntimePHP && id.Mode == OwnershipIsolated {
+		pool, err := s.createPHPPool(ctx, state, id)
 		if err != nil {
+			rb.undo(ctx)
+			return nil, fmt.Errorf("creating php-fpm pool: %w", err)
+		}
+		if pool != nil {
+			rb.trackPool(pool.ConfigPath)
+		}
+	}
+
+	vhostOpts := vhostOptionsFromAdd(opts, state, validated)
+	if opts.WebServer == WebServerNginx && !opts.NoVhost {
+		vhostPath, err := s.createNginxVhost(ctx, vhostOpts)
+		if err != nil {
+			rb.undo(ctx)
 			return nil, fmt.Errorf("creating nginx vhost: %w", err)
 		}
 		state.VhostPath = vhostPath
+		rb.trackVhost(vhostPath)
 	}
 
 	if err := s.saveState(state); err != nil {
+		rb.undo(ctx)
 		return nil, fmt.Errorf("saving project state: %w", err)
+	}
+
+	for _, warning := range CheckSecurityWarnings(state.Path) {
+		fmt.Println(formatWarnings([]SecurityWarning{warning}))
 	}
 
 	return state, nil
@@ -113,6 +204,8 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("project %q not found", opts.Name)
 	}
 
+	id := IdentityFromState(state)
+
 	if state.VhostPath != "" && opts.RemoveVhost {
 		enabledLink := filepath.Join(s.nginxEnabled, filepath.Base(state.VhostPath))
 		_ = os.Remove(enabledLink)
@@ -122,6 +215,16 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		}
 		_ = os.Remove(state.VhostPath)
 		_, _ = s.runner.Run(ctx, "nginx", "-s", "reload")
+	}
+
+	if id.Mode == OwnershipIsolated {
+		if err := s.removePHPPool(ctx, state); err != nil {
+			return err
+		}
+		aclMgr := newACLManager(s.runner)
+		if err := aclMgr.Remove(ctx, state.ManagedACLs, id.WebServerUser); err != nil {
+			return fmt.Errorf("removing nginx filesystem ACLs: %w", err)
+		}
 	}
 
 	if opts.DeleteFiles && !opts.KeepFiles {
@@ -186,7 +289,7 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 		if _, err := backup.File(state.VhostPath); err != nil {
 			return nil, err
 		}
-		if _, err := s.createNginxVhost(ctx, state.vhostOptions()); err != nil {
+		if _, err := s.createNginxVhost(ctx, state.vhostConfig()); err != nil {
 			return nil, err
 		}
 	}
@@ -272,7 +375,7 @@ func (s *Service) Reload(ctx context.Context, name string) error {
 	return err
 }
 
-func (s *Service) createNginxVhost(ctx context.Context, opts AddOptions) (string, error) {
+func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (string, error) {
 	if err := os.MkdirAll(s.nginxAvail, 0755); err != nil {
 		return "", err
 	}
@@ -307,7 +410,7 @@ func (s *Service) createNginxVhost(ctx context.Context, opts AddOptions) (string
 	return vhostPath, nil
 }
 
-func buildNginxConfig(opts AddOptions) string {
+func buildNginxConfig(opts vhostConfig) string {
 	domains := strings.Join(opts.Domains, " ")
 	if domains == "" {
 		domains = "_"
@@ -331,13 +434,17 @@ func buildNginxConfig(opts AddOptions) string {
 
 	switch opts.Runtime {
 	case RuntimePHP:
-		phpVersion := normalizePHPVersion(opts.PHPVersion)
+		socket := opts.PHPSocket
+		if socket == "" {
+			socket = filepath.Join("/run/php", fmt.Sprintf("php%s-fpm.sock", normalizePHPVersion(opts.PHPVersion)))
+		}
 		sb.WriteString("    location / {\n")
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		sb.WriteString("    }\n\n")
 		sb.WriteString("    location ~ \\.php$ {\n")
+		sb.WriteString("        try_files $uri =404;\n")
 		sb.WriteString("        include snippets/fastcgi-php.conf;\n")
-		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:/run/php/php%s-fpm.sock;\n", phpVersion))
+		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:%s;\n", socket))
 		sb.WriteString("    }\n")
 	case RuntimeNode, RuntimeRuby:
 		proxyPort := opts.ProxyPort
@@ -365,19 +472,16 @@ func buildNginxConfig(opts AddOptions) string {
 	return sb.String()
 }
 
-func (s *State) vhostOptions() AddOptions {
-	return AddOptions{
-		Name:        s.Name,
-		Path:        s.Path,
-		WebServer:   s.WebServer,
-		Domains:     s.Domains,
-		Runtime:     s.Runtime,
-		PHPVersion:  s.PHPVersion,
-		NodeVersion: s.NodeVersion,
-		RubyVersion: s.RubyVersion,
-		PublicDir:   s.PublicDir,
-		ProxyPort:   s.ProxyPort,
+func loadApprovedRoots() ([]string, error) {
+	cfg := config.New()
+	settings, err := cfg.Effective()
+	if err != nil {
+		return nil, err
 	}
+	if settings.Projects == nil {
+		return nil, nil
+	}
+	return settings.Projects.ApprovedRoots, nil
 }
 
 func (s *Service) statePath(name string) string {

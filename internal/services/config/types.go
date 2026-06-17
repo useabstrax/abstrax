@@ -3,8 +3,14 @@ package config
 // Settings holds Abstrax configuration. Values in the on-disk file override
 // built-in defaults for the keys that are present.
 type Settings struct {
-	PHP     *PHPSettings    `json:"php,omitempty"`
-	Plugins *PluginSettings `json:"plugins,omitempty"`
+	PHP      *PHPSettings     `json:"php,omitempty"`
+	Plugins  *PluginSettings  `json:"plugins,omitempty"`
+	Projects *ProjectSettings `json:"projects,omitempty"`
+}
+
+// ProjectSettings holds project-related configuration.
+type ProjectSettings struct {
+	ApprovedRoots []string `json:"approved_roots,omitempty"`
 }
 
 // PluginSettings holds plugin-related configuration.

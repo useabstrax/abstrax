@@ -82,6 +82,18 @@ func (s *Service) Save(stored *Settings) error {
 	return nil
 }
 
+// ApprovedRoots returns configured shared project roots for user-isolated projects.
+func (s *Service) ApprovedRoots() ([]string, error) {
+	effective, err := s.Effective()
+	if err != nil {
+		return nil, err
+	}
+	if effective.Projects == nil {
+		return nil, nil
+	}
+	return slices.Clone(effective.Projects.ApprovedRoots), nil
+}
+
 // Get returns the effective value for a config key.
 func (s *Service) Get(key string) (any, error) {
 	key, err := ParseKey(key)
@@ -97,6 +109,11 @@ func (s *Service) Get(key string) (any, error) {
 	switch key {
 	case keyPHPExtensions:
 		return slices.Clone(effective.PHP.Extensions), nil
+	case keyProjectsApprovedRoots:
+		if effective.Projects == nil {
+			return []string{}, nil
+		}
+		return slices.Clone(effective.Projects.ApprovedRoots), nil
 	default:
 		return nil, fmt.Errorf("unknown config key %q", key)
 	}
@@ -123,6 +140,11 @@ func (s *Service) Set(key string, values []string) error {
 			stored.PHP = &PHPSettings{}
 		}
 		stored.PHP.Extensions = dedupe(values)
+	case keyProjectsApprovedRoots:
+		if stored.Projects == nil {
+			stored.Projects = &ProjectSettings{}
+		}
+		stored.Projects.ApprovedRoots = dedupePaths(values)
 	default:
 		return fmt.Errorf("unknown config key %q", key)
 	}
@@ -149,6 +171,13 @@ func (s *Service) Add(key, value string) error {
 	switch key {
 	case keyPHPExtensions:
 		values := append(slices.Clone(effective.PHP.Extensions), value)
+		return s.Set(key, values)
+	case keyProjectsApprovedRoots:
+		roots := effective.Projects.ApprovedRoots
+		if effective.Projects == nil {
+			roots = nil
+		}
+		values := append(slices.Clone(roots), value)
 		return s.Set(key, values)
 	default:
 		return fmt.Errorf("unknown config key %q", key)
@@ -189,6 +218,24 @@ func (s *Service) Remove(key, value string) error {
 			return fmt.Errorf("cannot remove the last value from %s; use %q instead", key, "config reset "+key)
 		}
 		return s.Set(key, values)
+	case keyProjectsApprovedRoots:
+		roots := effective.Projects.ApprovedRoots
+		if effective.Projects == nil {
+			roots = nil
+		}
+		var values []string
+		found := false
+		for _, root := range roots {
+			if root == value {
+				found = true
+				continue
+			}
+			values = append(values, root)
+		}
+		if !found {
+			return fmt.Errorf("%q is not in %s", value, key)
+		}
+		return s.Set(key, values)
 	default:
 		return fmt.Errorf("unknown config key %q", key)
 	}
@@ -218,6 +265,11 @@ func (s *Service) Reset(key string) error {
 		if stored.PHP != nil {
 			stored.PHP.Extensions = nil
 			stored.PHP = nil
+		}
+	case keyProjectsApprovedRoots:
+		if stored.Projects != nil {
+			stored.Projects.ApprovedRoots = nil
+			stored.Projects = nil
 		}
 	default:
 		return fmt.Errorf("unknown config key %q", key)
@@ -252,11 +304,33 @@ func mergeDefaults(stored *Settings) *Settings {
 			effective.Plugins.AllowBlocked = slices.Clone(stored.Plugins.AllowBlocked)
 		}
 	}
+	if stored.Projects != nil && len(stored.Projects.ApprovedRoots) > 0 {
+		effective.Projects = &ProjectSettings{
+			ApprovedRoots: slices.Clone(stored.Projects.ApprovedRoots),
+		}
+	}
 	return effective
 }
 
 func isEmptyStored(stored *Settings) bool {
-	return stored == nil || (stored.PHP == nil && stored.Plugins == nil)
+	return stored == nil || (stored.PHP == nil && stored.Plugins == nil && stored.Projects == nil)
+}
+
+func dedupePaths(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = filepath.Clean(stringsTrim(v))
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func dedupe(values []string) []string {

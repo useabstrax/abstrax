@@ -59,8 +59,21 @@ func newProjectAddCmd() *cobra.Command {
 			if err := platform.RequireRoot(); err != nil {
 				return err
 			}
-			if opts.Path == "" {
-				opts.Path = "/var/www/" + opts.Name
+
+			opts.UserExplicit = cmd.Flags().Changed("user")
+			if !opts.UserExplicit {
+				opts.User = project.SharedWebUser
+				if cmd.Flags().Changed("group") {
+					// keep explicit group for shared mode
+				} else {
+					opts.Group = project.SharedWebGroup
+				}
+			} else if err := validate.Username(opts.User); err != nil {
+				return err
+			}
+
+			if opts.Path == "" && !opts.UserExplicit {
+				opts.Path = project.DefaultSharedBase + "/" + opts.Name
 			}
 
 			if apacheFlag {
@@ -95,12 +108,23 @@ func newProjectAddCmd() *cobra.Command {
 
 			p.Success("Project %s created.", opts.Name)
 			p.Line("  Path:       %s", state.Path)
+			p.Line("  Owner:      %s:%s", state.Owner, state.Group)
+			if state.OwnershipMode == project.OwnershipIsolated {
+				p.Line("  Mode:       user isolated")
+			}
 			p.Line("  Web server: %s", state.WebServer)
 			if len(state.Domains) > 0 {
 				p.Line("  Domains:    %s", strings.Join(state.Domains, ", "))
 			}
 			if state.VhostPath != "" {
 				p.Line("  Vhost:      %s", state.VhostPath)
+			}
+			if example := project.DaemonAddExampleFor(state); example != nil {
+				p.Line("")
+				p.Line("  Nginx proxies to 127.0.0.1:%d. Start your app with a managed daemon, for example:", example.Port)
+				for _, line := range example.FormatLines() {
+					p.Line("    %s", line)
+				}
 			}
 			return nil
 		},
@@ -113,8 +137,8 @@ func newProjectAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names")
 	cmd.Flags().IntVar(&opts.Port, "port", 80, "HTTP port")
 	cmd.Flags().StringVar(&opts.WebRoot, "web-root", "", "Custom web root directory")
-	cmd.Flags().StringVar(&opts.User, "user", "www-data", "Project owner user")
-	cmd.Flags().StringVar(&opts.Group, "group", "www-data", "Project owner group")
+	cmd.Flags().StringVar(&opts.User, "user", "", "Linux user for a user-owned project (omit for shared www-data mode)")
+	cmd.Flags().StringVar(&opts.Group, "group", "", "Project group for shared mode (default: www-data)")
 	cmd.Flags().BoolVar(&opts.SSL, "ssl", false, "Enable SSL (requires certbot)")
 	cmd.Flags().StringVar(&opts.Email, "email", "", "Email for SSL certificate")
 	cmd.Flags().BoolVar(&opts.RedirectHTTP, "redirect-http", true, "Redirect HTTP to HTTPS")
@@ -333,6 +357,15 @@ func newProjectInfoCmd() *cobra.Command {
 				p.Line("  %-14s %s", "Vhost:", state.VhostPath)
 			}
 			p.Line("  %-14s %s", "Owner:", state.Owner)
+			if state.Group != "" {
+				p.Line("  %-14s %s", "Group:", state.Group)
+			}
+			if state.OwnershipMode == project.OwnershipIsolated {
+				p.Line("  %-14s %s", "Mode:", "user isolated")
+				if state.PHPSocketPath != "" {
+					p.Line("  %-14s %s", "PHP socket:", state.PHPSocketPath)
+				}
+			}
 			p.Line("  %-14s %s", "Created:", state.CreatedAt.Format("2006-01-02 15:04:05"))
 			p.Line("  %-14s %s", "Updated:", state.UpdatedAt.Format("2006-01-02 15:04:05"))
 			p.Line("")
