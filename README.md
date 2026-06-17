@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/useabstrax/abstrax/blob/main/LICENSE">MIT License</a> ·
+  <a href="LICENSE">Apache License 2.0</a> ·
   <a href="https://useabstrax.com/docs">Documentation</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -138,6 +138,8 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes.
 
 Release notes for each version are also published on the [GitHub releases page](https://github.com/useabstrax/abstrax/releases).
 
-## License
+## Licence
 
-Abstrax is released under the [MIT License](https://github.com/useabstrax/abstrax/blob/main/LICENSE).
+Abstrax is licensed under the [Apache License 2.0](LICENSE). The SPDX identifier is `Apache-2.0`.
+
+The Abstrax name, logo, and branding are not licensed for unrestricted use. You may not use the branding to imply endorsement or to present modified versions as official Abstrax releases.

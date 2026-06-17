@@ -2,8 +2,8 @@
 set -e
 
 # Create required directories if they don't exist.
-mkdir -p /etc/abstrax
-mkdir -p /var/lib/abstrax/projects
+mkdir -p /etc/abstrax/projects
+mkdir -p /var/lib/abstrax
 mkdir -p /var/log/abstrax
 
 # Set secure permissions.

@@ -29,6 +29,8 @@ archives:
     format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
+      - LICENSE
+      - NOTICE
       - README.md
       - CHANGELOG.md
       - packaging/systemd/abstrax-agent.service
@@ -40,7 +42,7 @@ nfpms:
     homepage: https://github.com/useabstrax/abstrax
     maintainer: Abstrax <info@useabstrax.com>
     description: Server management CLI for Linux
-    license: MIT
+    license: Apache-2.0
     formats:
       - deb
       - rpm
@@ -52,6 +54,10 @@ nfpms:
         file_info:
           mode: 0644
       - dst: /etc/abstrax
+        type: dir
+        file_info:
+          mode: 0750
+      - dst: /etc/abstrax/projects
         type: dir
         file_info:
           mode: 0750

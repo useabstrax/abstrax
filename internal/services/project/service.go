@@ -26,12 +26,14 @@ type Service struct {
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
-	return &Service{
+	svc := &Service{
 		runner:       executil.New(dryRun, verbose),
 		stateDir:     debian.AbstraxProjectsDir,
 		nginxAvail:   debian.NginxSitesAvailable,
 		nginxEnabled: debian.NginxSitesEnabled,
 	}
+	_ = svc.migrateLegacyProjects()
+	return svc
 }
 
 // Add creates a new project and its web server configuration.
@@ -407,4 +409,49 @@ func (s *Service) saveState(state *State) error {
 
 func (s *Service) deleteState(name string) error {
 	return os.Remove(s.statePath(name))
+}
+
+func (s *Service) migrateLegacyProjects() error {
+	return migrateProjects(s.stateDir, debian.AbstraxProjectsDirLegacy)
+}
+
+func migrateProjects(newDir, legacyDir string) error {
+	if legacyDir == newDir {
+		return nil
+	}
+
+	entries, err := os.ReadDir(legacyDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(newDir, 0750); err != nil {
+		return err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		src := filepath.Join(legacyDir, e.Name())
+		dst := filepath.Join(newDir, e.Name())
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("migrating project %q: %w", e.Name(), err)
+		}
+	}
+
+	remaining, err := os.ReadDir(legacyDir)
+	if err != nil {
+		return nil
+	}
+	if len(remaining) == 0 {
+		_ = os.Remove(legacyDir)
+	}
+	return nil
 }

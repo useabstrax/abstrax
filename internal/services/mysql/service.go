@@ -4,8 +4,11 @@ package mysql
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	executil "abstrax/internal/exec"
@@ -15,15 +18,19 @@ import (
 
 // Service manages MySQL operations.
 type Service struct {
-	runner *executil.Runner
-	cfg    *Config
+	runner            *executil.Runner
+	cfg               *Config
+	configPath        string
+	legacyConfigPath  string
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
 	svc := &Service{
-		runner: executil.New(dryRun, verbose),
-		cfg:    &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
+		runner:           executil.New(dryRun, verbose),
+		cfg:              &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
+		configPath:       debian.MySQLConfig,
+		legacyConfigPath: debian.MySQLConfigLegacy,
 	}
 	_ = svc.loadConfig()
 	return svc
@@ -31,26 +38,17 @@ func New(dryRun, verbose bool) *Service {
 
 // SetConfig saves MySQL connection config.
 func (s *Service) SetConfig(_ context.Context, cfg Config) error {
-	if err := os.MkdirAll(debian.AbstraxConfigDir, 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.configPath), 0750); err != nil {
 		return err
 	}
 
-	var sb strings.Builder
-	sb.WriteString("# Abstrax MySQL config - root readable only\n")
-	sb.WriteString(fmt.Sprintf("host = %q\n", cfg.Host))
-	sb.WriteString(fmt.Sprintf("port = %d\n", cfg.Port))
-	sb.WriteString(fmt.Sprintf("user = %q\n", cfg.User))
-	if cfg.Password != "" {
-		sb.WriteString(fmt.Sprintf("password = %q\n", cfg.Password))
+	data, err := json.MarshalIndent(configToFile(cfg), "", "  ")
+	if err != nil {
+		return fmt.Errorf("encoding mysql config: %w", err)
 	}
-	if cfg.Socket != "" {
-		sb.WriteString(fmt.Sprintf("socket = %q\n", cfg.Socket))
-	}
-	if cfg.Database != "" {
-		sb.WriteString(fmt.Sprintf("database = %q\n", cfg.Database))
-	}
+	data = append(data, '\n')
 
-	if err := os.WriteFile(debian.MySQLConfig, []byte(sb.String()), 0600); err != nil {
+	if err := os.WriteFile(s.configPath, data, 0600); err != nil {
 		return fmt.Errorf("writing mysql config: %w", err)
 	}
 	s.cfg = &cfg
@@ -299,11 +297,101 @@ func (s *Service) query(ctx context.Context, sql string) (string, error) {
 }
 
 func (s *Service) loadConfig() error {
-	data, err := os.ReadFile(debian.MySQLConfig)
-	if err != nil {
-		return nil // no config file yet; use defaults
+	cfg, err := readConfigFile(s.configPath)
+	if err == nil {
+		s.cfg = cfg
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
 	}
 
+	legacy, err := readLegacyTOMLConfig(s.legacyConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // no config file yet; use defaults
+		}
+		return err
+	}
+
+	data, err := json.MarshalIndent(configToFile(*legacy), "", "  ")
+	if err != nil {
+		return fmt.Errorf("migrating mysql config: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.MkdirAll(filepath.Dir(s.configPath), 0750); err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.configPath, data, 0600); err != nil {
+		return fmt.Errorf("migrating mysql config: %w", err)
+	}
+	_ = os.Remove(s.legacyConfigPath)
+
+	s.cfg = legacy
+	return nil
+}
+
+func readConfigFile(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var stored fileConfig
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, fmt.Errorf("parsing mysql config: %w", err)
+	}
+	return configFromFile(stored), nil
+}
+
+type fileConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password,omitempty"`
+	Socket   string `json:"socket,omitempty"`
+	Database string `json:"database,omitempty"`
+}
+
+func configToFile(cfg Config) fileConfig {
+	return fileConfig{
+		Host:     cfg.Host,
+		Port:     cfg.Port,
+		User:     cfg.User,
+		Password: cfg.Password,
+		Socket:   cfg.Socket,
+		Database: cfg.Database,
+	}
+}
+
+func configFromFile(stored fileConfig) *Config {
+	cfg := &Config{
+		Host:     stored.Host,
+		Port:     stored.Port,
+		User:     stored.User,
+		Password: stored.Password,
+		Socket:   stored.Socket,
+		Database: stored.Database,
+	}
+	if cfg.Host == "" {
+		cfg.Host = "127.0.0.1"
+	}
+	if cfg.User == "" {
+		cfg.User = "root"
+	}
+	if cfg.Port == 0 {
+		cfg.Port = 3306
+	}
+	return cfg
+}
+
+func readLegacyTOMLConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &Config{Host: "127.0.0.1", Port: 3306, User: "root"}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") || line == "" {
@@ -317,16 +405,20 @@ func (s *Service) loadConfig() error {
 		val := strings.Trim(strings.TrimSpace(kv[1]), `"`)
 		switch key {
 		case "host":
-			s.cfg.Host = val
+			cfg.Host = val
+		case "port":
+			if port, err := strconv.Atoi(val); err == nil {
+				cfg.Port = port
+			}
 		case "user":
-			s.cfg.User = val
+			cfg.User = val
 		case "password":
-			s.cfg.Password = val
+			cfg.Password = val
 		case "socket":
-			s.cfg.Socket = val
+			cfg.Socket = val
 		case "database":
-			s.cfg.Database = val
+			cfg.Database = val
 		}
 	}
-	return nil
+	return cfg, nil
 }

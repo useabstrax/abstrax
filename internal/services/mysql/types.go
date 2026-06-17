@@ -2,12 +2,12 @@ package mysql
 
 // Config holds MySQL connection settings.
 type Config struct {
-	Host     string `toml:"host" json:"host"`
-	Port     int    `toml:"port" json:"port"`
-	User     string `toml:"user" json:"user"`
-	Password string `toml:"password" json:"-"`
-	Socket   string `toml:"socket" json:"socket"`
-	Database string `toml:"database" json:"database"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"-"`
+	Socket   string `json:"socket,omitempty"`
+	Database string `json:"database,omitempty"`
 }
 
 // InstallOptions holds options for mysql install.

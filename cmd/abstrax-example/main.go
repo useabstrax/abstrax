@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command abstrax-example is a reference Abstrax plugin for testing and documentation.
 package main
 

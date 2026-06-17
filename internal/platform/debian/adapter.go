@@ -23,11 +23,8 @@ const (
 	// NginxSitesEnabled is nginx's sites-enabled dir.
 	NginxSitesEnabled = "/etc/nginx/sites-enabled"
 
-	// AbstraxStateDir is where Abstrax stores project state.
+	// AbstraxStateDir is where Abstrax stores runtime state (plugins, caches).
 	AbstraxStateDir = "/var/lib/abstrax"
-
-	// AbstraxProjectsDir is where project state JSON files live.
-	AbstraxProjectsDir = "/var/lib/abstrax/projects"
 
 	// AbstraxConfigDir is the main config directory.
 	AbstraxConfigDir = "/etc/abstrax"
@@ -35,8 +32,17 @@ const (
 	// AbstraxConfig stores general Abstrax settings.
 	AbstraxConfig = "/etc/abstrax/config.json"
 
+	// AbstraxProjectsDir is where project state JSON files live.
+	AbstraxProjectsDir = "/etc/abstrax/projects"
+
+	// AbstraxProjectsDirLegacy is the pre-consolidation project state directory.
+	AbstraxProjectsDirLegacy = "/var/lib/abstrax/projects"
+
 	// MySQLConfig stores Abstrax MySQL connection config.
-	MySQLConfig = "/etc/abstrax/mysql.toml"
+	MySQLConfig = "/etc/abstrax/mysql.json"
+
+	// MySQLConfigLegacy is the pre-consolidation MySQL config file.
+	MySQLConfigLegacy = "/etc/abstrax/mysql.toml"
 
 	// AbstraxLogDir is the log directory.
 	AbstraxLogDir = "/var/log/abstrax"
