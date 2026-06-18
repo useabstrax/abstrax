@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform/debian"
 	"abstrax/internal/services/pkgmanager"
+	"abstrax/internal/services/svcmanager"
 )
 
 // Service manages MySQL operations.
@@ -71,9 +73,14 @@ func (s *Service) Test(ctx context.Context) error {
 	return nil
 }
 
-// Install installs MySQL/MariaDB.
-func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
+// Install installs MySQL/MariaDB, applies secure defaults, and sets the root password.
+func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswordResult, error) {
+	if opts.DryRun {
+		return dryRunPasswordResult(), nil
+	}
+
 	mgr := pkgmanager.NewApt(false, false)
+	svcMgr := svcmanager.New(false, false)
 
 	pkg := "mysql-server"
 	if opts.Version != "" {
@@ -81,19 +88,102 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if err := mgr.Update(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
-		return fmt.Errorf("installing mysql: %w", err)
+		return nil, fmt.Errorf("installing mysql: %w", err)
 	}
 
-	if opts.Secure {
-		// Run mysql_secure_installation non-interactively is complex -
-		// TODO: implement secure setup with predefined options.
-		fmt.Println("NOTE: Run 'mysql_secure_installation' manually to harden the installation.")
+	serviceName, err := s.detectServiceName(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := svcMgr.Enable(ctx, serviceName); err != nil {
+		return nil, err
+	}
+	if err := svcMgr.Start(ctx, serviceName); err != nil {
+		return nil, err
 	}
 
-	return nil
+	if err := s.waitForReady(ctx, 60*time.Second); err != nil {
+		return nil, err
+	}
+
+	if !s.canConnectWithoutPassword(ctx) {
+		return nil, fmt.Errorf("mysql is already configured; use `mysql reset-root-password` if you have lost the root password")
+	}
+
+	password, generated, err := resolveOrGeneratePassword(opts.RootPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.execAsRootSocket(ctx, buildSecureInstallSQL(password)); err != nil {
+		return nil, fmt.Errorf("securing mysql installation: %w", err)
+	}
+
+	if err := s.verifyRootLogin(ctx, password); err != nil {
+		return nil, err
+	}
+
+	return &RootPasswordResult{
+		RootPassword: password,
+		Generated:    generated,
+	}, nil
+}
+
+// ResetRootPassword resets the MySQL root password without knowing the current one.
+func (s *Service) ResetRootPassword(ctx context.Context, opts ResetRootPasswordOptions) (*RootPasswordResult, error) {
+	if opts.DryRun {
+		return dryRunPasswordResult(), nil
+	}
+
+	serviceName, err := s.detectServiceName(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	svcMgr := svcmanager.New(false, false)
+	if err := svcMgr.Stop(ctx, serviceName); err != nil {
+		return nil, err
+	}
+
+	if err := s.startRecoveryMysqld(ctx); err != nil {
+		return nil, err
+	}
+
+	password, generated, err := resolveOrGeneratePassword(opts.RootPassword)
+	if err != nil {
+		_ = s.stopRecoveryMysqld(ctx)
+		return nil, err
+	}
+
+	if err := s.execAsRootSocket(ctx, buildSetRootPasswordSQL(password)); err != nil {
+		_ = s.stopRecoveryMysqld(ctx)
+		return nil, fmt.Errorf("setting root password: %w", err)
+	}
+
+	if err := s.stopRecoveryMysqld(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := svcMgr.Start(ctx, serviceName); err != nil {
+		return nil, err
+	}
+
+	if err := s.waitForReady(ctx, 30*time.Second); err != nil {
+		// Server may require password auth now; verify directly.
+		if err := s.verifyRootLogin(ctx, password); err != nil {
+			return nil, err
+		}
+	} else if err := s.verifyRootLogin(ctx, password); err != nil {
+		return nil, err
+	}
+
+	return &RootPasswordResult{
+		RootPassword: password,
+		Generated:    generated,
+	}, nil
 }
 
 // DBAdd creates a database.

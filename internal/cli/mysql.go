@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,7 @@ func NewMySQLCmd() *cobra.Command {
 	cmd.AddCommand(userCmd)
 	cmd.AddCommand(newMySQLTestCmd())
 	cmd.AddCommand(newMySQLInstallCmd())
+	cmd.AddCommand(newMySQLResetRootPasswordCmd())
 	cmd.AddCommand(newMySQLGrantCmd())
 	cmd.AddCommand(newMySQLRevokeCmd())
 
@@ -138,19 +140,115 @@ func newMySQLInstallCmd() *cobra.Command {
 				return err
 			}
 
+			opts.DryRun = globals.Flags.DryRun
+			opts.RootPassword = resolveMySQLRootPassword(opts.RootPassword)
+
 			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.Install(cmd.Context(), opts); err != nil {
+			result, err := svc.Install(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
-			return printSimpleResult(actions.MySQLInstall, "MySQL installed.", nil)
+			return printRootPasswordResult(
+				actions.MySQLInstall,
+				"MySQL installed successfully.",
+				result,
+				false,
+			)
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.Version, "version", "", "MySQL version to install")
-	cmd.Flags().BoolVar(&opts.Secure, "secure", false, "Run mysql_secure_installation after install")
+	cmd.Flags().StringVar(&opts.RootPassword, "root-password", "", "Root password (generated if omitted)")
 
 	return cmd
+}
+
+func newMySQLResetRootPasswordCmd() *cobra.Command {
+	opts := mysql.ResetRootPasswordOptions{}
+
+	cmd := &cobra.Command{
+		Use:   "reset-root-password",
+		Short: "Reset the MySQL root password",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := platform.RequireRoot(); err != nil {
+				return err
+			}
+
+			ok, err := confirm.Ask(
+				"This will reset the MySQL root password and invalidate the current one. Continue?",
+				globals.Flags.Yes,
+			)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil
+			}
+
+			opts.DryRun = globals.Flags.DryRun
+			opts.RootPassword = resolveMySQLRootPassword(opts.RootPassword)
+
+			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			result, err := svc.ResetRootPassword(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+
+			staleConfig := svc.HasSavedPassword()
+			return printRootPasswordResult(
+				actions.MySQLResetRootPassword,
+				"MySQL root password reset.",
+				result,
+				staleConfig,
+			)
+		},
+	}
+
+	cmd.Flags().StringVar(&opts.RootPassword, "root-password", "", "New root password (generated if omitted)")
+
+	return cmd
+}
+
+func resolveMySQLRootPassword(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	return os.Getenv("ABSTRAX_MYSQL_ROOT_PASSWORD")
+}
+
+func printRootPasswordResult(action, summary string, result *mysql.RootPasswordResult, staleConfig bool) error {
+	r := output.Success(action, summary, result)
+
+	if globals.Flags.JSON {
+		output.PrintJSON(r)
+		return nil
+	}
+
+	p := printer()
+	if !globals.Flags.Quiet {
+		p.Line("")
+		p.Line("============================================================")
+		p.Line("  %s", summary)
+		p.Line("")
+		p.Line("  ROOT PASSWORD (save this now — shown only once):")
+		p.Line("")
+		p.Line("  %s", result.RootPassword)
+		p.Line("")
+		p.Line("  Connect with: mysql -u root -p")
+		p.Line("  Abstrax does not store this password. Use `mysql config set")
+		p.Line("  --password` separately if you want Abstrax commands to connect.")
+		if staleConfig {
+			p.Line("")
+			p.Warn("Saved MySQL config at /etc/abstrax/mysql.json may be stale. Run `mysql config set --password` to update it.")
+		}
+		p.Line("============================================================")
+		p.Line("")
+	} else {
+		p.Success(summary)
+	}
+
+	return nil
 }
 
 func newMySQLDBAddCmd() *cobra.Command {

@@ -10,11 +10,23 @@ type Config struct {
 	Database string `json:"database,omitempty"`
 }
 
+// RootPasswordResult is returned when a root password is set during install or reset.
+type RootPasswordResult struct {
+	RootPassword string `json:"root_password"`
+	Generated    bool   `json:"password_generated"`
+}
+
 // InstallOptions holds options for mysql install.
 type InstallOptions struct {
-	Version string
-	Secure  bool
-	DryRun  bool
+	Version      string
+	RootPassword string
+	DryRun       bool
+}
+
+// ResetRootPasswordOptions holds options for mysql reset-root-password.
+type ResetRootPasswordOptions struct {
+	RootPassword string
+	DryRun       bool
 }
 
 // DBAddOptions holds options for database add.
