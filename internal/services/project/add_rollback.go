@@ -10,8 +10,6 @@ type addRollback struct {
 	createdDirs []string
 	vhostPath   string
 	poolPath    string
-	acls        []ManagedACL
-	webUser     string
 	svc         *Service
 }
 
@@ -27,17 +25,10 @@ func (r *addRollback) trackPool(path string) {
 	r.poolPath = path
 }
 
-func (r *addRollback) trackACLs(entries []ManagedACL, webUser string) {
-	r.acls = entries
-	r.webUser = webUser
-}
-
 func (r *addRollback) undo(ctx context.Context) {
 	if r.svc == nil {
 		return
 	}
-	acl := newACLManager(r.svc.runner)
-	_ = acl.Remove(ctx, r.acls, r.webUser)
 
 	if r.poolPath != "" {
 		_ = os.Remove(r.poolPath)

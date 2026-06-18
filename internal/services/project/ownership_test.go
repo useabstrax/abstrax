@@ -295,34 +295,28 @@ func TestMkdirIsolatedOnlyChownsNewDirectories(t *testing.T) {
 	}
 }
 
-func TestRequiredACLsHomeProject(t *testing.T) {
+func TestWebTraverseDirsIncludesPublicParent(t *testing.T) {
 	root := t.TempDir()
-	paths := &ValidatedPaths{
-		ProjectPath:  filepath.Join(root, "home", "mike", "example.com"),
-		PublicPath:   filepath.Join(root, "home", "mike", "example.com", "public"),
-		DocumentRoot: filepath.Join(root, "home", "mike", "example.com", "public"),
+	home := filepath.Join(root, "home", "mike")
+	project := filepath.Join(home, "example.com")
+	public := filepath.Join(project, "public")
+	for _, dir := range []string{home, project, public} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
 	}
-	id := RuntimeIdentity{Home: filepath.Join(root, "home", "mike")}
-	entries := RequiredACLs(paths, id)
 
-	var traversal []string
-	for _, e := range entries {
-		if e.Permissions == "x" {
-			traversal = append(traversal, e.Path)
-		}
+	dirs := webTraverseDirs(&ValidatedPaths{
+		ProjectPath:  project,
+		PublicPath:   public,
+		DocumentRoot: public,
+	}, home)
+
+	if len(dirs) < 2 {
+		t.Fatalf("dirs = %#v", dirs)
 	}
-	if len(traversal) < 2 {
-		t.Fatalf("traversal paths = %#v", traversal)
-	}
-	if traversal[0] != filepath.Join(root, "home", "mike") {
-		t.Fatalf("first traversal = %s", traversal[0])
-	}
-	for _, e := range entries {
-		if e.Recurse && e.Permissions == "rX" && !e.Default {
-			if e.Path != paths.PublicPath {
-				t.Fatalf("public acl path = %s", e.Path)
-			}
-		}
+	if dirs[0] != home {
+		t.Fatalf("first dir = %s", dirs[0])
 	}
 }
 

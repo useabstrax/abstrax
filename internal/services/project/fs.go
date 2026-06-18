@@ -28,8 +28,20 @@ func mkdirProjectTree(paths *ValidatedPaths, id RuntimeIdentity, mode os.FileMod
 
 	result := &MkdirResult{}
 	targets := []string{paths.ProjectPath}
-	if paths.PublicPath != paths.ProjectPath {
+	if paths.PublicPath != paths.ProjectPath && !isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
 		targets = append(targets, paths.PublicPath)
+	}
+	if isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
+		targets = append(targets,
+			filepath.Join(paths.ProjectPath, "releases"),
+			filepath.Join(paths.ProjectPath, "shared"),
+		)
+	}
+	if isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
+		targets = append(targets,
+			filepath.Join(paths.ProjectPath, "releases"),
+			filepath.Join(paths.ProjectPath, "shared"),
+		)
 	}
 	for _, target := range targets {
 		created, err := mkdirNewTree(target, mode)

@@ -109,7 +109,6 @@ type State struct {
 	ApprovedRoot  string           `json:"approved_root,omitempty"`
 	PHPPoolName   string           `json:"php_pool_name,omitempty"`
 	PHPSocketPath string           `json:"php_socket_path,omitempty"`
-	ManagedACLs   []ManagedACL     `json:"managed_acls,omitempty"`
 	Services      []ProjectService `json:"services,omitempty"`
 	CreatedAt     time.Time        `json:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at"`

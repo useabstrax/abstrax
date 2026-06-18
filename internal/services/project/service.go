@@ -149,18 +149,10 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 	}
 
 	if id.Mode == OwnershipIsolated {
-		if err := ensureACLPackage(ctx, s.runner); err != nil {
-			rb.undo(ctx)
-			return nil, err
-		}
-		acls := RequiredACLs(validated, id)
-		aclMgr := newACLManager(s.runner)
-		if err := aclMgr.Apply(ctx, acls, id.WebServerUser); err != nil {
+		if err := ensureWebTraverseAccess(validated, id); err != nil {
 			rb.undo(ctx)
 			return nil, fmt.Errorf("configuring nginx filesystem access: %w", err)
 		}
-		state.ManagedACLs = acls
-		rb.trackACLs(acls, id.WebServerUser)
 	}
 
 	if state.Runtime == RuntimePHP && id.Mode == OwnershipIsolated {
@@ -220,10 +212,6 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	if id.Mode == OwnershipIsolated {
 		if err := s.removePHPPool(ctx, state); err != nil {
 			return err
-		}
-		aclMgr := newACLManager(s.runner)
-		if err := aclMgr.Remove(ctx, state.ManagedACLs, id.WebServerUser); err != nil {
-			return fmt.Errorf("removing nginx filesystem ACLs: %w", err)
 		}
 	}
 
