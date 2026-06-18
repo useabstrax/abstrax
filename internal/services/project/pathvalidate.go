@@ -182,8 +182,16 @@ func ensureInside(parent, child, label string) error {
 
 func validateIsolatedPath(resolved string, opts PathValidateOptions) (string, error) {
 	id := opts.Identity
-	if resolved == normalizeComparablePath(id.Home) {
+	ownHome := normalizeComparablePath(id.Home)
+	if resolved == ownHome {
 		return "", fmt.Errorf("project path cannot be the home directory of user %s (%s)", id.User, id.Home)
+	}
+
+	// Allow paths inside the selected user's home before checking other passwd
+	// entries. Some systems include accounts with home "/" that would otherwise
+	// match every path on the filesystem.
+	if isStrictChild(ownHome, resolved) {
+		return "", nil
 	}
 
 	for _, entry := range opts.Homes {
@@ -191,7 +199,7 @@ func validateIsolatedPath(resolved string, opts PathValidateOptions) (string, er
 			continue
 		}
 		home := normalizeComparablePath(entry.Home)
-		if home == "" {
+		if home == "" || home == ownHome {
 			continue
 		}
 		if isStrictChild(home, resolved) || normalizeComparablePath(resolved) == home {
@@ -206,12 +214,8 @@ func validateIsolatedPath(resolved string, opts PathValidateOptions) (string, er
 	if err != nil {
 		return "", err
 	}
-	if err := rejectForeignHomeParent(parent, opts.Homes, id.User); err != nil {
+	if err := rejectForeignHomeParent(parent, opts.Homes, id.User, ownHome); err != nil {
 		return "", err
-	}
-
-	if isStrictChild(normalizeComparablePath(id.Home), resolved) {
-		return "", nil
 	}
 
 	approvedRoot, err := matchApprovedRoot(resolved, opts.ApprovedRoots)
@@ -265,15 +269,17 @@ func nearestExistingParent(path string) (string, error) {
 	return "/", nil
 }
 
-func rejectForeignHomeParent(parent string, homes []identity.HomeEntry, selectedUser string) error {
+func rejectForeignHomeParent(parent string, homes []identity.HomeEntry, selectedUser, ownHome string) error {
+	parent = normalizeComparablePath(parent)
 	for _, entry := range homes {
 		if entry.Username == selectedUser {
 			continue
 		}
-		if entry.Home == "" {
+		home := normalizeComparablePath(entry.Home)
+		if home == "" || home == ownHome {
 			continue
 		}
-		if parent == entry.Home || isStrictChild(entry.Home, parent) {
+		if parent == home || isStrictChild(home, parent) {
 			return fmt.Errorf(
 				"The path cannot be created because parent directory %s is inside another user's home directory.\n\nChoose a path inside %s's home directory, use an approved shared project root, or select the matching project user.",
 				parent, selectedUser,

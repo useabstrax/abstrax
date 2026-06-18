@@ -431,3 +431,25 @@ func TestSymlinkEscapeRejected(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestRootHomeEntryDoesNotBlockOwnHomePath(t *testing.T) {
+	root := t.TempDir()
+	setupFilesystem(t, root)
+	mikeHome := resolvedPath(t, filepath.Join(root, "home", "mike"))
+	homes := append(testHomes(root), identity.HomeEntry{Username: "root", Home: "/"})
+
+	_, err := ValidateProjectPath(PathValidateOptions{
+		RequestedPath: filepath.Join(mikeHome, "useabstrax.com"),
+		ProjectName:   "useabstrax.com",
+		PublicDir:     "current/public",
+		Identity: RuntimeIdentity{
+			Mode: OwnershipIsolated,
+			User: "mike",
+			Home: mikeHome,
+		},
+		Homes: homes,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
