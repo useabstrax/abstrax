@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // ensureWebTraverseAccess grants nginx (www-data) traverse permission into an
@@ -19,17 +18,6 @@ func ensureWebTraverseAccess(paths *ValidatedPaths, id RuntimeIdentity) error {
 	for _, dir := range webTraverseDirs(paths, id.Home) {
 		if err := addOtherTraverse(dir); err != nil {
 			return fmt.Errorf("granting web server traverse on %q: %w", dir, err)
-		}
-	}
-
-	if isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
-		for _, dir := range []string{
-			filepath.Join(paths.ProjectPath, "releases"),
-			filepath.Join(paths.ProjectPath, "shared"),
-		} {
-			if err := addOtherTraverse(dir); err != nil {
-				return fmt.Errorf("granting web server traverse on %q: %w", dir, err)
-			}
 		}
 	}
 
@@ -120,20 +108,4 @@ func addOtherTraverse(path string) error {
 		return nil
 	}
 	return os.Chmod(path, mode|0001)
-}
-
-func isDeployStylePublicPath(projectPath, publicPath string) bool {
-	if projectPath == "" || publicPath == "" {
-		return false
-	}
-	rel, err := filepath.Rel(projectPath, publicPath)
-	if err != nil {
-		return false
-	}
-	rel = filepath.Clean(rel)
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return false
-	}
-	parts := strings.Split(rel, string(os.PathSeparator))
-	return len(parts) > 0 && parts[0] == "current"
 }

@@ -12,44 +12,21 @@ type MkdirResult struct {
 	Created []string
 }
 
-// mkdirProjectTree creates the project and public directories.
+// mkdirProjectTree creates the project root directory.
 func mkdirProjectTree(paths *ValidatedPaths, id RuntimeIdentity, mode os.FileMode) (*MkdirResult, error) {
 	if id.Mode == OwnershipShared {
 		if err := os.MkdirAll(paths.ProjectPath, mode); err != nil {
 			return nil, fmt.Errorf("creating project path: %w", err)
 		}
-		if paths.PublicPath != paths.ProjectPath {
-			if err := os.MkdirAll(paths.PublicPath, mode); err != nil {
-				return nil, fmt.Errorf("creating public path: %w", err)
-			}
-		}
 		return &MkdirResult{}, nil
 	}
 
 	result := &MkdirResult{}
-	targets := []string{paths.ProjectPath}
-	if paths.PublicPath != paths.ProjectPath && !isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
-		targets = append(targets, paths.PublicPath)
+	created, err := mkdirNewTree(paths.ProjectPath, mode)
+	if err != nil {
+		return result, err
 	}
-	if isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
-		targets = append(targets,
-			filepath.Join(paths.ProjectPath, "releases"),
-			filepath.Join(paths.ProjectPath, "shared"),
-		)
-	}
-	if isDeployStylePublicPath(paths.ProjectPath, paths.PublicPath) {
-		targets = append(targets,
-			filepath.Join(paths.ProjectPath, "releases"),
-			filepath.Join(paths.ProjectPath, "shared"),
-		)
-	}
-	for _, target := range targets {
-		created, err := mkdirNewTree(target, mode)
-		if err != nil {
-			return result, err
-		}
-		result.Created = append(result.Created, created...)
-	}
+	result.Created = append(result.Created, created...)
 	if err := lchownTree(result.Created, id.UID, id.GID); err != nil {
 		return result, err
 	}

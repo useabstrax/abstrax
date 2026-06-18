@@ -281,7 +281,7 @@ func TestMkdirIsolatedOnlyChownsNewDirectories(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
-	if len(result.Created) != 2 {
+	if len(result.Created) != 1 {
 		t.Fatalf("created = %#v", result.Created)
 	}
 	for _, p := range result.Created {

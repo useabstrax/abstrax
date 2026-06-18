@@ -49,23 +49,7 @@ func TestAddOtherTraverse(t *testing.T) {
 	}
 }
 
-func TestIsDeployStylePublicPath(t *testing.T) {
-	project := "/home/abstrax/useabstrax.com"
-	cases := []struct {
-		public string
-		want   bool
-	}{
-		{filepath.Join(project, "current", "public"), true},
-		{filepath.Join(project, "public"), false},
-	}
-	for _, tc := range cases {
-		if got := isDeployStylePublicPath(project, tc.public); got != tc.want {
-			t.Fatalf("isDeployStylePublicPath(%q) = %v, want %v", tc.public, got, tc.want)
-		}
-	}
-}
-
-func TestEnsureWebTraverseAccessDeployDirs(t *testing.T) {
+func TestEnsureWebTraverseAccessExistingDirs(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home", "abstrax")
 	project := filepath.Join(home, "useabstrax.com")
@@ -74,24 +58,16 @@ func TestEnsureWebTraverseAccessDeployDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	releases := filepath.Join(project, "releases")
-	shared := filepath.Join(project, "shared")
-	for _, dir := range []string{releases, shared} {
-		if err := os.Mkdir(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
 
-	public := filepath.Join(project, "current", "public")
 	if err := ensureWebTraverseAccess(&ValidatedPaths{
 		ProjectPath:  project,
-		PublicPath:   public,
-		DocumentRoot: public,
+		PublicPath:   filepath.Join(project, "current", "public"),
+		DocumentRoot: filepath.Join(project, "current", "public"),
 	}, RuntimeIdentity{Home: home}); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, dir := range []string{home, project, releases, shared} {
+	for _, dir := range []string{home, project} {
 		info, err := os.Stat(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -102,7 +78,7 @@ func TestEnsureWebTraverseAccessDeployDirs(t *testing.T) {
 	}
 }
 
-func TestMkdirSkipsDeployStylePublicPath(t *testing.T) {
+func TestMkdirCreatesOnlyProjectRoot(t *testing.T) {
 	root := t.TempDir()
 	setupFilesystem(t, root)
 	project := filepath.Join(root, "home", "abstrax", "useabstrax.com")
@@ -117,21 +93,10 @@ func TestMkdirSkipsDeployStylePublicPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var createdProject, createdReleases, createdShared bool
-	for _, p := range result.Created {
-		switch p {
-		case project:
-			createdProject = true
-		case filepath.Join(project, "releases"):
-			createdReleases = true
-		case filepath.Join(project, "shared"):
-			createdShared = true
-		}
-	}
-	if !createdProject || !createdReleases || !createdShared {
+	if len(result.Created) == 0 || result.Created[len(result.Created)-1] != project {
 		t.Fatalf("created = %#v", result.Created)
 	}
 	if _, err := os.Stat(public); !os.IsNotExist(err) {
-		t.Fatalf("deploy-style public path should not be created: err=%v", err)
+		t.Fatalf("public path should not be created: err=%v", err)
 	}
 }
