@@ -3,6 +3,7 @@ package mysql
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -108,6 +109,38 @@ func TestWriteTempMySQLClientCnf(t *testing.T) {
 		if !strings.Contains(content, fragment) {
 			t.Fatalf("expected %q in cnf, got:\n%s", fragment, content)
 		}
+	}
+}
+
+func TestClassifyRootConnectError(t *testing.T) {
+	if classifyRootConnectError("ERROR 1045 (28000): Access denied for user 'root'@'localhost'") != rootConnectAccessDenied {
+		t.Fatal("expected access denied classification")
+	}
+	if classifyRootConnectError("Can't connect to local MySQL server through socket") != rootConnectUnavailable {
+		t.Fatal("expected unavailable classification")
+	}
+}
+
+func TestParseSocketInFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "client.cnf")
+	content := `# client defaults
+[client]
+port = 3306
+socket = /custom/mysql.sock
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := parseSocketInFile(path); got != "/custom/mysql.sock" {
+		t.Fatalf("socket: got %q want /custom/mysql.sock", got)
+	}
+}
+
+func TestErrMySQLAlreadyConfigured(t *testing.T) {
+	err := errMySQLAlreadyConfigured()
+	if !strings.Contains(err.Error(), "reset-root-password") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

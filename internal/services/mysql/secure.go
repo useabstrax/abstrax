@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ const (
 	defaultMySQLSocket   = "/var/run/mysqld/mysqld.sock"
 	defaultMySQLPIDFile  = "/var/run/mysqld/mysqld.pid"
 	defaultMySQLConfFile = "/etc/mysql/my.cnf"
+	defaultMySQLDataDir  = "/var/lib/mysql"
 )
 
 // escapeSQLString escapes a string for use inside single-quoted SQL literals.
@@ -61,10 +63,182 @@ func (s *Service) defaultSocket() string {
 	if s.cfg != nil && s.cfg.Socket != "" {
 		return s.cfg.Socket
 	}
-	if _, err := os.Stat(defaultMySQLSocket); err == nil {
-		return defaultMySQLSocket
+	return discoverMySQLSocket()
+}
+
+func discoverMySQLSocket() string {
+	for _, path := range []string{
+		defaultMySQLSocket,
+		"/run/mysqld/mysqld.sock",
+	} {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return parseSocketFromMySQLConfig()
+}
+
+func parseSocketFromMySQLConfig() string {
+	for _, path := range mysqlConfigPaths() {
+		if sock := parseSocketInFile(path); sock != "" {
+			return sock
+		}
 	}
 	return ""
+}
+
+func mysqlConfigPaths() []string {
+	var paths []string
+	if _, err := os.Stat(defaultMySQLConfFile); err == nil {
+		paths = append(paths, defaultMySQLConfFile)
+	}
+	for _, dir := range []string{
+		"/etc/mysql/conf.d",
+		"/etc/mysql/mysql.conf.d",
+		"/etc/mysql/mariadb.conf.d",
+	} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cnf") {
+				continue
+			}
+			paths = append(paths, filepath.Join(dir, entry.Name()))
+		}
+	}
+	return paths
+}
+
+func parseSocketInFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+
+	inClient := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section := strings.TrimSuffix(strings.TrimPrefix(line, "["), "]")
+			inClient = strings.EqualFold(section, "client")
+			continue
+		}
+		if !inClient {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(key) == "socket" {
+			return strings.TrimSpace(val)
+		}
+	}
+	return ""
+}
+
+type rootConnectStatus int
+
+const (
+	rootConnectReady rootConnectStatus = iota
+	rootConnectAccessDenied
+	rootConnectUnavailable
+)
+
+func classifyRootConnectError(detail string) rootConnectStatus {
+	lower := strings.ToLower(detail)
+	if strings.Contains(lower, "access denied") {
+		return rootConnectAccessDenied
+	}
+	return rootConnectUnavailable
+}
+
+func mysqlDataDirExists() bool {
+	info, err := os.Stat(filepath.Join(defaultMySQLDataDir, "mysql"))
+	return err == nil && info.IsDir()
+}
+
+func errMySQLAlreadyConfigured() error {
+	if mysqlDataDirExists() {
+		return fmt.Errorf("mysql is already configured: database files in %s were kept by `package remove` (only the package was removed, not the data). Use `mysql reset-root-password`, or run `package remove mysql-server --purge` and remove %s for a fresh install", defaultMySQLDataDir, defaultMySQLDataDir)
+	}
+	return fmt.Errorf("mysql is already configured; use `mysql reset-root-password` if you have lost the root password")
+}
+
+func (s *Service) probeRootConnection(ctx context.Context) (rootConnectStatus, string) {
+	args := s.rootSocketClientArgs("-e", "SELECT 1")
+	res, err := s.runner.RunSilent(ctx, "mysql", args...)
+	if err == nil && res.ExitCode == 0 {
+		return rootConnectReady, ""
+	}
+
+	detail := res.Stderr
+	if detail == "" && err != nil {
+		detail = err.Error()
+	}
+	return classifyRootConnectError(detail), detail
+}
+
+func (s *Service) canConnectWithoutPassword(ctx context.Context) bool {
+	status, _ := s.probeRootConnection(ctx)
+	return status == rootConnectReady
+}
+
+func (s *Service) waitForReady(ctx context.Context, timeout time.Duration) error {
+	var lastDetail string
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		status, detail := s.probeRootConnection(ctx)
+		lastDetail = detail
+		switch status {
+		case rootConnectReady:
+			return nil
+		case rootConnectAccessDenied:
+			return errMySQLAlreadyConfigured()
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	return s.readyTimeoutError(ctx, lastDetail)
+}
+
+func (s *Service) readyTimeoutError(ctx context.Context, lastDetail string) error {
+	var msg strings.Builder
+	msg.WriteString("timed out waiting for MySQL to become ready")
+	if lastDetail != "" {
+		msg.WriteString(": ")
+		msg.WriteString(lastDetail)
+	}
+
+	if serviceName, err := s.detectServiceName(ctx); err == nil {
+		res, _ := s.runner.RunSilent(ctx, "systemctl", "is-active", serviceName)
+		state := strings.TrimSpace(res.Stdout)
+		if state == "" {
+			state = "unknown"
+		}
+		msg.WriteString(fmt.Sprintf(" (service %q is %s)", serviceName, state))
+		if state != "active" {
+			msg.WriteString(fmt.Sprintf("; check logs with: journalctl -u %s", serviceName))
+		}
+	}
+
+	socket := s.defaultSocket()
+	if socket != "" {
+		msg.WriteString(fmt.Sprintf("; socket: %s", socket))
+	}
+
+	return fmt.Errorf(msg.String())
 }
 
 func (s *Service) rootSocketClientArgs(extra ...string) []string {
@@ -74,27 +248,6 @@ func (s *Service) rootSocketClientArgs(extra ...string) []string {
 	}
 	args = append(args, extra...)
 	return args
-}
-
-func (s *Service) canConnectWithoutPassword(ctx context.Context) bool {
-	args := s.rootSocketClientArgs("-e", "SELECT 1")
-	res, err := s.runner.RunSilent(ctx, "mysql", args...)
-	return err == nil && res.ExitCode == 0
-}
-
-func (s *Service) waitForReady(ctx context.Context, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if s.canConnectWithoutPassword(ctx) {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(500 * time.Millisecond):
-		}
-	}
-	return fmt.Errorf("timed out waiting for MySQL to become ready")
 }
 
 func (s *Service) execAsRootSocket(ctx context.Context, sql string) error {
@@ -152,6 +305,29 @@ func cnfQuoteValue(s string) string {
 	escaped := strings.ReplaceAll(s, `\`, `\\`)
 	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
 	return `"` + escaped + `"`
+}
+
+func (s *Service) waitForRootLogin(ctx context.Context, password string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		if err := s.verifyRootLogin(ctx, password); err != nil {
+			lastErr = err
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(500 * time.Millisecond):
+				continue
+			}
+		}
+		return nil
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("timed out waiting for MySQL to accept the new root password: %w", lastErr)
+	}
+	return fmt.Errorf("timed out waiting for MySQL to accept the new root password")
 }
 
 func (s *Service) execWithPassword(ctx context.Context, password, sql string) error {

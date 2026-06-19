@@ -106,12 +106,8 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return nil, err
 	}
 
-	if err := s.waitForReady(ctx, 60*time.Second); err != nil {
+	if err := s.waitForReady(ctx, 120*time.Second); err != nil {
 		return nil, err
-	}
-
-	if !s.canConnectWithoutPassword(ctx) {
-		return nil, fmt.Errorf("mysql is already configured; use `mysql reset-root-password` if you have lost the root password")
 	}
 
 	password, generated, err := resolveOrGeneratePassword(opts.RootPassword)
@@ -176,12 +172,7 @@ func (s *Service) ResetRootPassword(ctx context.Context, opts ResetRootPasswordO
 		return nil, err
 	}
 
-	if err := s.waitForReady(ctx, 30*time.Second); err != nil {
-		// Server may require password auth now; verify directly.
-		if err := s.verifyRootLogin(ctx, password); err != nil {
-			return nil, err
-		}
-	} else if err := s.verifyRootLogin(ctx, password); err != nil {
+	if err := s.waitForRootLogin(ctx, password, 60*time.Second); err != nil {
 		return nil, err
 	}
 
