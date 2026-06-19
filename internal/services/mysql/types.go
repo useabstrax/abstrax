@@ -79,6 +79,6 @@ const (
 // PresetPrivileges maps preset names to privilege lists.
 var PresetPrivileges = map[string]string{
 	PresetReadonly: "SELECT",
-	PresetApp:      "SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP",
+	PresetApp:      "SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, REFERENCES",
 	PresetAdmin:    "ALL PRIVILEGES",
 }
