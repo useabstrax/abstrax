@@ -22,20 +22,28 @@ func escapeSQLString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
-// buildSetRootPasswordSQL returns SQL to set the root@localhost password.
-func buildSetRootPasswordSQL(password string) string {
+// buildRootPasswordSQL returns SQL to enable password auth for root over both
+// the localhost socket and TCP (127.0.0.1). Explicitly sets caching_sha2_password
+// so auth_socket/unix_socket is replaced on Debian/Ubuntu default installs.
+func buildRootPasswordSQL(password string) string {
 	esc := escapeSQLString(password)
-	return fmt.Sprintf("FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '%s';", esc)
+	return fmt.Sprintf(`ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '%s';
+CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED WITH caching_sha2_password BY '%s';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;`, esc, esc)
+}
+
+// buildSetRootPasswordSQL returns SQL to set root passwords for local connections.
+func buildSetRootPasswordSQL(password string) string {
+	return fmt.Sprintf("FLUSH PRIVILEGES;\n%s\nFLUSH PRIVILEGES;", buildRootPasswordSQL(password))
 }
 
 // buildSecureInstallSQL returns SQL to harden a fresh MySQL installation.
 func buildSecureInstallSQL(password string) string {
-	esc := escapeSQLString(password)
-	return fmt.Sprintf(`ALTER USER 'root'@'localhost' IDENTIFIED BY '%s';
+	return fmt.Sprintf(`%s
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-FLUSH PRIVILEGES;`, esc)
+FLUSH PRIVILEGES;`, buildRootPasswordSQL(password))
 }
 
 func resolveOrGeneratePassword(provided string) (password string, generated bool, err error) {
@@ -137,10 +145,33 @@ func (s *Service) execWithPassword(ctx context.Context, password, sql string) er
 }
 
 func (s *Service) verifyRootLogin(ctx context.Context, password string) error {
+	// Verify TCP first: GUI apps and SSH tunnels connect this way. Socket-only
+	// checks are not enough because auth_socket can authenticate root without
+	// a password when abstrax runs as the root OS user.
+	if err := s.execWithPasswordHost(ctx, password, "127.0.0.1", "SELECT 1"); err != nil {
+		return fmt.Errorf("verifying root login via 127.0.0.1: %w", err)
+	}
 	if err := s.execWithPassword(ctx, password, "SELECT 1"); err != nil {
-		return fmt.Errorf("verifying root login: %w", err)
+		return fmt.Errorf("verifying root login via socket: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) execWithPasswordHost(ctx context.Context, password, host, sql string) error {
+	cnf, err := writeTempMySQLCnf(password)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(cnf)
+
+	args := []string{"--defaults-extra-file=" + cnf, "-h", host}
+	if s.cfg != nil && s.cfg.Port > 0 && s.cfg.Port != 3306 {
+		args = append(args, fmt.Sprintf("--port=%d", s.cfg.Port))
+	}
+	args = append(args, "-e", sql)
+
+	_, err = s.runner.Run(ctx, "mysql", args...)
+	return err
 }
 
 // detectServiceName returns the systemd service name for MySQL or MariaDB.

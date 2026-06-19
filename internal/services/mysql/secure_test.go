@@ -26,8 +26,16 @@ func TestBuildSetRootPasswordSQL(t *testing.T) {
 	if !strings.Contains(sql, "secret''pass") {
 		t.Fatalf("expected escaped password in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "ALTER USER 'root'@'localhost'") {
-		t.Fatalf("expected ALTER USER in SQL, got: %s", sql)
+	for _, fragment := range []string{
+		"ALTER USER 'root'@'localhost'",
+		"caching_sha2_password",
+		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1'",
+		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1'",
+		"FLUSH PRIVILEGES",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("expected %q in SQL, got: %s", fragment, sql)
+		}
 	}
 }
 
@@ -35,6 +43,8 @@ func TestBuildSecureInstallSQL(t *testing.T) {
 	sql := buildSecureInstallSQL("pw")
 	for _, fragment := range []string{
 		"ALTER USER 'root'@'localhost'",
+		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1'",
+		"caching_sha2_password",
 		"DELETE FROM mysql.user WHERE User=''",
 		"DROP DATABASE IF EXISTS test",
 		"FLUSH PRIVILEGES",
