@@ -153,7 +153,6 @@ func newMySQLInstallCmd() *cobra.Command {
 				actions.MySQLInstall,
 				"MySQL installed successfully.",
 				result,
-				false,
 			)
 		},
 	}
@@ -195,12 +194,10 @@ func newMySQLResetRootPasswordCmd() *cobra.Command {
 				return err
 			}
 
-			staleConfig := svc.HasSavedPassword()
 			return printRootPasswordResult(
 				actions.MySQLResetRootPassword,
 				"MySQL root password reset.",
 				result,
-				staleConfig,
 			)
 		},
 	}
@@ -217,7 +214,7 @@ func resolveMySQLRootPassword(flagValue string) string {
 	return os.Getenv("ABSTRAX_MYSQL_ROOT_PASSWORD")
 }
 
-func printRootPasswordResult(action, summary string, result *mysql.RootPasswordResult, staleConfig bool) error {
+func printRootPasswordResult(action, summary string, result *mysql.RootPasswordResult) error {
 	r := output.Success(action, summary, result)
 
 	if globals.Flags.JSON {
@@ -231,17 +228,13 @@ func printRootPasswordResult(action, summary string, result *mysql.RootPasswordR
 		p.Line("============================================================")
 		p.Line("  %s", summary)
 		p.Line("")
-		p.Line("  ROOT PASSWORD (save this now — shown only once):")
+		p.Line("  ROOT PASSWORD (save this for external tools — shown only once):")
 		p.Line("")
 		p.Line("  %s", result.RootPassword)
 		p.Line("")
 		p.Line("  Connect with: mysql -u root -p")
-		p.Line("  Abstrax does not store this password. Use `mysql config set")
-		p.Line("  --password` separately if you want Abstrax commands to connect.")
-		if staleConfig {
-			p.Line("")
-			p.Warn("Saved MySQL config at /etc/abstrax/mysql.json may be stale. Run `mysql config set --password` to update it.")
-		}
+		p.Line("  Abstrax saved this to /etc/abstrax/mysql.json so mysql")
+		p.Line("  commands work immediately.")
 		p.Line("============================================================")
 		p.Line("")
 	} else {

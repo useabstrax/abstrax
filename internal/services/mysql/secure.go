@@ -67,7 +67,7 @@ func (s *Service) defaultSocket() string {
 	return ""
 }
 
-func (s *Service) mysqlClientArgs(extra ...string) []string {
+func (s *Service) rootSocketClientArgs(extra ...string) []string {
 	args := []string{"-u", "root"}
 	if sock := s.defaultSocket(); sock != "" {
 		args = append(args, "--socket="+sock)
@@ -77,7 +77,7 @@ func (s *Service) mysqlClientArgs(extra ...string) []string {
 }
 
 func (s *Service) canConnectWithoutPassword(ctx context.Context) bool {
-	args := s.mysqlClientArgs("-e", "SELECT 1")
+	args := s.rootSocketClientArgs("-e", "SELECT 1")
 	res, err := s.runner.RunSilent(ctx, "mysql", args...)
 	return err == nil && res.ExitCode == 0
 }
@@ -98,20 +98,40 @@ func (s *Service) waitForReady(ctx context.Context, timeout time.Duration) error
 }
 
 func (s *Service) execAsRootSocket(ctx context.Context, sql string) error {
-	args := s.mysqlClientArgs("-e", sql)
+	args := s.rootSocketClientArgs("-e", sql)
 	_, err := s.runner.Run(ctx, "mysql", args...)
 	return err
 }
 
-func writeTempMySQLCnf(password string) (string, error) {
+func writeTempMySQLClientCnf(cfg Config) (string, error) {
 	f, err := os.CreateTemp("", "abstrax-mysql-*.cnf")
 	if err != nil {
 		return "", fmt.Errorf("creating temp mysql config: %w", err)
 	}
 	path := f.Name()
 
-	content := fmt.Sprintf("[client]\nuser=root\npassword=%s\n", password)
-	if _, err := f.WriteString(content); err != nil {
+	var content strings.Builder
+	content.WriteString("[client]\n")
+	if cfg.User != "" {
+		content.WriteString("user=" + cfg.User + "\n")
+	}
+	if cfg.Password != "" {
+		content.WriteString("password=" + cnfQuoteValue(cfg.Password) + "\n")
+	}
+	if cfg.Host != "" && cfg.Host != "localhost" {
+		content.WriteString("host=" + cfg.Host + "\n")
+	}
+	if cfg.Port > 0 && cfg.Port != 3306 {
+		content.WriteString(fmt.Sprintf("port=%d\n", cfg.Port))
+	}
+	if cfg.Socket != "" {
+		content.WriteString("socket=" + cfg.Socket + "\n")
+	}
+	if cfg.Database != "" {
+		content.WriteString("database=" + cfg.Database + "\n")
+	}
+
+	if _, err := f.WriteString(content.String()); err != nil {
 		f.Close()
 		os.Remove(path)
 		return "", fmt.Errorf("writing temp mysql config: %w", err)
@@ -127,21 +147,19 @@ func writeTempMySQLCnf(password string) (string, error) {
 	return path, nil
 }
 
+// cnfQuoteValue wraps a value for a MySQL option file, escaping special characters.
+func cnfQuoteValue(s string) string {
+	escaped := strings.ReplaceAll(s, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	return `"` + escaped + `"`
+}
+
 func (s *Service) execWithPassword(ctx context.Context, password, sql string) error {
-	cnf, err := writeTempMySQLCnf(password)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(cnf)
-
-	args := []string{"--defaults-extra-file=" + cnf}
+	cfg := Config{User: "root", Password: password}
 	if sock := s.defaultSocket(); sock != "" {
-		args = append(args, "--socket="+sock)
+		cfg.Socket = sock
 	}
-	args = append(args, "-e", sql)
-
-	_, err = s.runner.Run(ctx, "mysql", args...)
-	return err
+	return s.runMySQL(ctx, cfg, sql, false)
 }
 
 func (s *Service) verifyRootLogin(ctx context.Context, password string) error {
@@ -158,20 +176,11 @@ func (s *Service) verifyRootLogin(ctx context.Context, password string) error {
 }
 
 func (s *Service) execWithPasswordHost(ctx context.Context, password, host, sql string) error {
-	cnf, err := writeTempMySQLCnf(password)
-	if err != nil {
-		return err
+	cfg := Config{User: "root", Password: password, Host: host}
+	if s.cfg != nil && s.cfg.Port > 0 {
+		cfg.Port = s.cfg.Port
 	}
-	defer os.Remove(cnf)
-
-	args := []string{"--defaults-extra-file=" + cnf, "-h", host}
-	if s.cfg != nil && s.cfg.Port > 0 && s.cfg.Port != 3306 {
-		args = append(args, fmt.Sprintf("--port=%d", s.cfg.Port))
-	}
-	args = append(args, "-e", sql)
-
-	_, err = s.runner.Run(ctx, "mysql", args...)
-	return err
+	return s.runMySQL(ctx, cfg, sql, false)
 }
 
 // detectServiceName returns the systemd service name for MySQL or MariaDB.
@@ -230,7 +239,7 @@ func (s *Service) startRecoveryMysqld(ctx context.Context) error {
 }
 
 func (s *Service) stopRecoveryMysqld(ctx context.Context) error {
-	args := s.mysqlClientArgs("-e", "SHUTDOWN")
+	args := s.rootSocketClientArgs("-e", "SHUTDOWN")
 	if _, err := s.runner.Run(ctx, "mysql", args...); err == nil {
 		return nil
 	}
@@ -248,15 +257,6 @@ func (s *Service) stopRecoveryMysqld(ctx context.Context) error {
 		return fmt.Errorf("stopping recovery mysqld: %w", err)
 	}
 	return nil
-}
-
-// HasSavedPassword reports whether Abstrax has a saved MySQL password in config.
-func (s *Service) HasSavedPassword() bool {
-	cfg, err := readConfigFile(s.configPath)
-	if err != nil {
-		return false
-	}
-	return cfg.Password != ""
 }
 
 func dryRunPasswordResult() *RootPasswordResult {

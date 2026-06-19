@@ -59,6 +59,37 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSaveRootCredentials(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mysql.json")
+
+	svc := &Service{
+		cfg:        &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
+		configPath: path,
+	}
+
+	if err := svc.saveRootCredentials(context.Background(), "install-pass"); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := &Service{
+		cfg:        &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
+		configPath: path,
+	}
+	if err := loaded.loadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if loaded.cfg.Password != "install-pass" {
+		t.Fatalf("password: got %q want %q", loaded.cfg.Password, "install-pass")
+	}
+	if loaded.cfg.Host != "127.0.0.1" {
+		t.Fatalf("host: got %q want %q", loaded.cfg.Host, "127.0.0.1")
+	}
+	if loaded.cfg.User != "root" {
+		t.Fatalf("user: got %q want %q", loaded.cfg.User, "root")
+	}
+}
+
 func TestLegacyTOMLMigration(t *testing.T) {
 	dir := t.TempDir()
 	jsonPath := filepath.Join(dir, "mysql.json")

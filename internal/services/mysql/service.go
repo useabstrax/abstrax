@@ -64,10 +64,11 @@ func (s *Service) ShowConfig(_ context.Context) (*Config, error) {
 
 // Test tests the MySQL connection.
 func (s *Service) Test(ctx context.Context) error {
-	args := s.clientArgs()
-	args = append(args, "-e", "SELECT 1")
-	_, err := s.runner.Run(ctx, "mysql", args...)
+	res, err := s.runMySQLQuery(ctx, s.connectionConfig(), "SELECT 1")
 	if err != nil {
+		if res.Stderr != "" {
+			return fmt.Errorf("mysql connection failed: %s", res.Stderr)
+		}
 		return fmt.Errorf("mysql connection failed: %w", err)
 	}
 	return nil
@@ -126,6 +127,10 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return nil, err
 	}
 
+	if err := s.saveRootCredentials(ctx, password); err != nil {
+		return nil, fmt.Errorf("saving mysql config: %w", err)
+	}
+
 	return &RootPasswordResult{
 		RootPassword: password,
 		Generated:    generated,
@@ -180,10 +185,34 @@ func (s *Service) ResetRootPassword(ctx context.Context, opts ResetRootPasswordO
 		return nil, err
 	}
 
+	if err := s.saveRootCredentials(ctx, password); err != nil {
+		return nil, fmt.Errorf("saving mysql config: %w", err)
+	}
+
 	return &RootPasswordResult{
 		RootPassword: password,
 		Generated:    generated,
 	}, nil
+}
+
+// saveRootCredentials stores the root password in Abstrax MySQL config so
+// subsequent mysql commands can connect without running config set manually.
+func (s *Service) saveRootCredentials(ctx context.Context, password string) error {
+	cfg := Config{Host: "127.0.0.1", Port: 3306, User: "root", Password: password}
+	if s.cfg != nil {
+		if s.cfg.Host != "" {
+			cfg.Host = s.cfg.Host
+		}
+		if s.cfg.Port != 0 {
+			cfg.Port = s.cfg.Port
+		}
+		if s.cfg.User != "" {
+			cfg.User = s.cfg.User
+		}
+		cfg.Socket = s.cfg.Socket
+		cfg.Database = s.cfg.Database
+	}
+	return s.SetConfig(ctx, cfg)
 }
 
 // DBAdd creates a database.
@@ -350,37 +379,74 @@ func (s *Service) Revoke(ctx context.Context, user, database string) error {
 	return s.exec(ctx, sql)
 }
 
-func (s *Service) clientArgs() []string {
-	args := []string{
-		"-u", s.cfg.User,
+func (s *Service) connectionConfig() Config {
+	if s.cfg == nil {
+		return Config{Host: "127.0.0.1", Port: 3306, User: "root"}
 	}
-	if s.cfg.Password != "" {
-		args = append(args, fmt.Sprintf("-p%s", s.cfg.Password))
+	return *s.cfg
+}
+
+func (s *Service) clientArgsWithoutPassword(cfg Config) []string {
+	args := []string{"-u", cfg.User}
+	if cfg.Host != "" && cfg.Host != "localhost" {
+		args = append(args, "-h", cfg.Host)
 	}
-	if s.cfg.Host != "" && s.cfg.Host != "localhost" {
-		args = append(args, "-h", s.cfg.Host)
+	if cfg.Port > 0 && cfg.Port != 3306 {
+		args = append(args, fmt.Sprintf("--port=%d", cfg.Port))
 	}
-	if s.cfg.Port > 0 && s.cfg.Port != 3306 {
-		args = append(args, fmt.Sprintf("--port=%d", s.cfg.Port))
-	}
-	if s.cfg.Socket != "" {
-		args = append(args, fmt.Sprintf("--socket=%s", s.cfg.Socket))
+	if cfg.Socket != "" {
+		args = append(args, fmt.Sprintf("--socket=%s", cfg.Socket))
 	}
 	return args
 }
 
-func (s *Service) exec(ctx context.Context, sql string) error {
-	args := s.clientArgs()
-	args = append(args, "-e", sql)
-	_, err := s.runner.Run(ctx, "mysql", args...)
+func (s *Service) configuredClientArgs(cfg Config) (args []string, cleanup func(), err error) {
+	if cfg.Password != "" {
+		cnf, err := writeTempMySQLClientCnf(cfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []string{"--defaults-extra-file=" + cnf}, func() { os.Remove(cnf) }, nil
+	}
+	return s.clientArgsWithoutPassword(cfg), func() {}, nil
+}
+
+func (s *Service) runMySQL(ctx context.Context, cfg Config, sql string, silent bool) error {
+	res, err := s.runMySQLWithConfig(ctx, cfg, sql, silent)
+	if err != nil && res.Stderr != "" {
+		return fmt.Errorf("%w: %s", err, res.Stderr)
+	}
 	return err
 }
 
-func (s *Service) query(ctx context.Context, sql string) (string, error) {
-	args := s.clientArgs()
-	args = append(args, "-e", sql)
-	res, err := s.runner.RunSilent(ctx, "mysql", args...)
+func (s *Service) runMySQLQuery(ctx context.Context, cfg Config, sql string) (executil.Result, error) {
+	return s.runMySQLWithConfig(ctx, cfg, sql, true)
+}
+
+func (s *Service) runMySQLWithConfig(ctx context.Context, cfg Config, sql string, silent bool) (executil.Result, error) {
+	args, cleanup, err := s.configuredClientArgs(cfg)
 	if err != nil {
+		return executil.Result{}, err
+	}
+	defer cleanup()
+
+	args = append(args, "-e", sql)
+	if silent {
+		return s.runner.RunSilent(ctx, "mysql", args...)
+	}
+	return s.runner.Run(ctx, "mysql", args...)
+}
+
+func (s *Service) exec(ctx context.Context, sql string) error {
+	return s.runMySQL(ctx, s.connectionConfig(), sql, false)
+}
+
+func (s *Service) query(ctx context.Context, sql string) (string, error) {
+	res, err := s.runMySQLQuery(ctx, s.connectionConfig(), sql)
+	if err != nil {
+		if res.Stderr != "" {
+			return "", fmt.Errorf("%w: %s", err, res.Stderr)
+		}
 		return "", err
 	}
 	return res.Stdout, nil
