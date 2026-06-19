@@ -29,8 +29,11 @@ func (a *AptManager) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	args := append(env, "apt-get", "install", "-y", pkg)
-	_, err := a.runner.Run(ctx, "env", args...)
+	res, err := a.runner.Run(ctx, "env", args...)
 	if err != nil {
+		if res.Stderr != "" {
+			return fmt.Errorf("apt install %s: %s", pkg, strings.TrimSpace(res.Stderr))
+		}
 		return fmt.Errorf("apt install %s: %w", pkg, err)
 	}
 	return nil

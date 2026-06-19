@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Default PHP extensions now include `intl`, `redis`, `pcntl`, `posix`, and `sqlite3` for Laravel-oriented installations.
+- Default PHP extensions now include `intl`, `redis`, and `sqlite3` for Laravel-oriented installations. `pcntl` and `posix` are provided by `php*-cli` and are no longer installed as separate packages.
 
 ### Added
 

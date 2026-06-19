@@ -29,6 +29,9 @@ type PHPSettings struct {
 
 // DefaultPHPExtensions are installed alongside php-fpm and php-cli when PHP
 // is installed for a project. Values are apt package suffixes, not full names.
+//
+// pcntl and posix are not listed because they are included in php*-cli on
+// Debian and Ubuntu and have no separate apt packages.
 var DefaultPHPExtensions = []string{
 	"mysql",
 	"xml",
@@ -39,9 +42,14 @@ var DefaultPHPExtensions = []string{
 	"gd",
 	"intl",
 	"redis",
-	"pcntl",
-	"posix",
 	"sqlite3",
+}
+
+// PHPBundledWithCLI lists extension suffixes that ship with php*-cli and must
+// not be installed as separate php*-{ext} packages.
+var PHPBundledWithCLI = map[string]bool{
+	"pcntl": true,
+	"posix": true,
 }
 
 // PHPPackages returns apt package names for a PHP version and extension list.
@@ -50,6 +58,9 @@ func PHPPackages(version string, extensions []string) []string {
 	cli := "php" + version + "-cli"
 	pkgs := []string{fpm, cli}
 	for _, ext := range extensions {
+		if PHPBundledWithCLI[ext] {
+			continue
+		}
 		pkgs = append(pkgs, "php"+version+"-"+ext)
 	}
 	return pkgs

@@ -92,6 +92,19 @@ func TestPHPPackages(t *testing.T) {
 	}
 }
 
+func TestPHPPackagesSkipsBundledCLIExtensions(t *testing.T) {
+	pkgs := PHPPackages("8.5", []string{"mysql", "pcntl", "posix"})
+	want := []string{"php8.5-fpm", "php8.5-cli", "php8.5-mysql"}
+	if len(pkgs) != len(want) {
+		t.Fatalf("packages = %#v, want %#v", pkgs, want)
+	}
+	for i, pkg := range want {
+		if pkgs[i] != pkg {
+			t.Fatalf("pkgs[%d] = %q, want %q", i, pkgs[i], pkg)
+		}
+	}
+}
+
 func TestSetDedupesValues(t *testing.T) {
 	dir := t.TempDir()
 	svc := NewWithPath(filepath.Join(dir, "config.json"))
