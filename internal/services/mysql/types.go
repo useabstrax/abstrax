@@ -49,6 +49,14 @@ type UserAddOptions struct {
 	DryRun     bool
 }
 
+// UserAddResult is returned when a MySQL user is created.
+type UserAddResult struct {
+	Name      string `json:"name"`
+	Host      string `json:"host"`
+	Password  string `json:"password,omitempty"`
+	Generated bool   `json:"password_generated"`
+}
+
 // Database describes a MySQL database.
 type Database struct {
 	Name string `json:"name"`

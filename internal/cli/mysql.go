@@ -11,6 +11,7 @@ import (
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
 	"abstrax/internal/platform"
+	"abstrax/internal/random"
 	"abstrax/internal/services/mysql"
 	"abstrax/internal/validate"
 )
@@ -244,6 +245,39 @@ func printRootPasswordResult(action, summary string, result *mysql.RootPasswordR
 	return nil
 }
 
+func printUserAddResult(result *mysql.UserAddResult) error {
+	summary := fmt.Sprintf("MySQL user %s created.", result.Name)
+	r := output.Success(actions.MySQLUserAdd, summary, result)
+
+	if globals.Flags.JSON {
+		output.PrintJSON(r)
+		return nil
+	}
+
+	p := printer()
+	if !globals.Flags.Quiet {
+		p.Line("")
+		if result.Generated {
+			p.Line("============================================================")
+			p.Line("  %s", summary)
+			p.Line("")
+			p.Line("  PASSWORD (save this now — shown only once):")
+			p.Line("")
+			p.Line("  %s", result.Password)
+			p.Line("")
+			p.Line("  Connect with: mysql -u %s -p", result.Name)
+			p.Line("============================================================")
+			p.Line("")
+		} else {
+			p.Success(summary)
+		}
+	} else {
+		p.Success(summary)
+	}
+
+	return nil
+}
+
 func newMySQLDBAddCmd() *cobra.Command {
 	opts := mysql.DBAddOptions{}
 
@@ -352,12 +386,23 @@ func newMySQLUserAddCmd() *cobra.Command {
 				return err
 			}
 
+			generated := false
 			if passwordFlag {
 				pw, err := promptPassword(fmt.Sprintf("Password for %s: ", opts.Name))
 				if err != nil {
 					return err
 				}
 				opts.Password = pw
+			} else if opts.DryRun {
+				opts.Password = "[dry-run]"
+				generated = true
+			} else {
+				pw, err := random.Password()
+				if err != nil {
+					return err
+				}
+				opts.Password = pw
+				generated = true
 			}
 
 			svc := mysql.New(opts.DryRun, globals.Flags.Verbose)
@@ -365,13 +410,17 @@ func newMySQLUserAddCmd() *cobra.Command {
 				return err
 			}
 
-			return printSimpleResult(actions.MySQLUserAdd,
-				fmt.Sprintf("MySQL user %s created.", opts.Name), nil)
+			return printUserAddResult(&mysql.UserAddResult{
+				Name:      opts.Name,
+				Host:      opts.Host,
+				Password:  opts.Password,
+				Generated: generated,
+			})
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.Host, "host", "localhost", "User host")
-	cmd.Flags().BoolVar(&passwordFlag, "password", false, "Prompt for password")
+	cmd.Flags().BoolVar(&passwordFlag, "password", false, "Prompt for a password instead of generating one")
 	cmd.Flags().StringVar(&opts.GrantDB, "grant-db", "", "Grant access to this database")
 	cmd.Flags().StringVar(&opts.Privileges, "privileges", "", "Specific privileges to grant")
 	cmd.Flags().StringVar(&opts.Preset, "preset", "app",
