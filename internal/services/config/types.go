@@ -37,6 +37,11 @@ var DefaultPHPExtensions = []string{
 	"zip",
 	"bcmath",
 	"gd",
+	"intl",
+	"redis",
+	"pcntl",
+	"posix",
+	"sqlite3",
 }
 
 // PHPPackages returns apt package names for a PHP version and extension list.

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Default PHP extensions now include `intl`, `redis`, `pcntl`, `posix`, and `sqlite3` for Laravel-oriented installations.
+
 ### Added
 
 - Plugin system with standalone executable binaries, registry-backed install/update/remove, command delegation, metadata protocol v1, and `abstrax plugin` management commands.
