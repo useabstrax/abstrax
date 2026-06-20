@@ -92,9 +92,9 @@ const (
 	// SSL actions.
 	SSLInstall = "ssl.install"
 	SSLAdd     = "ssl.add"
-	SSLRemove = "ssl.remove"
-	SSLRenew  = "ssl.renew"
-	SSLStatus = "ssl.status"
+	SSLRemove  = "ssl.remove"
+	SSLRenew   = "ssl.renew"
+	SSLStatus  = "ssl.status"
 
 	// MySQL actions.
 	MySQLConfigSet         = "mysql.config_set"
