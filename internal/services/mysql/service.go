@@ -452,24 +452,82 @@ func (s *Service) ensureLocalAppUserHosts(ctx context.Context, user string) erro
 
 	switch {
 	case !have["127.0.0.1"] && have["localhost"]:
-		sql := fmt.Sprintf(
-			"CREATE USER IF NOT EXISTS '%s'@'127.0.0.1' IDENTIFIED WITH caching_sha2_password AS '%s'@'localhost'",
-			user, user,
-		)
-		if err := s.exec(ctx, sql); err != nil {
+		if err := s.cloneUserToHost(ctx, user, "localhost", "127.0.0.1"); err != nil {
 			return fmt.Errorf("creating %q@127.0.0.1 from localhost account: %w", user, err)
 		}
 	case !have["localhost"] && have["127.0.0.1"]:
-		sql := fmt.Sprintf(
-			"CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED WITH caching_sha2_password AS '%s'@'127.0.0.1'",
-			user, user,
-		)
-		if err := s.exec(ctx, sql); err != nil {
+		if err := s.cloneUserToHost(ctx, user, "127.0.0.1", "localhost"); err != nil {
 			return fmt.Errorf("creating %q@localhost from 127.0.0.1 account: %w", user, err)
 		}
 	}
 
 	return nil
+}
+
+type userAuth struct {
+	Plugin     string
+	AuthString string
+}
+
+func (s *Service) cloneUserToHost(ctx context.Context, user, fromHost, toHost string) error {
+	auth, err := s.lookupUserAuth(ctx, user, fromHost)
+	if err != nil {
+		return err
+	}
+
+	plugin := auth.Plugin
+	if plugin == "" {
+		if s.isMariaDB(ctx) {
+			plugin = "mysql_native_password"
+		} else {
+			plugin = "caching_sha2_password"
+		}
+	}
+
+	var sql string
+	if s.isMariaDB(ctx) {
+		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED VIA %s USING '%s'",
+			user, toHost, plugin, escapeSQLString(auth.AuthString))
+	} else {
+		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED WITH %s AS '%s'",
+			user, toHost, plugin, escapeSQLString(auth.AuthString))
+	}
+	return s.exec(ctx, sql)
+}
+
+func (s *Service) lookupUserAuth(ctx context.Context, user, host string) (*userAuth, error) {
+	res, err := s.query(ctx, fmt.Sprintf(
+		"SELECT plugin, authentication_string FROM mysql.user WHERE User = '%s' AND Host = '%s'",
+		escapeSQLString(user), escapeSQLString(host)))
+	if err != nil {
+		return nil, err
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(res))
+	first := true
+	for scanner.Scan() {
+		if first {
+			first = false
+			continue
+		}
+		parts := strings.Split(scanner.Text(), "\t")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("mysql user %q@%q not found", user, host)
+		}
+		return &userAuth{
+			Plugin:     strings.TrimSpace(parts[0]),
+			AuthString: parts[1],
+		}, nil
+	}
+	return nil, fmt.Errorf("mysql user %q@%q not found", user, host)
+}
+
+func (s *Service) isMariaDB(ctx context.Context) bool {
+	res, err := s.query(ctx, "SELECT VERSION()")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(res), "mariadb")
 }
 
 func (s *Service) userHosts(ctx context.Context, user string) ([]string, error) {
