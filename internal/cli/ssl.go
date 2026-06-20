@@ -19,10 +19,35 @@ func NewSSLCmd() *cobra.Command {
 		Short: "Manage SSL certificates (Certbot)",
 	}
 
+	cmd.AddCommand(newSSLInstallCmd())
 	cmd.AddCommand(newSSLAddCmd())
 	cmd.AddCommand(newSSLRemoveCmd())
 	cmd.AddCommand(newSSLRenewCmd())
 	cmd.AddCommand(newSSLStatusCmd())
+
+	return cmd
+}
+
+func newSSLInstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install Certbot and the nginx plugin",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := platform.RequireRoot(); err != nil {
+				return err
+			}
+
+			svc := ssl.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.Install(cmd.Context(), ssl.InstallOptions{
+				DryRun: globals.Flags.DryRun,
+			}); err != nil {
+				return err
+			}
+
+			return printSimpleResult(actions.SSLInstall,
+				"Certbot and the nginx plugin installed.", nil)
+		},
+	}
 
 	return cmd
 }
@@ -53,7 +78,7 @@ func newSSLAddCmd() *cobra.Command {
 			}
 
 			return printSimpleResult(actions.SSLAdd,
-				"SSL certificate obtained.", nil)
+				"SSL certificate obtained and installed.", nil)
 		},
 	}
 

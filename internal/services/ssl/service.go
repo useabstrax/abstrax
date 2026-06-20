@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	executil "abstrax/internal/exec"
 	"abstrax/internal/services/project"
@@ -14,6 +15,7 @@ import (
 type Service struct {
 	runner      *executil.Runner
 	projectsSvc *project.Service
+	dryRun      bool
 }
 
 // New creates a Service.
@@ -21,13 +23,14 @@ func New(dryRun, verbose bool) *Service {
 	return &Service{
 		runner:      executil.New(dryRun, verbose),
 		projectsSvc: project.New(dryRun, verbose),
+		dryRun:      dryRun,
 	}
 }
 
 // Add obtains and configures SSL for a project.
 func (s *Service) Add(ctx context.Context, opts AddOptions) error {
-	if !executil.Exists("certbot") {
-		return fmt.Errorf("certbot is not installed; install it with: abstrax package install certbot")
+	if !Installed() {
+		return fmt.Errorf("certbot is not installed; install it with: %s", InstallCommand())
 	}
 
 	proj, err := s.projectsSvc.Info(ctx, opts.ProjectName)
@@ -47,29 +50,32 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) error {
 		return fmt.Errorf("--email is required for SSL certificate issuance")
 	}
 
-	args := []string{
-		"--nginx",
-		"--non-interactive",
-		"--agree-tos",
-		"--email", opts.Email,
+	args := buildCertbotAddArgs(AddOptions{
+		Email:        opts.Email,
+		Domains:      domains,
+		Staging:      opts.Staging,
+		RedirectHTTP: opts.RedirectHTTP,
+	})
+
+	res, err := s.runner.Run(ctx, "certbot", args...)
+	if err != nil {
+		if res.Stderr != "" {
+			return fmt.Errorf("certbot failed: %s", strings.TrimSpace(res.Stderr))
+		}
+		return fmt.Errorf("certbot failed: %w", err)
 	}
 
-	for _, d := range domains {
-		args = append(args, "-d", d)
+	state, err := s.projectsSvc.Info(ctx, opts.ProjectName)
+	if err != nil {
+		return fmt.Errorf("project %q not found: %w", opts.ProjectName, err)
+	}
+	state.SSLEnabled = true
+	state.UpdatedAt = time.Now()
+	if err := s.projectsSvc.SaveState(state); err != nil {
+		return fmt.Errorf("updating project SSL state: %w", err)
 	}
 
-	if opts.Staging {
-		args = append(args, "--staging")
-	}
-
-	if opts.RedirectHTTP {
-		args = append(args, "--redirect")
-	} else {
-		args = append(args, "--no-redirect")
-	}
-
-	_, err = s.runner.Run(ctx, "certbot", append([]string{"certonly"}, args...)...)
-	return err
+	return nil
 }
 
 // Remove removes SSL certificates for a project.
@@ -83,10 +89,27 @@ func (s *Service) Remove(ctx context.Context, projectName string) error {
 		return fmt.Errorf("no domains configured for project %q", projectName)
 	}
 
-	_, err = s.runner.Run(ctx, "certbot", "delete",
+	res, err := s.runner.Run(ctx, "certbot", "delete",
 		"--cert-name", proj.Domains[0],
 		"--non-interactive")
-	return err
+	if err != nil {
+		if res.Stderr != "" {
+			return fmt.Errorf("certbot failed: %s", strings.TrimSpace(res.Stderr))
+		}
+		return fmt.Errorf("certbot failed: %w", err)
+	}
+
+	state, err := s.projectsSvc.Info(ctx, projectName)
+	if err != nil {
+		return fmt.Errorf("project %q not found: %w", projectName, err)
+	}
+	state.SSLEnabled = false
+	state.UpdatedAt = time.Now()
+	if err := s.projectsSvc.SaveState(state); err != nil {
+		return fmt.Errorf("updating project SSL state: %w", err)
+	}
+
+	return nil
 }
 
 // Renew renews certificates.
@@ -150,4 +173,33 @@ func (s *Service) Status(ctx context.Context, projectName string) ([]CertStatus,
 	}
 
 	return statuses, nil
+}
+
+func buildCertbotAddArgs(opts AddOptions) []string {
+	args := []string{
+		"--nginx",
+		"--non-interactive",
+		"--agree-tos",
+		"--email", opts.Email,
+	}
+
+	for _, d := range opts.Domains {
+		d = strings.TrimSpace(d)
+		if d == "" {
+			continue
+		}
+		args = append(args, "-d", d)
+	}
+
+	if opts.Staging {
+		args = append(args, "--staging")
+	}
+
+	if opts.RedirectHTTP {
+		args = append(args, "--redirect")
+	} else {
+		args = append(args, "--no-redirect")
+	}
+
+	return args
 }

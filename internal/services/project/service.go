@@ -317,6 +317,11 @@ func (s *Service) Info(_ context.Context, name string) (*State, error) {
 	return s.loadState(name)
 }
 
+// SaveState persists project state.
+func (s *Service) SaveState(state *State) error {
+	return s.saveState(state)
+}
+
 // Enable enables the nginx vhost for a project.
 func (s *Service) Enable(ctx context.Context, name string) error {
 	state, err := s.loadState(name)

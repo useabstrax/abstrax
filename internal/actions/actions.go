@@ -90,7 +90,8 @@ const (
 	WebRestart = "web.restart"
 
 	// SSL actions.
-	SSLAdd    = "ssl.add"
+	SSLInstall = "ssl.install"
+	SSLAdd     = "ssl.add"
 	SSLRemove = "ssl.remove"
 	SSLRenew  = "ssl.renew"
 	SSLStatus = "ssl.status"
