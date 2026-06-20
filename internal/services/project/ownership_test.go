@@ -347,8 +347,8 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config missing socket:\n%s", conf)
 	}
-	if !strings.Contains(conf, "try_files $uri =404;") {
-		t.Fatalf("config missing php try_files guard:\n%s", conf)
+	if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
+		t.Fatalf("config duplicates try_files already present in snippets/fastcgi-php.conf:\n%s", conf)
 	}
 }
 

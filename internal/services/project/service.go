@@ -430,7 +430,6 @@ func buildNginxConfig(opts vhostConfig) string {
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		sb.WriteString("    }\n\n")
 		sb.WriteString("    location ~ \\.php$ {\n")
-		sb.WriteString("        try_files $uri =404;\n")
 		sb.WriteString("        include snippets/fastcgi-php.conf;\n")
 		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:%s;\n", socket))
 		sb.WriteString("    }\n")
