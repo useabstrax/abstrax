@@ -522,6 +522,7 @@ func newMySQLUserInfoCmd() *cobra.Command {
 func newMySQLGrantCmd() *cobra.Command {
 	var privileges string
 	var preset string
+	var host string
 
 	cmd := &cobra.Command{
 		Use:   "grant <user> <database>",
@@ -529,17 +530,28 @@ func newMySQLGrantCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, db := args[0], args[1]
+			if err := validate.MySQLUsername(user); err != nil {
+				return err
+			}
+			if err := validate.DatabaseName(db); err != nil {
+				return err
+			}
 
-			if preset != "" {
-				if p, ok := mysql.PresetPrivileges[preset]; ok {
-					privileges = p
+			privs := privileges
+			if privs == "" {
+				if preset != "" {
+					p, ok := mysql.PresetPrivileges[preset]
+					if !ok {
+						return fmt.Errorf("unknown privilege preset %q", preset)
+					}
+					privs = p
 				} else {
-					return fmt.Errorf("unknown privilege preset %q", preset)
+					privs = mysql.PresetPrivileges[mysql.PresetApp]
 				}
 			}
 
 			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.Grant(cmd.Context(), user, db, privileges); err != nil {
+			if err := svc.Grant(cmd.Context(), user, db, host, privs); err != nil {
 				return err
 			}
 
@@ -548,12 +560,15 @@ func newMySQLGrantCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&privileges, "privileges", "", "Specific privileges to grant")
-	cmd.Flags().StringVar(&preset, "preset", "app", "Privilege preset (readonly|app|admin)")
+	cmd.Flags().StringVar(&preset, "preset", "", "Privilege preset (readonly|app|admin)")
+	cmd.Flags().StringVar(&host, "host", "", "User host (default: all hosts the user exists on)")
 	return cmd
 }
 
 func newMySQLRevokeCmd() *cobra.Command {
-	return &cobra.Command{
+	var host string
+
+	cmd := &cobra.Command{
 		Use:   "revoke <user> <database>",
 		Short: "Revoke database access from a user",
 		Args:  cobra.ExactArgs(2),
@@ -572,7 +587,7 @@ func newMySQLRevokeCmd() *cobra.Command {
 			}
 
 			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.Revoke(cmd.Context(), user, db); err != nil {
+			if err := svc.Revoke(cmd.Context(), user, db, host); err != nil {
 				return err
 			}
 
@@ -580,4 +595,7 @@ func newMySQLRevokeCmd() *cobra.Command {
 				fmt.Sprintf("Revoked access on %s from %s.", db, user), nil)
 		},
 	}
+
+	cmd.Flags().StringVar(&host, "host", "", "User host (default: all hosts the user exists on)")
+	return cmd
 }

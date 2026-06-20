@@ -256,6 +256,14 @@ func (s *Service) DBList(ctx context.Context) ([]Database, error) {
 	return dbs, nil
 }
 
+func localAppHosts() []string {
+	return []string{"localhost", "127.0.0.1"}
+}
+
+func usesLocalAppHosts(host string) bool {
+	return host == "" || host == "localhost"
+}
+
 // UserAdd creates a MySQL user.
 func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 	host := opts.Host
@@ -263,10 +271,17 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 		host = "localhost"
 	}
 
-	createSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
-		opts.Name, host, opts.Password)
-	if err := s.exec(ctx, createSQL); err != nil {
-		return err
+	hosts := []string{host}
+	if usesLocalAppHosts(host) {
+		hosts = localAppHosts()
+	}
+
+	for _, h := range hosts {
+		createSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
+			opts.Name, h, escapeSQLString(opts.Password))
+		if err := s.exec(ctx, createSQL); err != nil {
+			return err
+		}
 	}
 
 	if opts.GrantDB != "" {
@@ -282,10 +297,12 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 			privs = PresetPrivileges[PresetApp]
 		}
 
-		grantSQL := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%s'",
-			privs, opts.GrantDB, opts.Name, host)
-		if err := s.exec(ctx, grantSQL); err != nil {
-			return err
+		for _, h := range hosts {
+			grantSQL := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%s'",
+				privs, opts.GrantDB, opts.Name, h)
+			if err := s.exec(ctx, grantSQL); err != nil {
+				return err
+			}
 		}
 		return s.exec(ctx, "FLUSH PRIVILEGES")
 	}
@@ -332,7 +349,7 @@ func (s *Service) UserInfo(ctx context.Context, name string) (*UserInfo, error) 
 	var res string
 	var err error
 	var matchedHost string
-	for _, host := range []string{"localhost", "%"} {
+	for _, host := range []string{"localhost", "127.0.0.1", "%"} {
 		res, err = s.query(ctx,
 			fmt.Sprintf("SHOW GRANTS FOR '%s'@'%s'", name, host))
 		if err == nil {
@@ -354,20 +371,132 @@ func (s *Service) UserInfo(ctx context.Context, name string) (*UserInfo, error) 
 }
 
 // Grant grants privileges on a database to a user.
-func (s *Service) Grant(ctx context.Context, user, database, privileges string) error {
+func (s *Service) Grant(ctx context.Context, user, database, host, privileges string) error {
 	if privileges == "" {
 		privileges = PresetPrivileges[PresetApp]
 	}
-	sql := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES",
-		privileges, database, user)
-	return s.exec(ctx, sql)
+
+	hosts, err := s.grantTargetHosts(ctx, user, host)
+	if err != nil {
+		return err
+	}
+
+	for _, h := range hosts {
+		sql := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%s'",
+			privileges, database, user, h)
+		if err := s.exec(ctx, sql); err != nil {
+			return err
+		}
+	}
+	return s.exec(ctx, "FLUSH PRIVILEGES")
 }
 
 // Revoke revokes all privileges from a user on a database.
-func (s *Service) Revoke(ctx context.Context, user, database string) error {
-	sql := fmt.Sprintf("REVOKE ALL PRIVILEGES ON `%s`.* FROM '%s'@'localhost'; FLUSH PRIVILEGES",
-		database, user)
-	return s.exec(ctx, sql)
+func (s *Service) Revoke(ctx context.Context, user, database, host string) error {
+	hosts, err := s.grantTargetHosts(ctx, user, host)
+	if err != nil {
+		return err
+	}
+
+	for _, h := range hosts {
+		sql := fmt.Sprintf("REVOKE ALL PRIVILEGES ON `%s`.* FROM '%s'@'%s'",
+			database, user, h)
+		if err := s.exec(ctx, sql); err != nil {
+			return err
+		}
+	}
+	return s.exec(ctx, "FLUSH PRIVILEGES")
+}
+
+func (s *Service) grantTargetHosts(ctx context.Context, user, host string) ([]string, error) {
+	if host != "" {
+		return []string{host}, nil
+	}
+
+	if err := s.ensureLocalAppUserHosts(ctx, user); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.userHosts(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	have := make(map[string]bool, len(existing))
+	for _, h := range existing {
+		have[h] = true
+	}
+
+	var targets []string
+	for _, h := range localAppHosts() {
+		if have[h] {
+			targets = append(targets, h)
+		}
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("mysql user %q has no localhost or 127.0.0.1 account; use --host to grant a specific host", user)
+	}
+	return targets, nil
+}
+
+func (s *Service) ensureLocalAppUserHosts(ctx context.Context, user string) error {
+	existing, err := s.userHosts(ctx, user)
+	if err != nil {
+		return err
+	}
+
+	have := make(map[string]bool, len(existing))
+	for _, h := range existing {
+		have[h] = true
+	}
+
+	switch {
+	case !have["127.0.0.1"] && have["localhost"]:
+		sql := fmt.Sprintf(
+			"CREATE USER IF NOT EXISTS '%s'@'127.0.0.1' IDENTIFIED WITH caching_sha2_password AS '%s'@'localhost'",
+			user, user,
+		)
+		if err := s.exec(ctx, sql); err != nil {
+			return fmt.Errorf("creating %q@127.0.0.1 from localhost account: %w", user, err)
+		}
+	case !have["localhost"] && have["127.0.0.1"]:
+		sql := fmt.Sprintf(
+			"CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED WITH caching_sha2_password AS '%s'@'127.0.0.1'",
+			user, user,
+		)
+		if err := s.exec(ctx, sql); err != nil {
+			return fmt.Errorf("creating %q@localhost from 127.0.0.1 account: %w", user, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) userHosts(ctx context.Context, user string) ([]string, error) {
+	res, err := s.query(ctx,
+		fmt.Sprintf("SELECT Host FROM mysql.user WHERE User = '%s' ORDER BY Host",
+			escapeSQLString(user)))
+	if err != nil {
+		return nil, err
+	}
+
+	var hosts []string
+	scanner := bufio.NewScanner(strings.NewReader(res))
+	first := true
+	for scanner.Scan() {
+		if first {
+			first = false
+			continue
+		}
+		h := strings.TrimSpace(scanner.Text())
+		if h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	if len(hosts) == 0 {
+		return nil, fmt.Errorf("mysql user %q not found", user)
+	}
+	return hosts, nil
 }
 
 func (s *Service) connectionConfig() Config {

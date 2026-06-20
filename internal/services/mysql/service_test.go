@@ -59,6 +59,22 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLocalAppHosts(t *testing.T) {
+	hosts := localAppHosts()
+	if len(hosts) != 2 || hosts[0] != "localhost" || hosts[1] != "127.0.0.1" {
+		t.Fatalf("localAppHosts() = %#v", hosts)
+	}
+}
+
+func TestUsesLocalAppHosts(t *testing.T) {
+	if !usesLocalAppHosts("") || !usesLocalAppHosts("localhost") {
+		t.Fatal("expected empty and localhost to use local app hosts")
+	}
+	if usesLocalAppHosts("127.0.0.1") || usesLocalAppHosts("%") {
+		t.Fatal("expected explicit host to skip local app host pair")
+	}
+}
+
 func TestSaveRootCredentials(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mysql.json")
