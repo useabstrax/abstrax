@@ -55,17 +55,23 @@ Abstrax detects unsupported platforms and returns a clear error rather than atte
 
 Full installation instructions, checksum verification, and package options are in the [getting started guide](https://useabstrax.com/docs/getting-started).
 
-### From a release binary
+### From a release archive
 
-Download the latest binary from the [releases page](https://github.com/useabstrax/abstrax/releases):
+Download a release archive from the [releases page](https://github.com/useabstrax/abstrax/releases), verify the checksum, and install the binary:
 
 ```bash
-curl -Lo abstrax https://github.com/useabstrax/abstrax/releases/latest/download/abstrax_linux_amd64
+VERSION="1.0.0"   # without the leading v
+ARCH="amd64"      # or arm64 on ARM servers
+
+wget "https://github.com/useabstrax/abstrax/releases/download/v${VERSION}/abstrax_${VERSION}_linux_${ARCH}.tar.gz"
+wget "https://github.com/useabstrax/abstrax/releases/download/v${VERSION}/abstrax_${VERSION}_checksums.txt"
+sha256sum -c "abstrax_${VERSION}_checksums.txt" 2>&1 | grep "abstrax_${VERSION}_linux_${ARCH}.tar.gz"
+tar -xzf "abstrax_${VERSION}_linux_${ARCH}.tar.gz"
 chmod +x abstrax
 sudo mv abstrax /usr/local/bin/abstrax
 ```
 
-Replace `abstrax_linux_amd64` with `abstrax_linux_arm64` on ARM servers.
+See the [getting started guide](https://useabstrax.com/docs/getting-started) for checksum verification details and a command to resolve the latest version automatically.
 
 ### Using the install script
 
