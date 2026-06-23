@@ -110,6 +110,15 @@ func (s *Service) Modify(_ context.Context, opts ModifyOptions) (*CronJob, error
 		Enabled:  job.Enabled,
 		Env:      job.Env,
 	}
+	if opts.Output != "" {
+		addOpts.Output = opts.Output
+	}
+	if opts.ErrorOutput != "" {
+		addOpts.ErrorOutput = opts.ErrorOutput
+	}
+	if opts.WorkingDir != "" {
+		addOpts.WorkingDir = opts.WorkingDir
+	}
 	if err := s.writeJob(path, job, addOpts); err != nil {
 		return nil, err
 	}

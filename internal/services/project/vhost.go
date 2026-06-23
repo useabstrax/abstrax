@@ -5,6 +5,7 @@ type vhostConfig struct {
 	Name        string
 	Path        string
 	Domains     []string
+	Port        int
 	Runtime     Runtime
 	PHPVersion  string
 	NodeVersion string
@@ -21,6 +22,7 @@ func vhostOptionsFromAdd(opts AddOptions, state *State, paths *ValidatedPaths) v
 		Name:        opts.Name,
 		Path:        paths.ProjectPath,
 		Domains:     opts.Domains,
+		Port:        opts.Port,
 		Runtime:     opts.Runtime,
 		PHPVersion:  state.PHPVersion,
 		NodeVersion: state.NodeVersion,

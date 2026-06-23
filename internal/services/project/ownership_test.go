@@ -364,6 +364,18 @@ func TestBuildNginxConfigSharedDefaultSocket(t *testing.T) {
 	}
 }
 
+func TestBuildNginxConfigCustomPort(t *testing.T) {
+	conf := buildNginxConfig(vhostConfig{
+		Name:    "example",
+		Path:    "/var/www/example",
+		Domains: []string{"example.com"},
+		Port:    8080,
+	})
+	if !strings.Contains(conf, "listen 8080;") {
+		t.Fatalf("config = %s", conf)
+	}
+}
+
 func TestIdentityFromStateBackwardsCompatible(t *testing.T) {
 	state := &State{Owner: "www-data"}
 	id := IdentityFromState(state)

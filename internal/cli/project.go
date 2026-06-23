@@ -162,6 +162,7 @@ func newProjectAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.Group, "group", "", "Project group for shared mode (default: www-data)")
 	cmd.Flags().BoolVar(&opts.SSL, "ssl", false, "Enable SSL (requires certbot)")
 	cmd.Flags().StringVar(&opts.Email, "email", "", "Email for SSL certificate")
+	cmd.Flags().BoolVar(&opts.Staging, "staging", false, "Use Let's Encrypt staging server (with --ssl)")
 	cmd.Flags().BoolVar(&opts.RedirectHTTP, "redirect-http", true, "Redirect HTTP to HTTPS")
 
 	// Runtime flags.
@@ -186,6 +187,8 @@ func newProjectAddCmd() *cobra.Command {
 			opts.Runtime = project.RuntimeNode
 		case rubyFlag:
 			opts.Runtime = project.RuntimeRuby
+		case staticFlag:
+			opts.Runtime = project.RuntimeStatic
 		default:
 			opts.Runtime = project.RuntimeStatic
 		}
@@ -238,15 +241,24 @@ func newProjectRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			ok, err := confirm.Ask(
-				fmt.Sprintf("Remove project %q?", opts.Name),
-				globals.Flags.Yes,
-			)
-			if err != nil {
-				return err
+			if !skipConfirm(opts.Force) {
+				ok, err := confirm.Ask(
+					fmt.Sprintf("Remove project %q?", opts.Name),
+					globals.Flags.Yes,
+				)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
 			}
-			if !ok {
-				return nil
+
+			if opts.RemoveSSL {
+				sslSvc := ssl.New(opts.DryRun, globals.Flags.Verbose)
+				if err := sslSvc.Remove(cmd.Context(), opts.Name); err != nil {
+					return err
+				}
 			}
 
 			svc := project.New(opts.DryRun, globals.Flags.Verbose)

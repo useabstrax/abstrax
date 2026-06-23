@@ -409,6 +409,11 @@ func buildNginxConfig(opts vhostConfig) string {
 		domains = "_"
 	}
 
+	listenPort := opts.Port
+	if listenPort == 0 {
+		listenPort = 80
+	}
+
 	root := opts.Path
 	if opts.WebRoot != "" {
 		root = opts.WebRoot
@@ -420,7 +425,7 @@ func buildNginxConfig(opts vhostConfig) string {
 	var sb strings.Builder
 	sb.WriteString("# Managed by Abstrax\n")
 	sb.WriteString("server {\n")
-	sb.WriteString(fmt.Sprintf("    listen 80;\n"))
+	sb.WriteString(fmt.Sprintf("    listen %d;\n", listenPort))
 	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
 	sb.WriteString(fmt.Sprintf("    root %s;\n", root))
 	sb.WriteString("    index index.html index.htm index.php;\n\n")

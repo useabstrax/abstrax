@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -38,6 +39,14 @@ func newSSHKeyAddCmd() *cobra.Command {
 			opts.Username = args[0]
 			opts.Key = args[1]
 			opts.DryRun = globals.Flags.DryRun
+
+			if opts.FromFile {
+				data, err := os.ReadFile(opts.Key)
+				if err != nil {
+					return fmt.Errorf("reading key file %q: %w", opts.Key, err)
+				}
+				opts.Key = string(data)
+			}
 
 			if err := validate.Username(opts.Username); err != nil {
 				return err

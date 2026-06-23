@@ -9,6 +9,7 @@ import (
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
 	"abstrax/internal/platform"
+	"abstrax/internal/services/firewall"
 	"abstrax/internal/services/sshcfg"
 	"abstrax/internal/validate"
 )
@@ -98,6 +99,18 @@ func newSSHConfigSetPortCmd() *cobra.Command {
 				DryRun:        globals.Flags.DryRun,
 			}); err != nil {
 				return err
+			}
+
+			if allowFirewall {
+				fw := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
+				if _, err := fw.Allow(cmd.Context(), firewall.AllowOptions{
+					Port:     fmt.Sprintf("%d", port),
+					Protocol: "tcp",
+					Comment:  "abstrax: ssh",
+					DryRun:   globals.Flags.DryRun,
+				}); err != nil {
+					return fmt.Errorf("opening firewall port %d: %w", port, err)
+				}
 			}
 
 			return printSimpleResult(actions.SSHConfigSetPort,

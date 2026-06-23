@@ -27,6 +27,10 @@ func New(dryRun, verbose bool) *Service {
 
 // Install installs a cache driver.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
+	if opts.Version != "" {
+		return fmt.Errorf("cache version pinning is not yet supported; omit --version")
+	}
+
 	pkg := string(opts.Driver)
 	switch opts.Driver {
 	case DriverRedis:
@@ -50,6 +54,16 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 	if opts.Start {
 		if err := s.svc.Start(ctx, pkg); err != nil {
 			return err
+		}
+	}
+
+	if err := applyDriverConfig(opts); err != nil {
+		return err
+	}
+
+	if !opts.DryRun && (opts.Port > 0 || opts.Bind != "" || opts.Memory != "") {
+		if err := s.svc.Restart(ctx, pkg); err != nil {
+			return fmt.Errorf("restarting %s after config change: %w", pkg, err)
 		}
 	}
 

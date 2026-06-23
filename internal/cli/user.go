@@ -143,15 +143,17 @@ func newUserRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			ok, err := confirm.Ask(
-				fmt.Sprintf("Remove user %q?", opts.Username),
-				globals.Flags.Yes,
-			)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return nil
+			if !skipConfirm(opts.Force) {
+				ok, err := confirm.Ask(
+					fmt.Sprintf("Remove user %q?", opts.Username),
+					globals.Flags.Yes,
+				)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
 			}
 
 			svc := user.New(opts.DryRun, globals.Flags.Verbose)

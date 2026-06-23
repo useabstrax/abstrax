@@ -58,7 +58,7 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) 
 	if opts.UID != "" {
 		args = append(args, "--uid", opts.UID)
 	}
-	if opts.NoCreateHome {
+	if opts.NoCreateHome || !opts.CreateHome {
 		args = append(args, "--no-create-home")
 	}
 
@@ -125,7 +125,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	args := []string{}
-	if opts.DeleteHome {
+	if opts.DeleteHome && !opts.KeepHome {
 		args = append(args, "--remove-home")
 	}
 	args = append(args, opts.Username)

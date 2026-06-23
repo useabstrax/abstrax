@@ -84,7 +84,15 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if opts.Stop {
-		_, _ = s.runner.Run(ctx, "supervisorctl", "stop", opts.Name)
+		if _, err := s.runner.Run(ctx, "supervisorctl", "stop", opts.Name); err != nil && !opts.Force {
+			return fmt.Errorf("stopping daemon %q: %w", opts.Name, err)
+		}
+	}
+
+	if opts.DeleteLogs {
+		stdoutLog, stderrLog := logPathsFromConf(path, opts.Name)
+		_ = os.Remove(stdoutLog)
+		_ = os.Remove(stderrLog)
 	}
 
 	if _, err := backup.File(path); err != nil {
@@ -188,8 +196,21 @@ func (s *Service) List(ctx context.Context) ([]DaemonInfo, error) {
 
 // Logs returns the log output for a daemon.
 func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
+	stream := ""
+	switch {
+	case opts.Stderr && !opts.Stdout:
+		stream = "stderr"
+	case opts.Stdout && !opts.Stderr:
+		stream = "stdout"
+	}
+
 	if opts.Follow {
-		_, err := s.runner.Run(ctx, "supervisorctl", "tail", "-f", opts.Name)
+		args := []string{"tail", "-f"}
+		if stream != "" {
+			args = append(args, stream)
+		}
+		args = append(args, opts.Name)
+		_, err := s.runner.Run(ctx, "supervisorctl", args...)
 		return "", err
 	}
 
@@ -197,8 +218,12 @@ func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 	if opts.Lines > 0 {
 		lines = opts.Lines
 	}
-	res, err := s.runner.RunSilent(ctx, "supervisorctl", "tail",
-		fmt.Sprintf("-%d", lines), opts.Name)
+	args := []string{"tail", fmt.Sprintf("-%d", lines)}
+	if stream != "" {
+		args = append(args, stream)
+	}
+	args = append(args, opts.Name)
+	res, err := s.runner.RunSilent(ctx, "supervisorctl", args...)
 	if err != nil {
 		return "", err
 	}
@@ -302,4 +327,25 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 	}
 
 	return os.WriteFile(path, []byte(sb.String()), 0644)
+}
+
+func logPathsFromConf(path, name string) (stdout, stderr string) {
+	stdout = fmt.Sprintf("/var/log/supervisor/%s-stdout.log", name)
+	stderr = fmt.Sprintf("/var/log/supervisor/%s-stderr.log", name)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return stdout, stderr
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "stdout_logfile="):
+			stdout = strings.TrimPrefix(line, "stdout_logfile=")
+		case strings.HasPrefix(line, "stderr_logfile="):
+			stderr = strings.TrimPrefix(line, "stderr_logfile=")
+		}
+	}
+	return stdout, stderr
 }
