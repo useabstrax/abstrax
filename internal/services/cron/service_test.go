@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ func TestModifyAppliesOutputOptions(t *testing.T) {
 	dir := t.TempDir()
 	svc := &Service{cronDir: dir}
 
-	job, err := svc.Add(t.Context(), AddOptions{
+	job, err := svc.Add(context.Background(), AddOptions{
 		ID:       "worker",
 		User:     "www-data",
 		Command:  "/usr/bin/php artisan schedule:run",
@@ -22,7 +23,7 @@ func TestModifyAppliesOutputOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, err := svc.Modify(t.Context(), ModifyOptions{
+	updated, err := svc.Modify(context.Background(), ModifyOptions{
 		ID:     job.ID,
 		Output: "/var/log/worker.log",
 	})
@@ -43,7 +44,7 @@ func TestModifyPreservesCommandWithoutOutputFlags(t *testing.T) {
 	dir := t.TempDir()
 	svc := &Service{cronDir: dir}
 
-	job, err := svc.Add(t.Context(), AddOptions{
+	job, err := svc.Add(context.Background(), AddOptions{
 		ID:       "worker",
 		User:     "www-data",
 		Command:  "/usr/bin/true",
@@ -54,7 +55,7 @@ func TestModifyPreservesCommandWithoutOutputFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, err := svc.Modify(t.Context(), ModifyOptions{
+	updated, err := svc.Modify(context.Background(), ModifyOptions{
 		ID:       job.ID,
 		Schedule: "5 * * * *",
 	})
