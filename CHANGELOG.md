@@ -4,16 +4,25 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-06-23
 
-### Changed
-
-- Default PHP extensions now include `intl`, `redis`, and `sqlite3` for Laravel-oriented installations. `pcntl` and `posix` are provided by `php*-cli` and are no longer installed as separate packages.
+First stable release of the Abstrax CLI — a single Go binary for managing common Linux server tasks through a consistent command interface.
 
 ### Added
 
-- Plugin system with standalone executable binaries, registry-backed install/update/remove, command delegation, metadata protocol v1, and `abstrax plugin` management commands.
-- Machine-readable `abstrax project inspect --json` API (v1) for plugins.
-- `abstrax project service restart|reload` for project-owned supervisor services.
-- Reference plugin at `cli/cmd/abstrax-example`.
-- Initial open-source release of the Abstrax CLI.
+- **Server administration** — users and groups, SSH keys and server config, packages, systemd services, cron jobs, and Supervisor daemons.
+- **Web projects** — create and manage nginx-backed projects for static, PHP, Node.js, and Ruby apps, including SSL certificates via Let's Encrypt.
+- **Databases and cache** — MySQL/MariaDB database and user management, plus Redis and Memcached setup.
+- **Security and monitoring** — UFW firewall rules, server status and resource usage, and system inspection via `abstrax doctor`.
+- **Plugin system** — install, update, and remove registry-backed CLI plugins with command delegation and metadata protocol v1.
+- **Scripting support** — machine-readable `--json` output on all commands, including `abstrax project inspect --json` (v1) for plugins.
+- **Project services** — `abstrax project service restart|reload` for project-owned supervisor services.
+- **Reference plugin** — example plugin at `cli/cmd/abstrax-example`.
+
+See the [documentation](https://useabstrax.com/docs) for the full list of commands, flags, and guides.
+
+## [0.1.0 – 0.10.12] - Alpha releases
+
+Versions v0.1.0 through v0.10.12 were alpha releases published during early development. They are superseded by v1.0.0.
+
+See the [GitHub releases page](https://github.com/useabstrax/abstrax/releases) for changelogs and download links for those versions.
