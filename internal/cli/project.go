@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"abstrax/internal/output"
 	"abstrax/internal/platform"
 	"abstrax/internal/services/project"
+	"abstrax/internal/services/ssl"
 	"abstrax/internal/validate"
 )
 
@@ -91,10 +93,26 @@ func newProjectAddCmd() *cobra.Command {
 				}
 			}
 
+			if opts.SSL {
+				if err := validateProjectSSLOptions(opts); err != nil {
+					return err
+				}
+			}
+
 			svc := project.New(opts.DryRun, globals.Flags.Verbose)
 			state, err := svc.Add(cmd.Context(), opts)
 			if err != nil {
 				return err
+			}
+
+			if opts.SSL {
+				if err := enableProjectSSL(cmd.Context(), opts); err != nil {
+					return err
+				}
+				state, err = svc.Info(cmd.Context(), opts.Name)
+				if err != nil {
+					return err
+				}
 			}
 
 			p := printer()
@@ -118,6 +136,9 @@ func newProjectAddCmd() *cobra.Command {
 			}
 			if state.VhostPath != "" {
 				p.Line("  Vhost:      %s", state.VhostPath)
+			}
+			if state.SSLEnabled {
+				p.Line("  SSL:        enabled")
 			}
 			if example := project.DaemonAddExampleFor(state); example != nil {
 				p.Line("")
@@ -172,6 +193,34 @@ func newProjectAddCmd() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func validateProjectSSLOptions(opts project.AddOptions) error {
+	if len(opts.Domains) == 0 {
+		return fmt.Errorf("--domains is required when using --ssl")
+	}
+	if opts.Email == "" {
+		return fmt.Errorf("--email is required when using --ssl")
+	}
+	if opts.NoVhost {
+		return fmt.Errorf("--ssl requires a virtual host; do not use --no-vhost")
+	}
+	if opts.WebServer != project.WebServerNginx {
+		return fmt.Errorf("--ssl requires nginx")
+	}
+	return nil
+}
+
+func enableProjectSSL(ctx context.Context, opts project.AddOptions) error {
+	sslSvc := ssl.New(opts.DryRun, globals.Flags.Verbose)
+	return sslSvc.Add(ctx, ssl.AddOptions{
+		ProjectName:  opts.Name,
+		Domains:      opts.Domains,
+		Email:        opts.Email,
+		Staging:      opts.Staging,
+		RedirectHTTP: opts.RedirectHTTP,
+		DryRun:       opts.DryRun,
+	})
 }
 
 func newProjectRemoveCmd() *cobra.Command {
