@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform/debian"
 	"abstrax/internal/services/pkgmanager"
@@ -95,10 +94,6 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		_ = os.Remove(stderrLog)
 	}
 
-	if _, err := backup.File(path); err != nil {
-		return err
-	}
-
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("removing daemon config: %w", err)
 	}
@@ -112,10 +107,6 @@ func (s *Service) Modify(ctx context.Context, opts AddOptions) (*DaemonInfo, err
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("daemon %q does not exist", opts.Name)
-	}
-
-	if _, err := backup.File(path); err != nil {
-		return nil, err
 	}
 
 	if err := s.writeConf(path, opts); err != nil {

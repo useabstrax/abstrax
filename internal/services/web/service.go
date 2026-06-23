@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform/debian"
 	"abstrax/internal/services/pkgmanager"
@@ -118,10 +117,6 @@ func (s *Service) ensureNginxSitesInclude() error {
 	content := string(data)
 	if strings.Contains(content, sitesEnabledInclude) || strings.Contains(content, "sites-enabled") {
 		return nil
-	}
-
-	if _, err := backup.File(nginxConfPath); err != nil {
-		return err
 	}
 
 	confDInclude := "include /etc/nginx/conf.d/*.conf;"

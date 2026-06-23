@@ -8,7 +8,6 @@ import (
 	"strings"
 	"unicode"
 
-	"abstrax/internal/backup"
 	"abstrax/internal/services/svcmanager"
 )
 
@@ -129,9 +128,6 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 func (s *Service) removePHPPool(ctx context.Context, state *State) error {
 	if state.PHPPoolName == "" {
 		return nil
-	}
-	if _, err := backup.File(state.PHPPoolPath()); err != nil {
-		return err
 	}
 	_ = os.Remove(state.PHPPoolPath())
 	if state.PHPVersion != "" {

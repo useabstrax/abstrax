@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"abstrax/internal/backup"
 	"abstrax/internal/platform/debian"
 )
 
@@ -66,10 +65,6 @@ func (s *Service) Remove(_ context.Context, id string) error {
 		return fmt.Errorf("cron job %q does not exist", id)
 	}
 
-	if _, err := backup.File(path); err != nil {
-		return fmt.Errorf("backing up cron file: %w", err)
-	}
-
 	return os.Remove(path)
 }
 
@@ -96,10 +91,6 @@ func (s *Service) Modify(_ context.Context, opts ModifyOptions) (*CronJob, error
 			job.Env = make(map[string]string)
 		}
 		job.Env[k] = v
-	}
-
-	if _, err := backup.File(path); err != nil {
-		return nil, err
 	}
 
 	addOpts := AddOptions{
@@ -295,10 +286,6 @@ func (s *Service) setEnabled(id string, enabled bool) error {
 			state = "disabled"
 		}
 		return fmt.Errorf("cron job %q is already %s", id, state)
-	}
-
-	if _, err := backup.File(path); err != nil {
-		return err
 	}
 
 	data, err := os.ReadFile(path)

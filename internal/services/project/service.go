@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 	"abstrax/internal/identity"
 	"abstrax/internal/platform/debian"
@@ -202,9 +201,6 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		enabledLink := filepath.Join(s.nginxEnabled, filepath.Base(state.VhostPath))
 		_ = os.Remove(enabledLink)
 
-		if _, err := backup.File(state.VhostPath); err != nil {
-			return err
-		}
 		_ = os.Remove(state.VhostPath)
 		_, _ = s.runner.Run(ctx, "nginx", "-s", "reload")
 	}
@@ -274,9 +270,6 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	state.UpdatedAt = time.Now()
 
 	if state.VhostPath != "" && state.WebServer == WebServerNginx {
-		if _, err := backup.File(state.VhostPath); err != nil {
-			return nil, err
-		}
 		if _, err := s.createNginxVhost(ctx, state.vhostConfig()); err != nil {
 			return nil, err
 		}

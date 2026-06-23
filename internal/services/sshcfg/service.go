@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform/debian"
 )
@@ -144,11 +143,6 @@ func (s *Service) writeDirective(_ context.Context, key, value string) error {
 		if err := os.MkdirAll(debian.SSHConfigDir, 0755); err != nil {
 			return fmt.Errorf("creating sshd_config.d: %w", err)
 		}
-	}
-
-	// Backup existing managed file.
-	if _, err := backup.File(managed); err != nil {
-		return fmt.Errorf("backing up managed ssh config: %w", err)
 	}
 
 	// Read existing entries.

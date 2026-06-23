@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"abstrax/internal/backup"
 	executil "abstrax/internal/exec"
 )
 
@@ -63,10 +62,6 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*KeyInfo, error) {
 		}
 	}
 
-	if _, err := backup.File(authFile); err != nil {
-		return nil, fmt.Errorf("backing up authorized_keys: %w", err)
-	}
-
 	name := opts.Name
 	if name == "" {
 		name = keyID
@@ -102,10 +97,6 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	authFile, err := authorizedKeysPath(opts.Username)
 	if err != nil {
 		return err
-	}
-
-	if _, err := backup.File(authFile); err != nil {
-		return fmt.Errorf("backing up authorized_keys: %w", err)
 	}
 
 	keys, err := s.List(ctx, ListOptions{Username: opts.Username})
