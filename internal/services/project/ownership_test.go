@@ -347,6 +347,7 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config missing socket:\n%s", conf)
 	}
+	assertPHPRealpathRootParams(t, conf)
 	if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
 		t.Fatalf("config duplicates try_files already present in snippets/fastcgi-php.conf:\n%s", conf)
 	}
@@ -361,6 +362,17 @@ func TestBuildNginxConfigSharedDefaultSocket(t *testing.T) {
 	})
 	if !strings.Contains(conf, "fastcgi_pass unix:/run/php/php8.5-fpm.sock;") {
 		t.Fatalf("config = %s", conf)
+	}
+	assertPHPRealpathRootParams(t, conf)
+}
+
+func assertPHPRealpathRootParams(t *testing.T, conf string) {
+	t.Helper()
+	if !strings.Contains(conf, "fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;") {
+		t.Fatalf("config missing SCRIPT_FILENAME realpath_root param:\n%s", conf)
+	}
+	if !strings.Contains(conf, "fastcgi_param DOCUMENT_ROOT $realpath_root;") {
+		t.Fatalf("config missing DOCUMENT_ROOT realpath_root param:\n%s", conf)
 	}
 }
 

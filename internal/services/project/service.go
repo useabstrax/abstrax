@@ -435,6 +435,8 @@ func buildNginxConfig(opts vhostConfig) string {
 		sb.WriteString("    location ~ \\.php$ {\n")
 		sb.WriteString("        include snippets/fastcgi-php.conf;\n")
 		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:%s;\n", socket))
+		sb.WriteString("        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;\n")
+		sb.WriteString("        fastcgi_param DOCUMENT_ROOT $realpath_root;\n")
 		sb.WriteString("    }\n")
 	case RuntimeNode, RuntimeRuby:
 		proxyPort := opts.ProxyPort
