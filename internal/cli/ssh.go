@@ -8,7 +8,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/firewall"
 	"abstrax/internal/services/sshcfg"
 	"abstrax/internal/validate"
@@ -82,7 +81,7 @@ func newSSHConfigSetPortCmd() *cobra.Command {
 			if err := validate.PortString(args[0]); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -132,7 +131,7 @@ func newSSHConfigSetTimeoutCmd() *cobra.Command {
 			if _, err := fmt.Sscanf(args[0], "%d", &seconds); err != nil {
 				return fmt.Errorf("invalid timeout value %q", args[0])
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -155,7 +154,7 @@ func newSSHConfigDisableRootLoginCmd() *cobra.Command {
 		Use:   "disable-root-login",
 		Short: "Disable root SSH login",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -172,7 +171,7 @@ func newSSHConfigEnableRootLoginCmd() *cobra.Command {
 		Use:   "enable-root-login",
 		Short: "Enable root SSH login",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -189,7 +188,7 @@ func newSSHConfigDisablePasswordAuthCmd() *cobra.Command {
 		Use:   "disable-password-auth",
 		Short: "Disable SSH password authentication",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			printer().Warn("Ensure you have a working SSH key before disabling password auth.")
@@ -207,7 +206,7 @@ func newSSHConfigEnablePasswordAuthCmd() *cobra.Command {
 		Use:   "enable-password-auth",
 		Short: "Enable SSH password authentication",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -224,7 +223,7 @@ func newSSHReloadCmd() *cobra.Command {
 		Use:   "reload",
 		Short: "Reload the SSH server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -241,7 +240,7 @@ func newSSHRestartCmd() *cobra.Command {
 		Use:   "restart",
 		Short: "Restart the SSH server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			printer().Warn("Restarting SSH will briefly disconnect active sessions.")

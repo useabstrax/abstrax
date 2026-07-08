@@ -24,19 +24,22 @@ func NewDoctorCmd() *cobra.Command {
 				return fmt.Errorf("platform detection failed: %w", err)
 			}
 
+			profile := info.Profile
+
 			type doctorData struct {
-				OS              string      `json:"os"`
-				Version         string      `json:"version"`
-				PrettyName      string      `json:"pretty_name"`
-				KernelVersion   string      `json:"kernel_version"`
-				Architecture    string      `json:"architecture"`
-				PackageManager  string      `json:"package_manager"`
-				ServiceManager  string      `json:"service_manager"`
-				FirewallBackend string      `json:"firewall_backend"`
-				IsRoot          bool        `json:"is_root"`
-				Supported       bool        `json:"supported"`
-				SupportNote     string      `json:"support_note,omitempty"`
-				Tools           interface{} `json:"tools"`
+				OS              string           `json:"os"`
+				Version         string           `json:"version"`
+				PrettyName      string           `json:"pretty_name"`
+				KernelVersion   string           `json:"kernel_version"`
+				Architecture    string           `json:"architecture"`
+				PackageManager  string           `json:"package_manager"`
+				ServiceManager  string           `json:"service_manager"`
+				FirewallBackend string           `json:"firewall_backend"`
+				IsRoot          bool             `json:"is_root"`
+				Supported       bool             `json:"supported"`
+				SupportNote     string           `json:"support_note,omitempty"`
+				Profile         platform.Profile `json:"profile"`
+				Tools           interface{}      `json:"tools"`
 			}
 
 			data := doctorData{
@@ -51,6 +54,7 @@ func NewDoctorCmd() *cobra.Command {
 				IsRoot:          info.IsRoot,
 				Supported:       info.Supported,
 				SupportNote:     info.SupportNote,
+				Profile:         profile,
 				Tools:           tools,
 			}
 
@@ -63,13 +67,19 @@ func NewDoctorCmd() *cobra.Command {
 
 			p.Line("")
 			p.Line("  %-20s %s", "OS:", info.OSPrettyName)
+			p.Line("  %-20s %s", "Distro ID:", profile.DistroID)
 			p.Line("  %-20s %s", "Version:", info.OSVersion)
+			p.Line("  %-20s %s", "Family:", profile.Family)
 			p.Line("  %-20s %s", "Kernel:", info.KernelVersion)
 			p.Line("  %-20s %s", "Architecture:", info.Architecture)
 			p.Line("")
 			p.Line("  %-20s %s", "Package manager:", info.PackageManager)
 			p.Line("  %-20s %s", "Service manager:", info.ServiceManager)
-			p.Line("  %-20s %s", "Firewall backend:", info.FirewallBackend)
+			p.Line("  %-20s %s", "Firewall strategy:", profile.FirewallStrategy)
+			p.Line("  %-20s %s", "Nginx layout:", string(profile.NginxLayout))
+			p.Line("  %-20s %s", "Web user:", profile.WebUser)
+			p.Line("  %-20s %s", "Project root:", profile.DefaultProjectRoot)
+			p.Line("  %-20s %s", "PHP-FPM strategy:", profile.PHPFPMStrategy)
 			p.Line("")
 
 			rootStr := "no"
@@ -77,11 +87,10 @@ func NewDoctorCmd() *cobra.Command {
 				rootStr = "yes"
 			}
 			p.Line("  %-20s %s", "Running as root:", rootStr)
+			p.Line("  %-20s %s", "Support level:", profile.SupportLevel)
 
-			if !info.Supported {
-				p.Warn(info.SupportNote)
-			} else {
-				p.Line("  %-20s %s", "Platform support:", "full")
+			if profile.SupportNote != "" {
+				p.Warn(profile.SupportNote)
 			}
 
 			p.Line("")

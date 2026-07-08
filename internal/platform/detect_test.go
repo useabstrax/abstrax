@@ -7,8 +7,6 @@ import (
 )
 
 func TestDetectReturnsInfo(t *testing.T) {
-	// Detect should always return a non-nil Info and Tools even on
-	// unsupported platforms (macOS in CI).
 	info, tools, err := platform.Detect()
 	if err != nil {
 		t.Fatalf("Detect() returned unexpected error: %v", err)
@@ -19,17 +17,25 @@ func TestDetectReturnsInfo(t *testing.T) {
 	if tools == nil {
 		t.Fatal("Detect() returned nil Tools")
 	}
-	// Architecture and kernel version should be populated on any Unix-like system.
 	if info.Architecture == "" {
 		t.Error("Architecture should not be empty")
+	}
+	if info.Profile.Family == "" && info.OSName != "" {
+		t.Error("Profile family should be set when OS is detected")
 	}
 }
 
 func TestRequireRootReturnsErrorWhenNotRoot(t *testing.T) {
-	// In CI / test environments we are typically not root.
-	// The function should return an error in that case, or nil if running as root.
 	err := platform.RequireRoot()
-	// We can't assert a specific value because the test may run as root in some
-	// environments. Just assert the function does not panic.
 	_ = err
+}
+
+func TestDebianDefaultsProvider(t *testing.T) {
+	p := platform.DebianDefaults()
+	if p.WebUser() != "www-data" {
+		t.Fatalf("WebUser = %q", p.WebUser())
+	}
+	if p.DefaultProjectRoot() != "/var/www" {
+		t.Fatalf("DefaultProjectRoot = %q", p.DefaultProjectRoot())
+	}
 }

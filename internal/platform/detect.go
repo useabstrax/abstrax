@@ -9,14 +9,27 @@ import (
 	"syscall"
 )
 
+var osReleasePath = "/etc/os-release"
+
 // Detect inspects the running system and returns a populated Info and Tools.
 func Detect() (*Info, *Tools, error) {
 	info := &Info{}
 	tools := &Tools{}
 
-	if err := parseOSRelease(info); err != nil {
-		return nil, nil, fmt.Errorf("reading /etc/os-release: %w", err)
+	rel, err := readOSRelease(osReleasePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading %s: %w", osReleasePath, err)
 	}
+
+	profile := classifyRelease(rel)
+	info.OSName = rel.ID
+	info.OSVersion = rel.VersionID
+	info.OSPrettyName = rel.PrettyName
+	if info.OSPrettyName == "" {
+		info.OSPrettyName = rel.Name
+	}
+	info.Profile = profile
+	info.Family = profile.Family
 
 	info.KernelVersion = kernelVersion()
 	info.Architecture = architecture()
@@ -25,44 +38,66 @@ func Detect() (*Info, *Tools, error) {
 	info.FirewallBackend = detectFirewallBackend()
 	info.IsRoot = os.Getuid() == 0
 
-	info.Supported, info.SupportNote = isSupported(info)
+	// Enrich profile with detected managers.
+	info.Profile.PackageManager = info.PackageManager
+	info.Profile.ServiceManager = info.ServiceManager
+	info.Profile.FirewallStrategy = firewallStrategy(info.FirewallBackend, profile.Family)
+	if info.Profile.DistroName == "" {
+		info.Profile.DistroName = info.OSPrettyName
+	}
+	if info.Profile.DistroID == "" {
+		info.Profile.DistroID = info.OSName
+	}
+	if info.Profile.VersionID == "" {
+		info.Profile.VersionID = info.OSVersion
+	}
+
+	info.Supported = profile.Supported()
+	info.SupportNote = profile.SupportNote
 
 	detectTools(tools)
 
 	return info, tools, nil
 }
 
-func parseOSRelease(info *Info) error {
-	f, err := os.Open("/etc/os-release")
+// ProfileFromOSRelease builds a platform profile from /etc/os-release content.
+// This is primarily used in tests.
+func ProfileFromOSRelease(content string) Profile {
+	rel, err := parseOSReleaseReader(strings.NewReader(content))
 	if err != nil {
-		// Not a Linux system - still try to continue.
-		info.OSName = "unknown"
-		info.OSVersion = "unknown"
-		info.OSPrettyName = "unknown"
-		return nil
+		return Profile{
+			Family:       "unknown",
+			SupportLevel: SupportUnsupported,
+			SupportNote:  "malformed /etc/os-release",
+		}
+	}
+	return classifyRelease(rel)
+}
+
+func readOSRelease(path string) (OSRelease, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return OSRelease{}, nil
+		}
+		return OSRelease{}, err
 	}
 	defer f.Close()
+	return parseOSReleaseReader(f)
+}
 
-	kv := make(map[string]string)
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := parts[0]
-		val := strings.Trim(parts[1], `"`)
-		kv[key] = val
+func firewallStrategy(backend, family string) string {
+	if family != "debian" {
+		return "unknown"
 	}
-
-	info.OSName = kv["ID"]
-	info.OSVersion = kv["VERSION_ID"]
-	info.OSPrettyName = kv["PRETTY_NAME"]
-	return scanner.Err()
+	switch backend {
+	case "ufw":
+		return "ufw"
+	case "none", "":
+		return "unknown"
+	default:
+		return "unknown"
+	}
 }
 
 func kernelVersion() string {
@@ -99,7 +134,6 @@ func detectPackageManager() string {
 }
 
 func detectServiceManager() string {
-	// Check for systemd via the PID 1 process name.
 	if _, err := os.Stat("/run/systemd/private"); err == nil {
 		return "systemd"
 	}
@@ -128,17 +162,6 @@ func detectFirewallBackend() string {
 		return "iptables"
 	default:
 		return "none"
-	}
-}
-
-func isSupported(info *Info) (bool, string) {
-	switch info.OSName {
-	case "ubuntu", "debian", "linuxmint", "pop", "raspbian":
-		return true, ""
-	case "":
-		return false, "could not detect OS"
-	default:
-		return false, fmt.Sprintf("OS %q is not fully supported; Abstrax targets Debian and Ubuntu based systems", info.OSName)
 	}
 }
 
@@ -174,14 +197,31 @@ func RequireRoot() error {
 	return nil
 }
 
-// RequireSupported returns an error when the current platform is not in the
-// supported set.
+// RequireSupported returns an error when the current platform is unsupported.
 func RequireSupported(info *Info) error {
-	if !info.Supported {
-		if info.SupportNote != "" {
-			return fmt.Errorf("unsupported platform: %s", info.SupportNote)
-		}
-		return fmt.Errorf("unsupported platform: %s", info.OSName)
+	if info == nil {
+		return fmt.Errorf("platform detection failed")
 	}
-	return nil
+	if info.Supported {
+		return nil
+	}
+	return &UnsupportedError{Profile: info.Profile}
+}
+
+// ParseOSRelease is exported for tests that need raw key/value parsing.
+func ParseOSRelease(r interface{ Read([]byte) (int, error) }) (map[string]string, error) {
+	kv := make(map[string]string)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		kv[parts[0]] = strings.Trim(parts[1], `"`)
+	}
+	return kv, scanner.Err()
 }

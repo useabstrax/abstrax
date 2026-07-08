@@ -11,7 +11,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/config"
 	"abstrax/internal/services/plugin"
 	"abstrax/internal/validate"
@@ -201,7 +200,7 @@ func newPluginInstallCmd() *cobra.Command {
 				return err
 			}
 			if manifestURL == "" {
-				if err := platform.RequireRoot(); err != nil {
+				if err := requireRootAndSupported(); err != nil {
 					return err
 				}
 			}
@@ -253,7 +252,7 @@ func newPluginUpdateCmd() *cobra.Command {
 			if err := validate.PluginName(args[0]); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc, err := pluginService()
@@ -286,7 +285,7 @@ func newPluginRemoveCmd() *cobra.Command {
 			if !ok {
 				return nil
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc, err := pluginService()

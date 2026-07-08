@@ -10,7 +10,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/random"
 	"abstrax/internal/services/mysql"
 	"abstrax/internal/validate"
@@ -58,7 +57,7 @@ func newMySQLConfigSetCmd() *cobra.Command {
 		Use:   "set",
 		Short: "Set MySQL connection configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -137,7 +136,7 @@ func newMySQLInstallCmd() *cobra.Command {
 		Use:   "install",
 		Short: "Install MySQL / MariaDB",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -171,7 +170,7 @@ func newMySQLResetRootPasswordCmd() *cobra.Command {
 		Use:   "reset-root-password",
 		Short: "Reset the MySQL root password",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 

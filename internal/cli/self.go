@@ -6,7 +6,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/selfupdate"
 )
 
@@ -47,7 +46,7 @@ Examples:
 			}
 
 			if !globals.Flags.DryRun {
-				if err := platform.RequireRoot(); err != nil {
+				if err := requireRootAndSupported(); err != nil {
 					return err
 				}
 			}

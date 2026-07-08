@@ -14,11 +14,9 @@ import (
 	"abstrax/internal/services/svcmanager"
 )
 
-const (
-	nginxConfPath         = "/etc/nginx/nginx.conf"
-	sitesEnabledInclude   = "include /etc/nginx/sites-enabled/*;"
-	defaultSiteConfigName = "default"
-)
+const defaultSiteConfigName = "default"
+
+var nginxPaths = debian.DefaultPaths()
 
 // Service manages web servers.
 type Service struct {
@@ -105,34 +103,34 @@ func (s *Service) configureNginx(ctx context.Context) error {
 
 func (s *Service) ensureNginxSitesInclude() error {
 	if s.dryRun {
-		fmt.Printf("[dry-run] would ensure %s includes sites-enabled\n", nginxConfPath)
+		fmt.Printf("[dry-run] would ensure %s includes sites-enabled\n", nginxPaths.NginxConfPath)
 		return nil
 	}
 
-	data, err := os.ReadFile(nginxConfPath)
+	data, err := os.ReadFile(nginxPaths.NginxConfPath)
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", nginxConfPath, err)
+		return fmt.Errorf("reading %s: %w", nginxPaths.NginxConfPath, err)
 	}
 
 	content := string(data)
-	if strings.Contains(content, sitesEnabledInclude) || strings.Contains(content, "sites-enabled") {
+	if strings.Contains(content, nginxPaths.NginxSitesEnabledInclude) || strings.Contains(content, "sites-enabled") {
 		return nil
 	}
 
 	confDInclude := "include /etc/nginx/conf.d/*.conf;"
 	if idx := strings.Index(content, confDInclude); idx != -1 {
 		insertPos := idx + len(confDInclude)
-		newContent := content[:insertPos] + "\n\t" + sitesEnabledInclude + content[insertPos:]
-		return os.WriteFile(nginxConfPath, []byte(newContent), 0644)
+		newContent := content[:insertPos] + "\n\t" + nginxPaths.NginxSitesEnabledInclude + content[insertPos:]
+		return os.WriteFile(nginxPaths.NginxConfPath, []byte(newContent), 0644)
 	}
 
 	httpIdx := strings.Index(content, "http {")
 	if httpIdx == -1 {
-		return fmt.Errorf("%s: no http block found; cannot add sites-enabled include", nginxConfPath)
+		return fmt.Errorf("%s: no http block found; cannot add sites-enabled include", nginxPaths.NginxConfPath)
 	}
 	insertPos := httpIdx + len("http {")
-	newContent := content[:insertPos] + "\n\t" + sitesEnabledInclude + content[insertPos:]
-	return os.WriteFile(nginxConfPath, []byte(newContent), 0644)
+	newContent := content[:insertPos] + "\n\t" + nginxPaths.NginxSitesEnabledInclude + content[insertPos:]
+	return os.WriteFile(nginxPaths.NginxConfPath, []byte(newContent), 0644)
 }
 
 func (s *Service) disableDefaultSite() error {

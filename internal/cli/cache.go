@@ -9,7 +9,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/cache"
 )
 
@@ -42,7 +41,7 @@ func newCacheInstallCmd() *cobra.Command {
 			opts.Driver = cache.Driver(args[0])
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -90,7 +89,7 @@ func newCacheRemoveCmd() *cobra.Command {
 			opts.Driver = cache.Driver(args[0])
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -115,7 +114,7 @@ func newCacheStartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			d := cache.Driver(args[0])
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := cache.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -135,7 +134,7 @@ func newCacheStopCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			d := cache.Driver(args[0])
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := cache.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -155,7 +154,7 @@ func newCacheRestartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			d := cache.Driver(args[0])
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := cache.New(globals.Flags.DryRun, globals.Flags.Verbose)

@@ -427,7 +427,7 @@ func buildNginxConfig(opts vhostConfig) string {
 	case RuntimePHP:
 		socket := opts.PHPSocket
 		if socket == "" {
-			socket = filepath.Join("/run/php", fmt.Sprintf("php%s-fpm.sock", normalizePHPVersion(opts.PHPVersion)))
+			socket = debianPlatform.PHPFPMDefaultSocket(normalizePHPVersion(opts.PHPVersion))
 		}
 		sb.WriteString("    location / {\n")
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")

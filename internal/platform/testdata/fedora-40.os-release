@@ -1,0 +1,7 @@
+NAME="Fedora Linux"
+VERSION="40 (Workstation Edition)"
+ID=fedora
+VERSION_ID=40
+PRETTY_NAME="Fedora Linux 40 (Workstation Edition)"
+VARIANT="Workstation Edition"
+VARIANT_ID=workstation

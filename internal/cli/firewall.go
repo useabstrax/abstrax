@@ -9,7 +9,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/firewall"
 	"abstrax/internal/validate"
 )
@@ -84,7 +83,7 @@ func newFirewallEnableCmd() *cobra.Command {
 		Use:   "enable",
 		Short: "Enable the firewall",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -129,7 +128,7 @@ func newFirewallDisableCmd() *cobra.Command {
 		Use:   "disable",
 		Short: "Disable the firewall",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -165,7 +164,7 @@ func newFirewallAllowCmd() *cobra.Command {
 			if err := validate.PortString(opts.Port); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -199,7 +198,7 @@ func newFirewallDenyCmd() *cobra.Command {
 			opts.Port = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -233,7 +232,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 			if err := validate.CIDRRange(opts.From); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -269,7 +268,7 @@ func newFirewallDenyIPCmd() *cobra.Command {
 			if err := validate.CIDRRange(opts.From); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -324,7 +323,7 @@ func newFirewallRuleRemoveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 

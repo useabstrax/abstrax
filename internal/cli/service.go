@@ -8,7 +8,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/svcmanager"
 	"abstrax/internal/validate"
 )
@@ -152,7 +151,7 @@ func runSvcAction(
 	if err := validate.ServiceName(name); err != nil {
 		return err
 	}
-	if err := platform.RequireRoot(); err != nil {
+	if err := requireRootAndSupported(); err != nil {
 		return err
 	}
 

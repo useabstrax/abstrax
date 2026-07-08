@@ -14,7 +14,7 @@ var forbiddenProjectRoots = []string{
 	"/",
 	"/home",
 	"/var",
-	"/var/www",
+	DefaultSharedBase,
 }
 
 // ValidatedPaths holds symlink-safe resolved project paths.

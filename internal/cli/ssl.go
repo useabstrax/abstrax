@@ -8,7 +8,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/ssl"
 )
 
@@ -33,7 +32,7 @@ func newSSLInstallCmd() *cobra.Command {
 		Use:   "install",
 		Short: "Install Certbot and the nginx plugin",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -64,7 +63,7 @@ func newSSLAddCmd() *cobra.Command {
 			opts.ProjectName = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -96,7 +95,7 @@ func newSSLRemoveCmd() *cobra.Command {
 		Short: "Remove SSL certificate for a project",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -119,7 +118,7 @@ func newSSLRenewCmd() *cobra.Command {
 		Short: "Renew SSL certificates",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.DryRun = globals.Flags.DryRun
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 

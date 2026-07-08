@@ -8,7 +8,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/web"
 )
 
@@ -57,7 +56,7 @@ func NewWebCmd() *cobra.Command {
 		Use:   "reload",
 		Short: "Reload web server gracefully",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := web.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -72,7 +71,7 @@ func NewWebCmd() *cobra.Command {
 		Use:   "restart",
 		Short: "Restart web server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := web.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -104,7 +103,7 @@ func newWebInstallCmd() *cobra.Command {
 			}
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 

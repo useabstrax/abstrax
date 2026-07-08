@@ -86,7 +86,7 @@ func (spec RuntimeSpec) label() string {
 func (spec RuntimeSpec) Installed() bool {
 	switch spec.Runtime {
 	case RuntimePHP:
-		return packageInstalled(fmt.Sprintf("php%s-fpm", spec.Version))
+		return packageInstalled(debianPlatform.PHPFPMServiceName(spec.Version))
 	case RuntimeNode:
 		return nodeMajorVersion() == nodeMajor(spec.Version)
 	case RuntimeRuby:
@@ -145,7 +145,7 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 				return fmt.Errorf("installing %s: %w", pkg, err)
 			}
 		}
-		fpmPkg := fmt.Sprintf("php%s-fpm", spec.Version)
+		fpmPkg := debianPlatform.PHPFPMServiceName(spec.Version)
 		if err := svc.Enable(ctx, fpmPkg); err != nil {
 			return err
 		}
