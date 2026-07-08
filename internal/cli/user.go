@@ -11,7 +11,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/user"
 	"abstrax/internal/validate"
 )
@@ -57,7 +56,7 @@ func newUserAddCmd() *cobra.Command {
 			if err := validate.Username(opts.Username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -139,7 +138,7 @@ func newUserRemoveCmd() *cobra.Command {
 			if err := validate.Username(opts.Username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -191,7 +190,7 @@ func newUserGrantSudoCmd() *cobra.Command {
 			if err := validate.Username(username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -216,7 +215,7 @@ func newUserRevokeSudoCmd() *cobra.Command {
 			if err := validate.Username(username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -253,7 +252,7 @@ func newUserSetGroupsCmd() *cobra.Command {
 			if err := validate.Username(username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -281,7 +280,7 @@ func newUserAddGroupsCmd() *cobra.Command {
 			if err := validate.Username(username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -309,7 +308,7 @@ func newUserRemoveGroupsCmd() *cobra.Command {
 			if err := validate.Username(username); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -339,7 +338,7 @@ func newUserSetShellCmd() *cobra.Command {
 			if err := validate.Shell(shell); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -363,7 +362,7 @@ func newUserLockCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			username := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -386,7 +385,7 @@ func newUserUnlockCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			username := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)

@@ -1,0 +1,10 @@
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+ID=raspberrypi
+ID_LIKE="debian"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+HOME_URL="https://www.raspberrypi.com/"
+SUPPORT_URL="https://www.raspberrypi.com/help/"
+BUG_REPORT_URL="https://github.com/RPi-Distro/pi-gen/issues"

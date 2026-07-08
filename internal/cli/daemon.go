@@ -9,7 +9,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/daemon"
 	"abstrax/internal/validate"
 )
@@ -52,7 +51,7 @@ func newDaemonAddCmd() *cobra.Command {
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			if opts.Command == "" {
@@ -115,7 +114,7 @@ func newDaemonRemoveCmd() *cobra.Command {
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -151,7 +150,7 @@ func newDaemonModifyCmd() *cobra.Command {
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -184,7 +183,7 @@ func newDaemonStartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := daemon.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -204,7 +203,7 @@ func newDaemonStopCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := daemon.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -224,7 +223,7 @@ func newDaemonRestartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := daemon.New(globals.Flags.DryRun, globals.Flags.Verbose)

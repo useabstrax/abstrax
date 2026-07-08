@@ -11,7 +11,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/project"
 	"abstrax/internal/services/ssl"
 	"abstrax/internal/validate"
@@ -58,7 +57,7 @@ func newProjectAddCmd() *cobra.Command {
 			if err := validate.ProjectName(opts.Name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -237,7 +236,7 @@ func newProjectRemoveCmd() *cobra.Command {
 			opts.Name = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -293,7 +292,7 @@ func newProjectModifyCmd() *cobra.Command {
 			opts.DryRun = globals.Flags.DryRun
 			opts.Yes = globals.Flags.Yes
 
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -483,7 +482,7 @@ func newProjectServiceRestartCmd() *cobra.Command {
 		Short: "Restart a project-owned service",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			if err := validate.DaemonName(args[1]); err != nil {
@@ -505,7 +504,7 @@ func newProjectServiceReloadCmd() *cobra.Command {
 		Short: "Reload a project-owned service",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			if err := validate.DaemonName(args[1]); err != nil {
@@ -527,7 +526,7 @@ func newProjectEnableCmd() *cobra.Command {
 		Short: "Enable a project's nginx vhost",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -546,7 +545,7 @@ func newProjectDisableCmd() *cobra.Command {
 		Short: "Disable a project's nginx vhost",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -565,7 +564,7 @@ func newProjectReloadCmd() *cobra.Command {
 		Short: "Reload nginx for a project",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)

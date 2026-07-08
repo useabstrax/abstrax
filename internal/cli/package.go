@@ -8,7 +8,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/validate"
 )
@@ -43,7 +42,7 @@ func newPkgInstallCmd() *cobra.Command {
 			if err := validate.PackageName(name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -77,7 +76,7 @@ func newPkgRemoveCmd() *cobra.Command {
 			if err := validate.PackageName(name); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -104,7 +103,7 @@ func newPkgUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Update package lists",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -123,7 +122,7 @@ func newPkgUpgradeCmd() *cobra.Command {
 		Use:   "upgrade",
 		Short: "Upgrade installed packages",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)

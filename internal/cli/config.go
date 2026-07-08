@@ -10,7 +10,6 @@ import (
 	"abstrax/internal/confirm"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/config"
 )
 
@@ -104,7 +103,7 @@ func newConfigSetCmd() *cobra.Command {
 		Short: "Replace a list configuration value",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -125,7 +124,7 @@ func newConfigAddCmd() *cobra.Command {
 		Short: "Add a value to a list configuration key",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -146,7 +145,7 @@ func newConfigRemoveCmd() *cobra.Command {
 		Short: "Remove a value from a list configuration key",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -167,7 +166,7 @@ func newConfigResetCmd() *cobra.Command {
 		Short: "Reset configuration to defaults",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 

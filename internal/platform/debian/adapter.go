@@ -23,6 +23,18 @@ const (
 	// NginxSitesEnabled is nginx's sites-enabled dir.
 	NginxSitesEnabled = "/etc/nginx/sites-enabled"
 
+	// NginxConfPath is the main nginx configuration file.
+	NginxConfPath = "/etc/nginx/nginx.conf"
+
+	// NginxSitesEnabledInclude is the include directive for enabled sites.
+	NginxSitesEnabledInclude = "include /etc/nginx/sites-enabled/*;"
+
+	// PHPSocketDir is where PHP-FPM Unix sockets are created on Debian/Ubuntu.
+	PHPSocketDir = "/run/php"
+
+	// PHPConfigRoot is the root directory for PHP versioned configuration.
+	PHPConfigRoot = "/etc/php"
+
 	// AbstraxStateDir is where Abstrax stores runtime state (plugins, caches).
 	AbstraxStateDir = "/var/lib/abstrax"
 

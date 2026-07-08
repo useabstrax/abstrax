@@ -1,5 +1,7 @@
 package config
 
+import "abstrax/internal/platform"
+
 // Settings holds Abstrax configuration. Values in the on-disk file override
 // built-in defaults for the keys that are present.
 type Settings struct {
@@ -54,14 +56,5 @@ var PHPBundledWithCLI = map[string]bool{
 
 // PHPPackages returns apt package names for a PHP version and extension list.
 func PHPPackages(version string, extensions []string) []string {
-	fpm := "php" + version + "-fpm"
-	cli := "php" + version + "-cli"
-	pkgs := []string{fpm, cli}
-	for _, ext := range extensions {
-		if PHPBundledWithCLI[ext] {
-			continue
-		}
-		pkgs = append(pkgs, "php"+version+"-"+ext)
-	}
-	return pkgs
+	return platform.DebianDefaults().PHPPackageNames(version, extensions)
 }

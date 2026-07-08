@@ -6,19 +6,23 @@ import (
 	"path/filepath"
 
 	"abstrax/internal/identity"
+	"abstrax/internal/platform"
 	"abstrax/internal/validate"
 )
 
-const (
-	// SharedWebUser is the default runtime and project owner for shared mode.
-	SharedWebUser = "www-data"
-	// SharedWebGroup is the default project group for shared mode.
-	SharedWebGroup = "www-data"
-	// DefaultSharedBase is the default project root for shared mode.
-	DefaultSharedBase = "/var/www"
-	// NginxUser is the user nginx workers run as on Debian/Ubuntu.
-	NginxUser = "www-data"
-)
+var debianPlatform = platform.DebianDefaults()
+
+// SharedWebUser is the default runtime and project owner for shared mode.
+var SharedWebUser = debianPlatform.WebUser()
+
+// SharedWebGroup is the default project group for shared mode.
+var SharedWebGroup = debianPlatform.WebGroup()
+
+// DefaultSharedBase is the default project root for shared mode.
+var DefaultSharedBase = debianPlatform.DefaultProjectRoot()
+
+// NginxUser is the user nginx workers run as on Debian/Ubuntu.
+var NginxUser = debianPlatform.WebUser()
 
 // OwnershipMode describes how a project is owned and executed.
 type OwnershipMode string

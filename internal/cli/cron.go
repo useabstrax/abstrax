@@ -9,7 +9,6 @@ import (
 	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
-	"abstrax/internal/platform"
 	"abstrax/internal/services/cron"
 	"abstrax/internal/validate"
 )
@@ -60,7 +59,7 @@ func newCronAddCmd() *cobra.Command {
 			if err := validate.CronID(opts.ID); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			if opts.Command == "" {
@@ -149,7 +148,7 @@ func newCronRemoveCmd() *cobra.Command {
 			if err := validate.CronID(id); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 
@@ -178,7 +177,7 @@ func newCronModifyCmd() *cobra.Command {
 			if err := validate.CronID(opts.ID); err != nil {
 				return err
 			}
-			if err := platform.RequireRoot(); err != nil {
+			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			if opts.Schedule != "" {
