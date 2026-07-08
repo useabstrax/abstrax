@@ -4,6 +4,19 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-07-08
+
+### Added
+
+- **Platform profiles** — Abstrax now reads `/etc/os-release` (including `ID_LIKE` and `VERSION_ID`) and derives a platform profile covering distro family, package and service managers, nginx layout, web user, default project root, PHP-FPM naming, firewall strategy, and support level (`official`, `compatible`, or `unsupported`).
+- **Debian-family provider** — Paths and naming conventions for apt/systemd, nginx `sites-available`/`sites-enabled`, `www-data`, `/var/www`, PHP-FPM services and sockets, and UFW are centralised in a single provider rather than scattered through command code.
+- **Enhanced `abstrax doctor`** — Reports distro ID, family, nginx layout, web user, project root, PHP-FPM strategy, firewall strategy, and support level alongside the existing tool and manager detection.
+
+### Changed
+
+- **Supported operating systems** — Fully supported distros are now explicitly defined as Ubuntu 20.04+, Debian 11+, Linux Mint, Pop!_OS, and Raspbian / Raspberry Pi OS. Other Debian/Ubuntu-based systems are marked `compatible` (best-effort). Non-Debian-family distributions are `unsupported`.
+- **Mutating commands** — Commands that change system state now verify platform support before running. Unsupported distributions receive a clear error explaining what was detected and which distros are supported, without attempting destructive changes.
+
 ## [1.1.1] - 2026-06-24
 
 ### Fixed
