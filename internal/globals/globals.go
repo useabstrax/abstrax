@@ -8,11 +8,12 @@ var Flags = &GlobalFlags{}
 
 // GlobalFlags contains the parsed global flag values.
 type GlobalFlags struct {
-	JSON               bool
-	DryRun             bool
-	Yes                bool
-	Quiet              bool
-	Verbose            bool
-	NoColor            bool
-	AllowBlockedPlugin []string
+	JSON                bool
+	DryRun              bool
+	Yes                 bool
+	Quiet               bool
+	Verbose             bool
+	NoColor             bool
+	EnableRequiredRepos bool
+	AllowBlockedPlugin  []string
 }

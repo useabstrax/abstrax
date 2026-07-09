@@ -38,6 +38,21 @@ func (s *Service) ensureClientSSHAllow(ctx context.Context) (SSHProtectResult, e
 		return result, nil
 	}
 
+	if s.backend == "firewalld" {
+		rich := fmt.Sprintf(
+			`rule family="ipv4" source address="%s" port port="%d" protocol="tcp" accept`,
+			clientIP, sshPort,
+		)
+		if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
+			return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
+		}
+		if _, err := s.runner.Run(ctx, "firewall-cmd", "--reload"); err != nil {
+			return result, fmt.Errorf("reloading firewalld: %w", err)
+		}
+		result.Added = true
+		return result, nil
+	}
+
 	args := []string{
 		"allow", "from", clientIP, "to", "any",
 		"port", strconv.Itoa(sshPort), "proto", "tcp",
@@ -59,7 +74,10 @@ func hasSSHAllowRule(rules []Rule, clientIP string, sshPort int) bool {
 		if !strings.EqualFold(r.Action, "ALLOW") {
 			continue
 		}
-		if r.From != clientIP {
+		if r.From != "" && r.From != clientIP {
+			continue
+		}
+		if r.From == "" {
 			continue
 		}
 		port := strings.TrimSuffix(strings.TrimSuffix(r.Port, "/tcp"), "/udp")

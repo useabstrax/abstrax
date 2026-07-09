@@ -51,6 +51,7 @@ func classifyRelease(rel OSRelease) Profile {
 		NginxLayout:      NginxLayoutUnknown,
 		PHPFPMStrategy:   "unknown",
 		FirewallStrategy: "unknown",
+		SELinuxStatus:    SELinuxUnknown,
 	}
 
 	if profile.DistroName == "" {
@@ -61,7 +62,7 @@ func classifyRelease(rel OSRelease) Profile {
 	}
 
 	profile.SupportLevel, profile.SupportNote = classifySupport(rel, profile.Family)
-	applyDebianFamilyDefaults(&profile)
+	applyFamilyDefaults(&profile)
 
 	return profile
 }
@@ -71,11 +72,17 @@ func detectFamily(rel OSRelease) string {
 	switch id {
 	case "ubuntu", "debian", "linuxmint", "pop", "raspbian", "raspberrypi":
 		return "debian"
+	case "rocky", "almalinux", "rhel", "centos", "ol", "oracle":
+		return "rhel"
 	}
 
 	like := rel.IDLike
 	if strings.Contains(like, "debian") || strings.Contains(like, "ubuntu") {
 		return "debian"
+	}
+	// Generic RHEL-compatible derivatives via ID_LIKE, excluding Fedora itself.
+	if id != "fedora" && (strings.Contains(like, "rhel") || strings.Contains(like, "centos")) {
+		return "rhel"
 	}
 
 	return "unknown"
@@ -85,19 +92,28 @@ func normalizeDistroID(id string) string {
 	switch strings.ToLower(id) {
 	case "raspberry_pi", "raspberry-pi":
 		return "raspberrypi"
+	case "oraclelinux", "oracle":
+		return "ol"
 	default:
 		return strings.ToLower(id)
 	}
 }
 
 func classifySupport(rel OSRelease, family string) (SupportLevel, string) {
-	if family != "debian" {
+	switch family {
+	case "debian":
+		return classifyDebianSupport(rel)
+	case "rhel":
+		return classifyRHELSupport(rel)
+	default:
 		if rel.ID == "" {
 			return SupportUnsupported, "could not detect operating system from /etc/os-release"
 		}
 		return SupportUnsupported, unsupportedMessage(rel)
 	}
+}
 
+func classifyDebianSupport(rel OSRelease) (SupportLevel, string) {
 	id := normalizeDistroID(rel.ID)
 	switch id {
 	case "ubuntu":
@@ -119,12 +135,61 @@ func classifySupport(rel OSRelease, family string) (SupportLevel, string) {
 	}
 }
 
+func classifyRHELSupport(rel OSRelease) (SupportLevel, string) {
+	id := normalizeDistroID(rel.ID)
+	majorOK := debianVersionAtLeast(rel.VersionID, 9)
+
+	switch id {
+	case "rocky":
+		if majorOK {
+			return SupportOfficial, ""
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, "Rocky Linux")
+	case "almalinux":
+		if majorOK {
+			return SupportOfficial, ""
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, "AlmaLinux")
+	case "rhel":
+		if majorOK {
+			return SupportCompatible, "Red Hat Enterprise Linux " + rel.VersionID + " is experimental; Rocky Linux 9+ and AlmaLinux 9+ are the officially supported RHEL-family targets"
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, "Red Hat Enterprise Linux")
+	case "centos":
+		if majorOK {
+			return SupportCompatible, "CentOS Stream " + rel.VersionID + " is experimental; Rocky Linux 9+ and AlmaLinux 9+ are the officially supported RHEL-family targets"
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, "CentOS")
+	case "ol":
+		if majorOK {
+			return SupportCompatible, "Oracle Linux " + rel.VersionID + " is experimental; Rocky Linux 9+ and AlmaLinux 9+ are the officially supported RHEL-family targets"
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, "Oracle Linux")
+	default:
+		if majorOK {
+			return SupportCompatible, "RHEL-compatible distribution " + quote(id) + " is experimental; Rocky Linux 9+ and AlmaLinux 9+ are the officially supported targets"
+		}
+		return SupportUnsupported, rhelUnsupportedVersionNote(rel, rel.PrettyName)
+	}
+}
+
+func rhelUnsupportedVersionNote(rel OSRelease, label string) string {
+	if label == "" {
+		label = rel.ID
+	}
+	version := rel.VersionID
+	if version == "" {
+		version = "unknown"
+	}
+	return label + " " + version + " is not supported; Abstrax officially supports Rocky Linux 9+ and AlmaLinux 9+ (RHEL 9+, CentOS Stream 9+, and Oracle Linux 9+ are experimental)"
+}
+
 func unsupportedMessage(rel OSRelease) string {
 	name := rel.PrettyName
 	if name == "" {
 		name = rel.ID
 	}
-	return "operating system " + quote(name) + " is not supported; Abstrax currently supports Debian/Ubuntu-based distributions"
+	return "operating system " + quote(name) + " is not supported; Abstrax currently supports Debian/Ubuntu-based and RHEL-compatible distributions"
 }
 
 func quote(s string) string {
@@ -192,13 +257,37 @@ func parseVersionComponent(part string) (int, bool) {
 	return n, true
 }
 
+func applyFamilyDefaults(profile *Profile) {
+	applyDebianFamilyDefaults(profile)
+	applyRHELFamilyDefaults(profile)
+}
+
 func applyDebianFamilyDefaults(profile *Profile) {
 	if profile.Family != "debian" {
 		return
 	}
 	profile.NginxLayout = NginxSitesAvailableEnabled
+	profile.NginxConfigDir = "/etc/nginx/sites-available"
 	profile.WebUser = "www-data"
 	profile.WebGroup = "www-data"
 	profile.DefaultProjectRoot = "/var/www"
 	profile.PHPFPMStrategy = "php{version}-fpm"
+	profile.PackageManager = "apt"
+	profile.ServiceManager = "systemd"
+	profile.FirewallStrategy = "ufw"
+}
+
+func applyRHELFamilyDefaults(profile *Profile) {
+	if profile.Family != "rhel" {
+		return
+	}
+	profile.NginxLayout = NginxConfD
+	profile.NginxConfigDir = "/etc/nginx/conf.d"
+	profile.WebUser = "nginx"
+	profile.WebGroup = "nginx"
+	profile.DefaultProjectRoot = "/var/www"
+	profile.PHPFPMStrategy = "remi-php{mm}-php-fpm"
+	profile.PackageManager = "dnf"
+	profile.ServiceManager = "systemd"
+	profile.FirewallStrategy = "firewalld"
 }

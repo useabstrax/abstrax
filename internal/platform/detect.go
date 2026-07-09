@@ -42,6 +42,7 @@ func Detect() (*Info, *Tools, error) {
 	info.Profile.PackageManager = info.PackageManager
 	info.Profile.ServiceManager = info.ServiceManager
 	info.Profile.FirewallStrategy = firewallStrategy(info.FirewallBackend, profile.Family)
+	info.Profile.SELinuxStatus = detectSELinuxStatus()
 	if info.Profile.DistroName == "" {
 		info.Profile.DistroName = info.OSPrettyName
 	}
@@ -87,16 +88,53 @@ func readOSRelease(path string) (OSRelease, error) {
 }
 
 func firewallStrategy(backend, family string) string {
-	if family != "debian" {
+	switch family {
+	case "debian":
+		if backend == "ufw" {
+			return "ufw"
+		}
 		return "unknown"
-	}
-	switch backend {
-	case "ufw":
-		return "ufw"
-	case "none", "":
-		return "unknown"
+	case "rhel":
+		if backend == "firewalld" {
+			return "firewalld"
+		}
+		// Prefer the family default even when firewall-cmd is missing so doctor
+		// and profiles report the intended strategy.
+		return "firewalld"
 	default:
 		return "unknown"
+	}
+}
+
+func detectSELinuxStatus() SELinuxStatus {
+	if binExists("getenforce") {
+		out, err := runQuiet("getenforce")
+		if err == nil {
+			switch strings.ToLower(strings.TrimSpace(out)) {
+			case "enforcing":
+				return SELinuxEnforcing
+			case "permissive":
+				return SELinuxPermissive
+			case "disabled":
+				return SELinuxDisabled
+			}
+		}
+	}
+
+	data, err := os.ReadFile("/sys/fs/selinux/enforce")
+	if err != nil {
+		if _, statErr := os.Stat("/etc/selinux/config"); statErr == nil {
+			return SELinuxUnknown
+		}
+		return SELinuxDisabled
+	}
+	switch strings.TrimSpace(string(data)) {
+	case "1":
+		return SELinuxEnforcing
+	case "0":
+		return SELinuxPermissive
+	default:
+		return SELinuxUnknown
 	}
 }
 
@@ -172,9 +210,10 @@ func detectTools(t *Tools) {
 	t.MySQL = binExists("mysql")
 	t.MariaDB = binExists("mariadb")
 	t.Supervisor = binExists("supervisorctl")
-	t.Redis = binExists("redis-server")
+	t.Redis = binExists("redis-server") || binExists("redis")
 	t.Memcached = binExists("memcached")
 	t.UFW = binExists("ufw")
+	t.Firewalld = binExists("firewall-cmd")
 	t.Curl = binExists("curl")
 	t.Git = binExists("git")
 }

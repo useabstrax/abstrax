@@ -17,11 +17,12 @@ type SecurityWarning struct {
 func CheckSecurityWarnings(projectPath string) []SecurityWarning {
 	var warnings []SecurityWarning
 	if selinuxEnforcing() {
+		msg := "SELinux is enforcing"
 		if strings.HasPrefix(projectPath, "/home/") {
-			warnings = append(warnings, SecurityWarning{
-				Message: "SELinux is enforcing and the project is under /home; you may need to adjust file contexts (for example semanage fcontext and restorecon) if nginx or PHP-FPM cannot access the site",
-			})
+			msg += " and the project is under /home"
 		}
+		msg += "; you may need to adjust file contexts (for example semanage fcontext and restorecon) if nginx or PHP-FPM cannot access the site. Abstrax will not disable SELinux automatically"
+		warnings = append(warnings, SecurityWarning{Message: msg})
 	}
 	if appArmorEnabled() {
 		warnings = append(warnings, SecurityWarning{

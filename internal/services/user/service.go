@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
+	"abstrax/internal/platform"
 )
 
 // Service provides user management methods.
@@ -42,50 +43,78 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) 
 	}
 
 	args := []string{}
+	useUseradd := preferUseradd()
 
-	if opts.System {
-		args = append(args, "--system")
-	}
-	if opts.DisabledPassword {
-		args = append(args, "--disabled-password")
-	}
-	if opts.Comment != "" {
-		args = append(args, "--gecos", opts.Comment)
-	}
-	if opts.Shell != "" {
-		args = append(args, "--shell", opts.Shell)
-	}
-	if opts.UID != "" {
-		args = append(args, "--uid", opts.UID)
-	}
-	if opts.NoCreateHome || !opts.CreateHome {
-		args = append(args, "--no-create-home")
-	}
+	if useUseradd {
+		if opts.System {
+			args = append(args, "-r")
+		}
+		if opts.Comment != "" {
+			args = append(args, "-c", opts.Comment)
+		}
+		if opts.Shell != "" {
+			args = append(args, "-s", opts.Shell)
+		}
+		if opts.UID != "" {
+			args = append(args, "-u", opts.UID)
+		}
+		if opts.CreateHome && !opts.NoCreateHome {
+			args = append(args, "-m")
+		} else {
+			args = append(args, "-M")
+		}
+		if len(opts.Groups) > 0 {
+			args = append(args, "-G", strings.Join(opts.Groups, ","))
+		}
+		args = append(args, opts.Username)
+		if _, err := s.runner.Run(ctx, "useradd", args...); err != nil {
+			return nil, fmt.Errorf("creating user %s: %w", opts.Username, err)
+		}
+	} else {
+		if opts.System {
+			args = append(args, "--system")
+		}
+		if opts.DisabledPassword {
+			args = append(args, "--disabled-password")
+		}
+		if opts.Comment != "" {
+			args = append(args, "--gecos", opts.Comment)
+		}
+		if opts.Shell != "" {
+			args = append(args, "--shell", opts.Shell)
+		}
+		if opts.UID != "" {
+			args = append(args, "--uid", opts.UID)
+		}
+		if opts.NoCreateHome || !opts.CreateHome {
+			args = append(args, "--no-create-home")
+		}
 
-	// adduser on Debian/Ubuntu requires --disabled-password to avoid
-	// interactive password prompts when no password is being set.
-	if !opts.DisabledPassword && opts.Password == "" {
-		args = append(args, "--disabled-password")
-	}
+		// adduser on Debian/Ubuntu requires --disabled-password to avoid
+		// interactive password prompts when no password is being set.
+		if !opts.DisabledPassword && opts.Password == "" {
+			args = append(args, "--disabled-password")
+		}
 
-	// Provide an empty GECOS field to suppress the interactive prompt
-	// for full name / room / phone etc.
-	if opts.Comment == "" {
-		args = append(args, "--gecos", "")
-	}
-	if len(opts.Groups) > 0 {
-		args = append(args, "--add-extra-groups")
-		args = append(args, strings.Join(opts.Groups, ","))
-	}
+		// Provide an empty GECOS field to suppress the interactive prompt
+		// for full name / room / phone etc.
+		if opts.Comment == "" {
+			args = append(args, "--gecos", "")
+		}
+		if len(opts.Groups) > 0 {
+			args = append(args, "--add-extra-groups")
+			args = append(args, strings.Join(opts.Groups, ","))
+		}
 
-	args = append(args, opts.Username)
+		args = append(args, opts.Username)
 
-	if _, err := s.runner.Run(ctx, "adduser", args...); err != nil {
-		return nil, fmt.Errorf("creating user %s: %w", opts.Username, err)
+		if _, err := s.runner.Run(ctx, "adduser", args...); err != nil {
+			return nil, fmt.Errorf("creating user %s: %w", opts.Username, err)
+		}
 	}
 
 	if opts.GrantSudo {
-		if err := s.addToGroup(ctx, opts.Username, "sudo"); err != nil {
+		if err := s.addToGroup(ctx, opts.Username, SudoGroup()); err != nil {
 			return nil, fmt.Errorf("granting sudo to %s: %w", opts.Username, err)
 		}
 	}
@@ -141,14 +170,14 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	return nil
 }
 
-// GrantSudo adds a user to the sudo group.
+// GrantSudo adds a user to the platform sudo group (sudo or wheel).
 func (s *Service) GrantSudo(ctx context.Context, username string, dryRun bool) error {
-	return s.addToGroup(ctx, username, "sudo")
+	return s.addToGroup(ctx, username, SudoGroup())
 }
 
-// RevokeSudo removes a user from the sudo group.
+// RevokeSudo removes a user from the platform sudo group (sudo or wheel).
 func (s *Service) RevokeSudo(ctx context.Context, username string, dryRun bool) error {
-	return s.removeFromGroup(ctx, username, "sudo")
+	return s.removeFromGroup(ctx, username, SudoGroup())
 }
 
 // SetGroups sets a user's supplementary groups, replacing existing ones.
@@ -372,10 +401,13 @@ func extractName(s string) string {
 	return s[open+1 : close]
 }
 
-// SudoGroup attempts to detect the correct sudo group for the current OS.
-// Defaults to "sudo" (Debian/Ubuntu).
+// SudoGroup returns the platform sudo group (sudo on Debian, wheel on RHEL).
 func SudoGroup() string {
-	// Check /etc/group for the sudo group first.
+	if provider, _, err := platform.Current(); err == nil && provider != nil {
+		if g := provider.SudoGroup(); g != "" {
+			return g
+		}
+	}
 	for _, candidate := range []string{"sudo", "wheel", "admin"} {
 		cmd := exec.Command("getent", "group", candidate)
 		if err := cmd.Run(); err == nil {
@@ -383,4 +415,15 @@ func SudoGroup() string {
 		}
 	}
 	return "sudo"
+}
+
+func preferUseradd() bool {
+	info, _, err := platform.Detect()
+	if err == nil && info.Family == "rhel" {
+		return executil.Exists("useradd")
+	}
+	if executil.Exists("adduser") {
+		return false
+	}
+	return executil.Exists("useradd")
 }

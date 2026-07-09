@@ -31,17 +31,24 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("cache version pinning is not yet supported; omit --version")
 	}
 
+	mgr, info, err := pkgmanager.NewFromPlatform(false, false)
+	if err != nil {
+		return err
+	}
+
 	pkg := string(opts.Driver)
 	switch opts.Driver {
 	case DriverRedis:
 		pkg = "redis-server"
+		if info.Family == "rhel" {
+			pkg = "redis"
+		}
 	case DriverMemcached:
 		pkg = "memcached"
 	default:
 		return fmt.Errorf("unsupported cache driver %q; supported: redis, memcached", opts.Driver)
 	}
 
-	mgr := pkgmanager.NewApt(false, false)
 	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
 		return fmt.Errorf("installing %s: %w", pkg, err)
 	}
@@ -77,7 +84,13 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("unsupported cache driver %q", opts.Driver)
 	}
 
-	mgr := pkgmanager.NewApt(false, false)
+	mgr, info, err := pkgmanager.NewFromPlatform(false, false)
+	if err != nil {
+		return err
+	}
+	if info.Family == "rhel" && opts.Driver == DriverRedis {
+		pkg = "redis"
+	}
 	return mgr.Remove(ctx, pkgmanager.RemoveOptions{Name: pkg, Purge: opts.Purge})
 }
 

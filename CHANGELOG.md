@@ -4,7 +4,28 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.2] - 2026-07-08
+## [Unreleased]
+
+### Added
+
+- **RHEL-family provider** — Initial support for Rocky Linux 9+ and AlmaLinux 9+ (official), plus experimental compatibility for RHEL 9+, CentOS Stream 9+, and Oracle Linux 9+. Detection classifies `rocky`, `almalinux`, `rhel`, `centos`, `ol`, and `oracle` as the `rhel` family with `dnf`, systemd, nginx `conf.d`, `nginx`/`nginx` web user, Remi multi-version PHP, firewalld, and SELinux status reporting.
+- **DNF package backend** — Package commands select `dnf` on RHEL-family hosts and `apt` on Debian-family hosts.
+- **firewalld backend** — Firewall commands use firewalld on RHEL-family systems (permanent rules + reload) while preserving UFW behaviour on Debian-family systems.
+- **Firewalld rule removal** — `firewall rule list` assigns Abstrax IDs to firewalld services/ports; `firewall rule remove <id>` removes the matching entry. Also `firewall remove service` and `firewall remove port`.
+- **Remi multi-version PHP** — RHEL-family PHP installs use Remi SCL packages (`php83-php-fpm`, paths under `/opt/remi` and `/etc/opt/remi`) with the same version-oriented project commands as Debian.
+- **Repository helpers** — `abstrax repo enable <epel|crb|remi>` and global `--enable-required-repos` for explicit third-party repo consent (required for Remi; required for EPEL on RHEL/Oracle).
+- **SELinux warnings** — Enforcing mode is detected and surfaced in `doctor` and project/web flows; Abstrax never disables SELinux automatically.
+- **RHEL MariaDB install** — `mysql install` installs `mariadb-server` on RHEL-family systems as the MySQL-compatible database server.
+- **RHEL Certbot install** — `ssl install` installs Certbot via dnf and enables EPEL on Rocky/Alma/CentOS Stream when required (RHEL/Oracle need `--enable-required-repos` or `repo enable epel`).
+- **RHEL Supervisor install** — Daemon auto-install uses `supervisord`, `/etc/supervisord.d`, and `.ini` program configs on RHEL-family systems.
+- **RHEL Node.js / Ruby install** — Project runtime install uses NodeSource RPM setup scripts and stock `ruby`/`ruby-devel` packages on RHEL-family systems. Exact Ruby version pinning on RHEL remains a deliberate product limitation.
+
+### Changed
+
+- **`abstrax doctor`** — Reports nginx config directory, web user/group, SELinux status, and firewalld tool presence for RHEL-family systems.
+- **Nginx site enable/disable** — Provider-aware: Debian continues to symlink `sites-available` → `sites-enabled`; RHEL writes `/etc/nginx/conf.d/{site}.conf` and disables by renaming to `.disabled`.
+- **Functional parity docs** — Supported platforms documentation now describes the parity model, Remi PHP, repository consent, and remaining deliberate limitations.
+
 
 ### Added
 

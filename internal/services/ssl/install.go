@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
+	"abstrax/internal/globals"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 )
 
@@ -30,15 +32,38 @@ func InstallCommand() string {
 	return "abstrax ssl install"
 }
 
-// Install installs Certbot and the nginx plugin via apt.
+// Install installs Certbot and the nginx plugin via the platform package manager.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
-	mgr := pkgmanager.NewApt(s.dryRun, false)
+	mgr, _, err := pkgmanager.NewFromPlatform(s.dryRun, false)
+	if err != nil {
+		return err
+	}
+	provider := platform.Resolve()
+
+	repoOpts := platform.RepoOptions{
+		EnableRequiredRepos: globals.Flags.EnableRequiredRepos,
+		Yes:                 globals.Flags.Yes,
+		DryRun:              opts.DryRun,
+		Verbose:             globals.Flags.Verbose,
+	}
+	enabler := platform.DefaultRepoEnabler(
+		func(ctx context.Context, name string) error {
+			return mgr.Install(ctx, pkgmanager.InstallOptions{Name: name, DryRun: opts.DryRun})
+		},
+		func(ctx context.Context, name string, args ...string) error {
+			_, err := s.runner.Run(ctx, name, args...)
+			return err
+		},
+	)
+	if err := platform.EnsureEPELWithOptions(ctx, provider, repoOpts, enabler); err != nil {
+		return err
+	}
 
 	if err := mgr.Update(ctx); err != nil {
 		return fmt.Errorf("updating package lists: %w", err)
 	}
 
-	for _, pkg := range certbotInstallPackages() {
+	for _, pkg := range provider.CertbotPackages() {
 		if err := mgr.Install(ctx, pkgmanager.InstallOptions{
 			Name:   pkg,
 			DryRun: opts.DryRun,
@@ -52,19 +77,29 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if !Installed() {
-		return fmt.Errorf("certbot installed but nginx plugin is not available; check %s is installed", certbotNginxPackage)
+		pkgs := provider.CertbotPackages()
+		hint := certbotNginxPackage
+		if len(pkgs) > 1 {
+			hint = pkgs[1]
+		}
+		return fmt.Errorf("certbot installed but nginx plugin is not available; check %s is installed", hint)
 	}
 
 	return nil
 }
 
 func certbotInstallPackages() []string {
-	return []string{certbotPackage, certbotNginxPackage}
+	return platform.Resolve().CertbotPackages()
 }
 
 func nginxPluginInstalled() bool {
-	if packageInstalled(certbotNginxPackage) {
-		return true
+	for _, pkg := range platform.Resolve().CertbotPackages() {
+		if pkg == certbotPackage {
+			continue
+		}
+		if pkgmanager.PackageInstalled(pkg) {
+			return true
+		}
 	}
 
 	if !executil.Exists("certbot") {
@@ -77,13 +112,4 @@ func nginxPluginInstalled() bool {
 	}
 
 	return strings.Contains(string(res), "nginx")
-}
-
-func packageInstalled(name string) bool {
-	cmd := exec.Command("dpkg-query", "-W", "-f=${Status}", name)
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(out), "install ok installed")
 }

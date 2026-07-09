@@ -21,6 +21,9 @@ func TestProviderPathsAndNaming(t *testing.T) {
 	if p.PHPFPMBinary("8.5") != "php-fpm8.5" {
 		t.Fatalf("PHPFPMBinary = %q", p.PHPFPMBinary("8.5"))
 	}
+	if p.PHPCLIBinary("8.5") != "php8.5" {
+		t.Fatalf("PHPCLIBinary = %q", p.PHPCLIBinary("8.5"))
+	}
 	if p.PHPFPMPoolDir("8.5") != "/etc/php/8.5/fpm/pool.d" {
 		t.Fatalf("PHPFPMPoolDir = %q", p.PHPFPMPoolDir("8.5"))
 	}

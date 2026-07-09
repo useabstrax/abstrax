@@ -10,19 +10,21 @@ import (
 	"abstrax/internal/validate"
 )
 
-var debianPlatform = platform.DebianDefaults()
+// platformProvider is resolved at package init for default ownership values.
+// Tests and commands that need a specific family should prefer platform.Resolve().
+var platformProvider = platform.Resolve()
 
 // SharedWebUser is the default runtime and project owner for shared mode.
-var SharedWebUser = debianPlatform.WebUser()
+var SharedWebUser = platformProvider.WebUser()
 
 // SharedWebGroup is the default project group for shared mode.
-var SharedWebGroup = debianPlatform.WebGroup()
+var SharedWebGroup = platformProvider.WebGroup()
 
 // DefaultSharedBase is the default project root for shared mode.
-var DefaultSharedBase = debianPlatform.DefaultProjectRoot()
+var DefaultSharedBase = platformProvider.DefaultProjectRoot()
 
-// NginxUser is the user nginx workers run as on Debian/Ubuntu.
-var NginxUser = debianPlatform.WebUser()
+// NginxUser is the user nginx workers run as on the detected platform.
+var NginxUser = platformProvider.WebUser()
 
 // OwnershipMode describes how a project is owned and executed.
 type OwnershipMode string

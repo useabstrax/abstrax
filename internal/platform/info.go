@@ -15,7 +15,7 @@ type Info struct {
 	// Supported signals whether Abstrax allows mutating commands on this platform.
 	Supported   bool   `json:"supported"`
 	SupportNote string `json:"support_note,omitempty"`
-	// Family is the detected distro family (debian or unknown).
+	// Family is the detected distro family (debian, rhel, or unknown).
 	Family string `json:"family"`
 }
 
@@ -30,6 +30,7 @@ type Tools struct {
 	Redis      bool `json:"redis"`
 	Memcached  bool `json:"memcached"`
 	UFW        bool `json:"ufw"`
+	Firewalld  bool `json:"firewalld"`
 	Curl       bool `json:"curl"`
 	Git        bool `json:"git"`
 }

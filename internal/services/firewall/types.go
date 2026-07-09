@@ -1,14 +1,25 @@
 package firewall
 
+// RuleKind identifies how a listed rule should be removed on firewalld.
+type RuleKind string
+
+const (
+	RuleKindService RuleKind = "service"
+	RuleKindPort    RuleKind = "port"
+	RuleKindUFW     RuleKind = "ufw"
+)
+
 // Rule describes a firewall rule.
 type Rule struct {
-	ID       string `json:"id"`
-	Action   string `json:"action"`
-	Port     string `json:"port,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
-	From     string `json:"from,omitempty"`
-	To       string `json:"to,omitempty"`
-	Comment  string `json:"comment,omitempty"`
+	ID       string   `json:"id"`
+	Action   string   `json:"action"`
+	Port     string   `json:"port,omitempty"`
+	Protocol string   `json:"protocol,omitempty"`
+	From     string   `json:"from,omitempty"`
+	To       string   `json:"to,omitempty"`
+	Comment  string   `json:"comment,omitempty"`
+	Kind     RuleKind `json:"kind,omitempty"`
+	Target   string   `json:"target,omitempty"`
 }
 
 // AllowOptions holds options for allow/deny commands.

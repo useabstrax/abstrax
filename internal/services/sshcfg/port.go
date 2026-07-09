@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 	"abstrax/internal/validate"
 )
 
@@ -30,7 +30,8 @@ func SSHPort() (int, error) {
 }
 
 func portFromConfigFiles() string {
-	if port := portFromEntries(readConfigFileSafe(debian.AbstraxSSHConfig)); port != "" {
+	managed := platform.Resolve().Paths().AbstraxSSHConfig
+	if port := portFromEntries(readConfigFileSafe(managed)); port != "" {
 		return port
 	}
 	return portFromEntries(readConfigFileSafe(sshdConfigPath))

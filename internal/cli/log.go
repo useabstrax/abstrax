@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 )
 
 // NewLogCmd returns the log command.
@@ -21,7 +21,7 @@ func NewLogCmd() *cobra.Command {
 		Long:  "Tail a log file. Defaults to the Abstrax log at /var/log/abstrax/abstrax.log.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logFile := debian.AbstraxLogDir + "/abstrax.log"
+			logFile := platform.Resolve().Paths().AbstraxLogDir + "/abstrax.log"
 			if len(args) == 1 {
 				logFile = args[0]
 			}

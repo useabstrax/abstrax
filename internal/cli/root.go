@@ -39,6 +39,7 @@ Run 'abstrax --help' for a list of commands.`,
 	root.PersistentFlags().BoolVar(&globals.Flags.Quiet, "quiet", false, "Reduce output")
 	root.PersistentFlags().BoolVar(&globals.Flags.Verbose, "verbose", false, "Increase output verbosity")
 	root.PersistentFlags().BoolVar(&globals.Flags.NoColor, "no-color", false, "Disable colour output")
+	root.PersistentFlags().BoolVar(&globals.Flags.EnableRequiredRepos, "enable-required-repos", false, "Allow enabling required third-party repositories (EPEL, Remi, etc.)")
 	root.PersistentFlags().StringSliceVar(&globals.Flags.AllowBlockedPlugin, "allow-blocked-plugin", nil, "Allow execution of blocked plugins (repeatable)")
 
 	// Subcommands.
@@ -59,6 +60,7 @@ Run 'abstrax --help' for a list of commands.`,
 	root.AddCommand(NewMySQLCmd())
 	root.AddCommand(NewCacheCmd())
 	root.AddCommand(NewFirewallCmd())
+	root.AddCommand(NewRepoCmd())
 	root.AddCommand(NewServerCmd())
 	root.AddCommand(NewLogCmd())
 	root.AddCommand(NewAgentCmd())

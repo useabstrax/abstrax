@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,7 +18,7 @@ import (
 func NewFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "firewall",
-		Short: "Manage the system firewall (UFW)",
+		Short: "Manage the system firewall (UFW or firewalld)",
 	}
 
 	ruleCmd := &cobra.Command{
@@ -27,6 +28,13 @@ func NewFirewallCmd() *cobra.Command {
 	ruleCmd.AddCommand(newFirewallRuleListCmd())
 	ruleCmd.AddCommand(newFirewallRuleRemoveCmd())
 
+	removeCmd := &cobra.Command{
+		Use:   "remove",
+		Short: "Remove firewall rules by service or port (firewalld)",
+	}
+	removeCmd.AddCommand(newFirewallRemoveServiceCmd())
+	removeCmd.AddCommand(newFirewallRemovePortCmd())
+
 	cmd.AddCommand(newFirewallStatusCmd())
 	cmd.AddCommand(newFirewallEnableCmd())
 	cmd.AddCommand(newFirewallDisableCmd())
@@ -35,6 +43,7 @@ func NewFirewallCmd() *cobra.Command {
 	cmd.AddCommand(newFirewallAllowIPCmd())
 	cmd.AddCommand(newFirewallDenyIPCmd())
 	cmd.AddCommand(ruleCmd)
+	cmd.AddCommand(removeCmd)
 
 	return cmd
 }
@@ -319,8 +328,12 @@ func newFirewallRuleListCmd() *cobra.Command {
 func newFirewallRuleRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <id>",
-		Short: "Remove a firewall rule by number",
-		Args:  cobra.ExactArgs(1),
+		Short: "Remove a firewall rule by list ID",
+		Long: `Remove a firewall rule by the ID shown in "abstrax firewall rule list".
+
+On UFW, IDs are UFW numbered rules.
+On firewalld, IDs are Abstrax-assigned entries that map to a service or port.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 			if err := requireRootAndSupported(); err != nil {
@@ -334,6 +347,50 @@ func newFirewallRuleRemoveCmd() *cobra.Command {
 
 			return printSimpleResult(actions.FirewallRuleRm,
 				fmt.Sprintf("Rule %s removed.", id), nil)
+		},
+	}
+}
+
+func newFirewallRemoveServiceCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "service <name>",
+		Short: "Remove a firewalld service (for example http)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.RemoveService(cmd.Context(), args[0]); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.FirewallRemoveService,
+				fmt.Sprintf("Firewall service %s removed.", args[0]), nil)
+		},
+	}
+}
+
+func newFirewallRemovePortCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "port <port[/protocol]>",
+		Short: "Remove a firewalld port (for example 8080/tcp)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			port := args[0]
+			proto := "tcp"
+			if i := strings.Index(port, "/"); i >= 0 {
+				proto = port[i+1:]
+				port = port[:i]
+			}
+			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.RemovePort(cmd.Context(), port, proto); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.FirewallRemovePort,
+				fmt.Sprintf("Firewall port %s/%s removed.", port, proto), nil)
 		},
 	}
 }
