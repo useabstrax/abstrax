@@ -46,7 +46,7 @@ func TestSupportsAutomaticRepoEnable(t *testing.T) {
 func TestEnsureRepositoryEPELRocky(t *testing.T) {
 	provider := rhelProviderFor(t, "rocky", "Rocky Linux 9.5", platform.SupportOfficial)
 	var installed []string
-	err := platform.EnsureRepository(t.Context(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
 			installed = append(installed, name)
 			return nil
@@ -63,7 +63,7 @@ func TestEnsureRepositoryEPELRocky(t *testing.T) {
 
 func TestEnsureRepositoryEPELRHELRequiresFlag(t *testing.T) {
 	provider := rhelProviderFor(t, "rhel", "Red Hat Enterprise Linux 9.5", platform.SupportCompatible)
-	err := platform.EnsureRepository(t.Context(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error { return nil },
 		Run:     func(ctx context.Context, name string, args ...string) error { return nil },
 	})
@@ -75,7 +75,7 @@ func TestEnsureRepositoryEPELRHELRequiresFlag(t *testing.T) {
 	}
 
 	var installed []string
-	err = platform.EnsureRepository(t.Context(), provider, platform.RepoEPEL, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
+	err = platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
 			installed = append(installed, name)
 			return nil
@@ -92,7 +92,7 @@ func TestEnsureRepositoryEPELRHELRequiresFlag(t *testing.T) {
 
 func TestEnsureRepositoryEPELOracleRequiresFlag(t *testing.T) {
 	provider := rhelProviderFor(t, "ol", "Oracle Linux 9.5", platform.SupportCompatible)
-	err := platform.EnsureRepository(t.Context(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error { return nil },
 		Run:     func(ctx context.Context, name string, args ...string) error { return nil },
 	})
@@ -103,7 +103,7 @@ func TestEnsureRepositoryEPELOracleRequiresFlag(t *testing.T) {
 
 func TestEnsureRemiRequiresFlagOnRocky(t *testing.T) {
 	provider := rhelProviderFor(t, "rocky", "Rocky Linux 9.5", platform.SupportOfficial)
-	err := platform.EnsureRepository(t.Context(), provider, platform.RepoRemi, platform.RepoOptions{}, platform.RepoEnabler{
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoRemi, platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error { return nil },
 		Run:     func(ctx context.Context, name string, args ...string) error { return nil },
 	})
@@ -115,7 +115,7 @@ func TestEnsureRemiRequiresFlagOnRocky(t *testing.T) {
 	}
 
 	var installed []string
-	err = platform.EnsureRepository(t.Context(), provider, platform.RepoRemi, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
+	err = platform.EnsureRepository(context.Background(), provider, platform.RepoRemi, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
 			installed = append(installed, name)
 			return nil
@@ -134,7 +134,7 @@ func TestEnsureRemiRequiresFlagOnRocky(t *testing.T) {
 }
 
 func TestEnsurePHPRepositoryDebianNoop(t *testing.T) {
-	err := platform.EnsurePHPRepository(t.Context(), platform.DebianDefaults(), "8.3", platform.RepoOptions{}, platform.RepoEnabler{
+	err := platform.EnsurePHPRepository(context.Background(), platform.DebianDefaults(), "8.3", platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
 			t.Fatal("should not install repos on debian")
 			return nil

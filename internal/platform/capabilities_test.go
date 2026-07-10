@@ -174,7 +174,7 @@ func TestEnsureEPELUnsupportedDistro(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = platform.EnsureEPEL(t.Context(), provider,
+	err = platform.EnsureEPEL(context.Background(), provider,
 		func(ctx context.Context, name string) error { return nil },
 		func(ctx context.Context, name string, args ...string) error { return nil },
 	)
@@ -206,7 +206,7 @@ func TestEnsureEPELRocky(t *testing.T) {
 		t.Fatal(err)
 	}
 	var installed []string
-	err = platform.EnsureEPEL(t.Context(), provider,
+	err = platform.EnsureEPEL(context.Background(), provider,
 		func(ctx context.Context, name string) error {
 			installed = append(installed, name)
 			return nil
