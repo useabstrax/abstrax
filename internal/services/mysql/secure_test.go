@@ -25,8 +25,8 @@ func TestEscapeSQLString(t *testing.T) {
 	}
 }
 
-func TestBuildSetRootPasswordSQL(t *testing.T) {
-	sql := buildSetRootPasswordSQL("secret'pass")
+func TestBuildSetRootPasswordSQLMySQL(t *testing.T) {
+	sql := buildSetRootPasswordSQLWithPlugin("secret'pass", platform.DatabaseAuthCachingSHA2)
 	if !strings.Contains(sql, "secret''pass") {
 		t.Fatalf("expected escaped password in SQL, got: %s", sql)
 	}
@@ -34,6 +34,23 @@ func TestBuildSetRootPasswordSQL(t *testing.T) {
 		"ALTER USER 'root'@'localhost'",
 		"caching_sha2_password",
 		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1'",
+		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1'",
+		"FLUSH PRIVILEGES",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("expected %q in SQL, got: %s", fragment, sql)
+		}
+	}
+}
+
+func TestBuildSetRootPasswordSQLMariaDB(t *testing.T) {
+	sql := buildSetRootPasswordSQLWithPlugin("secret'pass", platform.DatabaseAuthNativePassword)
+	if strings.Contains(sql, "caching_sha2_password") {
+		t.Fatalf("MariaDB SQL should not use caching_sha2_password: %s", sql)
+	}
+	for _, fragment := range []string{
+		"ALTER USER 'root'@'localhost' IDENTIFIED BY 'secret''pass'",
+		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY 'secret''pass'",
 		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1'",
 		"FLUSH PRIVILEGES",
 	} {

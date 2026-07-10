@@ -3,6 +3,7 @@ package project
 import (
 	"testing"
 
+	"abstrax/internal/platform"
 	"abstrax/internal/services/config"
 )
 
@@ -57,7 +58,11 @@ func TestPHPPackagesFromConfig(t *testing.T) {
 	if len(pkgs) < 3 {
 		t.Fatalf("expected fpm, cli, and extensions, got %#v", pkgs)
 	}
-	if pkgs[0] != "php8.5-fpm" || pkgs[1] != "php8.5-cli" {
+	wantFPM, wantCLI := "php8.5-fpm", "php8.5-cli"
+	if platform.Resolve().Profile().IsRHELFamily() {
+		wantFPM, wantCLI = "php85-php-fpm", "php85-php-cli"
+	}
+	if pkgs[0] != wantFPM || pkgs[1] != wantCLI {
 		t.Fatalf("base packages = %#v", pkgs[:2])
 	}
 }
