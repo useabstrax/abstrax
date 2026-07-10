@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"abstrax/internal/platform"
 )
 
 func TestEffectiveUsesDefaultsWhenFileMissing(t *testing.T) {
@@ -82,6 +84,9 @@ func TestSetAddRemoveReset(t *testing.T) {
 func TestPHPPackages(t *testing.T) {
 	pkgs := PHPPackages("8.5", []string{"mysql", "xml"})
 	want := []string{"php8.5-fpm", "php8.5-cli", "php8.5-mysql", "php8.5-xml"}
+	if platform.Resolve().Profile().IsRHELFamily() {
+		want = []string{"php85-php-fpm", "php85-php-cli", "php85-php-mysqlnd", "php85-php-xml"}
+	}
 	if len(pkgs) != len(want) {
 		t.Fatalf("packages = %#v", pkgs)
 	}
@@ -95,6 +100,9 @@ func TestPHPPackages(t *testing.T) {
 func TestPHPPackagesSkipsBundledCLIExtensions(t *testing.T) {
 	pkgs := PHPPackages("8.5", []string{"mysql", "pcntl", "posix"})
 	want := []string{"php8.5-fpm", "php8.5-cli", "php8.5-mysql"}
+	if platform.Resolve().Profile().IsRHELFamily() {
+		want = []string{"php85-php-fpm", "php85-php-cli", "php85-php-mysqlnd"}
+	}
 	if len(pkgs) != len(want) {
 		t.Fatalf("packages = %#v, want %#v", pkgs, want)
 	}
