@@ -55,7 +55,11 @@ GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;`, plugin, e
 
 // buildSetRootPasswordSQL returns SQL to set root passwords for local connections.
 func buildSetRootPasswordSQL(password string) string {
-	return fmt.Sprintf("FLUSH PRIVILEGES;\n%s\nFLUSH PRIVILEGES;", buildRootPasswordSQL(password))
+	return buildSetRootPasswordSQLWithPlugin(password, databaseProvider().DatabaseAuthPlugin())
+}
+
+func buildSetRootPasswordSQLWithPlugin(password string, plugin platform.DatabaseAuthPlugin) string {
+	return fmt.Sprintf("FLUSH PRIVILEGES;\n%s\nFLUSH PRIVILEGES;", buildRootPasswordSQLWithPlugin(password, plugin))
 }
 
 // buildSecureInstallSQL returns SQL to harden a fresh MySQL/MariaDB installation.
