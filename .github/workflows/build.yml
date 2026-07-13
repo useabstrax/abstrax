@@ -1,0 +1,88 @@
+name: Build CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch or tag to build
+        required: true
+        default: main
+        type: string
+      arch:
+        description: Target architecture
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - amd64
+          - arm64
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ inputs.branch }}, ${{ inputs.arch }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binaries
+        id: build
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          BRANCH_SLUG=$(echo "${{ inputs.branch }}" | tr '/:' '-')
+          echo "branch_slug=${BRANCH_SLUG}" >> "${GITHUB_OUTPUT}"
+
+          VERSION=$(git describe --tags --always --dirty)
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w \
+            -X abstrax/internal/version.Version=${VERSION} \
+            -X abstrax/internal/version.Commit=${COMMIT} \
+            -X abstrax/internal/version.BuildDate=${DATE}"
+
+          build_one() {
+            local arch=$1
+            echo "Building linux/${arch}..."
+            GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build \
+              -ldflags="${LDFLAGS}" \
+              -o "dist/abstrax-linux-${arch}" \
+              ./cmd/abstrax
+          }
+
+          case "${{ inputs.arch }}" in
+            amd64) build_one amd64 ;;
+            arm64) build_one arm64 ;;
+            both)  build_one amd64; build_one arm64 ;;
+          esac
+
+          {
+            echo "branch=${{ inputs.branch }}"
+            echo "arch=${{ inputs.arch }}"
+            echo "version=${VERSION}"
+            echo "commit=${COMMIT}"
+            echo "build_date=${DATE}"
+            echo "workflow_run=${{ github.run_id }}"
+          } > dist/build-info.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: abstrax-${{ steps.build.outputs.branch_slug }}-${{ inputs.arch }}-${{ github.run_number }}
+          path: dist/
+          retention-days: 30
