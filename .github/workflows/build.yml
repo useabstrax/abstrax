@@ -46,11 +46,14 @@ jobs:
           mkdir -p dist
 
           BRANCH_SLUG=$(echo "${{ inputs.branch }}" | tr '/:' '-')
-          echo "branch_slug=${BRANCH_SLUG}" >> "${GITHUB_OUTPUT}"
-
           VERSION=$(git describe --tags --always --dirty)
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "branch_slug=${BRANCH_SLUG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "commit=${COMMIT}" >> "${GITHUB_OUTPUT}"
+
           LDFLAGS="-s -w \
             -X abstrax/internal/version.Version=${VERSION} \
             -X abstrax/internal/version.Commit=${COMMIT} \
@@ -78,30 +81,87 @@ jobs:
             echo "commit=${COMMIT}"
             echo "build_date=${DATE}"
             echo "workflow_run=${{ github.run_id }}"
+            echo "workflow_number=${{ github.run_number }}"
           } > dist/build-info.txt
 
-      - name: Upload amd64 binary
-        if: inputs.arch == 'amd64' || inputs.arch == 'both'
-        uses: actions/upload-artifact@v4
-        with:
-          name: abstrax-linux-amd64-${{ steps.build.outputs.branch_slug }}-${{ github.run_number }}
-          path: dist/abstrax-linux-amd64
-          if-no-files-found: error
-          retention-days: 30
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          BRANCH_SLUG: ${{ steps.build.outputs.branch_slug }}
+          ARCH: ${{ inputs.arch }}
+        run: |
+          set -euo pipefail
 
-      - name: Upload arm64 binary
-        if: inputs.arch == 'arm64' || inputs.arch == 'both'
-        uses: actions/upload-artifact@v4
-        with:
-          name: abstrax-linux-arm64-${{ steps.build.outputs.branch_slug }}-${{ github.run_number }}
-          path: dist/abstrax-linux-arm64
-          if-no-files-found: error
-          retention-days: 30
+          if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ] || [ -z "${R2_ACCOUNT_ID}" ] || [ -z "${R2_BUCKET}" ]; then
+            echo "Missing R2 secrets. Required repository secrets:"
+            echo "  R2_ACCOUNT_ID"
+            echo "  R2_ACCESS_KEY_ID"
+            echo "  R2_SECRET_ACCESS_KEY"
+            echo "  R2_BUCKET"
+            echo "Optional:"
+            echo "  R2_PUBLIC_BASE_URL  (e.g. https://downloads.example.com)"
+            exit 1
+          fi
 
-      - name: Upload build info
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info-${{ steps.build.outputs.branch_slug }}-${{ github.run_number }}
-          path: dist/build-info.txt
-          if-no-files-found: error
-          retention-days: 30
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          PREFIX="abstrax/test-builds/${BRANCH_SLUG}/${{ github.run_number }}"
+
+          upload_file() {
+            local file=$1
+            local key="${PREFIX}/$(basename "${file}")"
+            echo "Uploading ${file} -> s3://${R2_BUCKET}/${key}"
+            aws s3 cp "${file}" "s3://${R2_BUCKET}/${key}" \
+              --endpoint-url "${ENDPOINT}" \
+              --content-type application/octet-stream
+          }
+
+          case "${ARCH}" in
+            amd64) upload_file dist/abstrax-linux-amd64 ;;
+            arm64) upload_file dist/abstrax-linux-arm64 ;;
+            both)
+              upload_file dist/abstrax-linux-amd64
+              upload_file dist/abstrax-linux-arm64
+              ;;
+          esac
+          upload_file dist/build-info.txt
+
+          {
+            echo "## R2 upload complete"
+            echo
+            echo "| File | Object key |"
+            echo "|---|---|"
+            for f in dist/abstrax-linux-* dist/build-info.txt; do
+              [ -f "${f}" ] || continue
+              key="${PREFIX}/$(basename "${f}")"
+              echo "| \`$(basename "${f}")\` | \`${key}\` |"
+            done
+            echo
+            if [ -n "${R2_PUBLIC_BASE_URL}" ]; then
+              echo "### Download URLs"
+              echo
+              BASE="${R2_PUBLIC_BASE_URL%/}"
+              for f in dist/abstrax-linux-*; do
+                [ -f "${f}" ] || continue
+                echo "- [${BASE}/${PREFIX}/$(basename "${f}")](${BASE}/${PREFIX}/$(basename "${f}"))"
+              done
+              echo
+              echo "On a test server:"
+              echo
+              echo '```bash'
+              for f in dist/abstrax-linux-*; do
+                [ -f "${f}" ] || continue
+                echo "curl -fsSL -o abstrax '${BASE}/${PREFIX}/$(basename "${f}")'"
+                echo "chmod +x abstrax"
+                echo "sudo mv abstrax /usr/local/bin/abstrax"
+                break
+              done
+              echo '```'
+            else
+              echo "Set secret \`R2_PUBLIC_BASE_URL\` (custom domain or r2.dev URL) to print direct download links in this summary."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
