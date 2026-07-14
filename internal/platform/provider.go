@@ -69,6 +69,16 @@ type Provider interface {
 
 	// Firewall
 	FirewallSupportsNumberedRules() bool
+
+	// Cache (Redis / Memcached)
+	RedisPackage() string
+	RedisServiceName() string
+	RedisConfigPath() string
+	RequiresExternalRepoForRedis() bool
+	RedisModuleStream() string
+	MemcachedPackage() string
+	MemcachedServiceName() string
+	MemcachedConfigPath() string
 }
 
 type debianProvider struct {
@@ -201,6 +211,15 @@ func (p *debianProvider) RubyPackages(version string) ([]string, error) {
 func (p *debianProvider) RubySupportsExactVersion() bool { return true }
 
 func (p *debianProvider) FirewallSupportsNumberedRules() bool { return true }
+
+func (p *debianProvider) RedisPackage() string               { return "redis-server" }
+func (p *debianProvider) RedisServiceName() string           { return "redis-server" }
+func (p *debianProvider) RedisConfigPath() string            { return "/etc/redis/redis.conf" }
+func (p *debianProvider) RequiresExternalRepoForRedis() bool { return false }
+func (p *debianProvider) RedisModuleStream() string          { return "" }
+func (p *debianProvider) MemcachedPackage() string           { return "memcached" }
+func (p *debianProvider) MemcachedServiceName() string       { return "memcached" }
+func (p *debianProvider) MemcachedConfigPath() string        { return "/etc/memcached.conf" }
 
 func newDebianProvider(profile Profile) Provider {
 	return &debianProvider{
@@ -348,6 +367,21 @@ func (p *rhelProvider) RubyPackages(version string) ([]string, error) {
 func (p *rhelProvider) RubySupportsExactVersion() bool { return false }
 
 func (p *rhelProvider) FirewallSupportsNumberedRules() bool { return false }
+
+func (p *rhelProvider) RedisPackage() string     { return "redis" }
+func (p *rhelProvider) RedisServiceName() string { return "redis" }
+func (p *rhelProvider) RedisConfigPath() string  { return "/etc/redis/redis.conf" }
+func (p *rhelProvider) RequiresExternalRepoForRedis() bool {
+	maj, _, ok := parseVersionID(p.profile.VersionID)
+	return ok && maj >= 10
+}
+func (p *rhelProvider) RedisModuleStream() string {
+	// Remi modular stream for Redis on EL10+ (AppStream ships Valkey instead).
+	return "redis:remi-7.2"
+}
+func (p *rhelProvider) MemcachedPackage() string     { return "memcached" }
+func (p *rhelProvider) MemcachedServiceName() string { return "memcached" }
+func (p *rhelProvider) MemcachedConfigPath() string  { return "/etc/sysconfig/memcached" }
 
 func newRHELProvider(profile Profile) Provider {
 	return &rhelProvider{

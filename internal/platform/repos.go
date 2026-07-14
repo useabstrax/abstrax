@@ -200,6 +200,29 @@ func EnsurePHPRepository(ctx context.Context, provider Provider, version string,
 	return EnsureRepository(ctx, provider, RepoRemi, opts, enabler)
 }
 
+// EnsureRedisRepository enables Remi and the Remi Redis module stream when the
+// provider requires an external repository for Redis (for example Rocky/Alma 10+,
+// where AppStream ships Valkey instead of Redis).
+func EnsureRedisRepository(ctx context.Context, provider Provider, opts RepoOptions, enabler RepoEnabler) error {
+	if provider == nil || !provider.RequiresExternalRepoForRedis() {
+		return nil
+	}
+	if err := EnsureRepository(ctx, provider, RepoRemi, opts, enabler); err != nil {
+		return err
+	}
+	stream := provider.RedisModuleStream()
+	if stream == "" {
+		return fmt.Errorf("no Remi Redis module stream configured for this platform")
+	}
+	fmt.Printf("Enabling Remi Redis module stream %s...\n", stream)
+	_ = enabler.Run(ctx, "dnf", "module", "reset", "redis", "-y")
+	if err := enabler.Run(ctx, "dnf", "module", "enable", stream, "-y"); err != nil {
+		return fmt.Errorf("enabling Redis module stream %s: %w", stream, err)
+	}
+	_ = enabler.Run(ctx, "dnf", "makecache")
+	return nil
+}
+
 // RepoEnableHint returns a user-facing instruction for enabling a repository.
 func RepoEnableHint(repo RepoName) string {
 	return fmt.Sprintf("sudo abstrax repo enable %s --enable-required-repos", repo)

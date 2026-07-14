@@ -6,39 +6,31 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"abstrax/internal/platform"
 )
 
-const (
-	redisConfigPathDefault     = "/etc/redis/redis.conf"
-	memcachedConfigPathDefault = "/etc/memcached.conf"
-)
-
-var (
-	redisConfigPath     = redisConfigPathDefault
-	memcachedConfigPath = memcachedConfigPathDefault
-)
-
-func applyDriverConfig(opts InstallOptions) error {
+func applyDriverConfig(provider platform.Provider, opts InstallOptions) error {
 	if opts.DryRun {
 		return nil
 	}
 
 	switch opts.Driver {
 	case DriverRedis:
-		return applyRedisConfig(opts)
+		return applyRedisConfig(provider.RedisConfigPath(), opts)
 	case DriverMemcached:
-		return applyMemcachedConfig(opts)
+		return applyMemcachedConfig(provider.MemcachedConfigPath(), opts)
 	default:
 		return nil
 	}
 }
 
-func applyRedisConfig(opts InstallOptions) error {
+func applyRedisConfig(configPath string, opts InstallOptions) error {
 	if opts.Port == 0 && opts.Bind == "" && opts.Memory == "" {
 		return nil
 	}
 
-	data, err := os.ReadFile(redisConfigPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("reading redis config: %w", err)
 	}
@@ -55,18 +47,18 @@ func applyRedisConfig(opts InstallOptions) error {
 	}
 
 	content := strings.Join(lines, "\n")
-	if err := os.WriteFile(redisConfigPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing redis config: %w", err)
 	}
 	return nil
 }
 
-func applyMemcachedConfig(opts InstallOptions) error {
+func applyMemcachedConfig(configPath string, opts InstallOptions) error {
 	if opts.Port == 0 && opts.Bind == "" && opts.Memory == "" {
 		return nil
 	}
 
-	data, err := os.ReadFile(memcachedConfigPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("reading memcached config: %w", err)
 	}
@@ -118,7 +110,7 @@ func applyMemcachedConfig(opts InstallOptions) error {
 	}
 
 	content := strings.Join(lines, "\n")
-	if err := os.WriteFile(memcachedConfigPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing memcached config: %w", err)
 	}
 	return nil

@@ -169,6 +169,86 @@ func TestNginxPHPFastCGIInclude(t *testing.T) {
 	}
 }
 
+func TestCacheProviderNames(t *testing.T) {
+	debian := platform.DebianDefaults()
+	if debian.RedisPackage() != "redis-server" || debian.RedisServiceName() != "redis-server" {
+		t.Fatalf("debian redis = %s/%s", debian.RedisPackage(), debian.RedisServiceName())
+	}
+	if debian.RequiresExternalRepoForRedis() {
+		t.Fatal("debian redis should not require Remi")
+	}
+
+	rocky9 := rhelProviderForVersion(t, "rocky", "Rocky Linux 9.5", "9.5", platform.SupportOfficial)
+	if rocky9.RedisPackage() != "redis" || rocky9.RedisServiceName() != "redis" {
+		t.Fatalf("rocky9 redis = %s/%s", rocky9.RedisPackage(), rocky9.RedisServiceName())
+	}
+	if rocky9.RequiresExternalRepoForRedis() {
+		t.Fatal("rocky 9 redis should use AppStream without Remi")
+	}
+
+	rocky10 := rhelProviderForVersion(t, "rocky", "Rocky Linux 10.1", "10.1", platform.SupportOfficial)
+	if !rocky10.RequiresExternalRepoForRedis() {
+		t.Fatal("rocky 10 redis should require Remi (AppStream ships Valkey)")
+	}
+	if rocky10.RedisModuleStream() != "redis:remi-7.2" {
+		t.Fatalf("module stream = %q", rocky10.RedisModuleStream())
+	}
+}
+
+func TestEnsureRedisRepositoryRocky10(t *testing.T) {
+	provider := rhelProviderForVersion(t, "rocky", "Rocky Linux 10.1", "10.1", platform.SupportOfficial)
+	var installed []string
+	var ran []string
+	err := platform.EnsureRedisRepository(context.Background(), provider, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error {
+			installed = append(installed, name)
+			return nil
+		},
+		Run: func(ctx context.Context, name string, args ...string) error {
+			ran = append(ran, name+" "+strings.Join(args, " "))
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundRemi := false
+	for _, name := range installed {
+		if strings.Contains(name, "remi-release-10.rpm") {
+			foundRemi = true
+		}
+	}
+	if !foundRemi {
+		t.Fatalf("expected remi-release-10; installed=%#v", installed)
+	}
+	foundModule := false
+	for _, cmd := range ran {
+		if strings.Contains(cmd, "module enable redis:remi-7.2") {
+			foundModule = true
+		}
+	}
+	if !foundModule {
+		t.Fatalf("expected module enable; ran=%#v", ran)
+	}
+}
+
+func TestEnsureRedisRepositoryRocky9Noop(t *testing.T) {
+	provider := rhelProviderForVersion(t, "rocky", "Rocky Linux 9.5", "9.5", platform.SupportOfficial)
+	err := platform.EnsureRedisRepository(context.Background(), provider, platform.RepoOptions{}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error {
+			t.Fatalf("unexpected install %s", name)
+			return nil
+		},
+		Run: func(ctx context.Context, name string, args ...string) error {
+			t.Fatalf("unexpected run %s", name)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEnsureEPELUnsupportedDistro(t *testing.T) {
 	info := &platform.Info{
 		Family: "rhel",
