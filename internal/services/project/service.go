@@ -484,7 +484,14 @@ func buildNginxConfig(opts vhostConfig) string {
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		sb.WriteString("    }\n\n")
 		sb.WriteString("    location ~ \\.php$ {\n")
-		sb.WriteString("        include snippets/fastcgi-php.conf;\n")
+		if include := platformProvider.NginxPHPFastCGIInclude(); include != "" {
+			sb.WriteString(fmt.Sprintf("        include %s;\n", include))
+		} else {
+			// RHEL-family nginx has no snippets/fastcgi-php.conf; inline equivalents.
+			sb.WriteString("        try_files $uri =404;\n")
+			sb.WriteString("        fastcgi_index index.php;\n")
+			sb.WriteString("        include fastcgi_params;\n")
+		}
 		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:%s;\n", socket))
 		sb.WriteString("        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;\n")
 		sb.WriteString("        fastcgi_param DOCUMENT_ROOT $realpath_root;\n")

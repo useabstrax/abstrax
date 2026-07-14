@@ -349,8 +349,21 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 		t.Fatalf("config missing socket:\n%s", conf)
 	}
 	assertPHPRealpathRootParams(t, conf)
-	if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
-		t.Fatalf("config duplicates try_files already present in snippets/fastcgi-php.conf:\n%s", conf)
+	include := platformProvider.NginxPHPFastCGIInclude()
+	if include != "" {
+		if !strings.Contains(conf, "include "+include+";") {
+			t.Fatalf("config missing %s include:\n%s", include, conf)
+		}
+		if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
+			t.Fatalf("config duplicates try_files already present in %s:\n%s", include, conf)
+		}
+	} else {
+		if !strings.Contains(conf, "include fastcgi_params;") {
+			t.Fatalf("config missing fastcgi_params for RHEL-style PHP location:\n%s", conf)
+		}
+		if !strings.Contains(conf, "try_files $uri =404;") {
+			t.Fatalf("config missing inline try_files for RHEL-style PHP location:\n%s", conf)
+		}
 	}
 }
 

@@ -158,6 +158,17 @@ func TestFirewallNumberedRulesCapability(t *testing.T) {
 	}
 }
 
+func TestNginxPHPFastCGIInclude(t *testing.T) {
+	debian := platform.DebianDefaults()
+	if debian.NginxPHPFastCGIInclude() != "snippets/fastcgi-php.conf" {
+		t.Fatalf("debian include = %q", debian.NginxPHPFastCGIInclude())
+	}
+	rhel := platform.RHELDefaults()
+	if rhel.NginxPHPFastCGIInclude() != "" {
+		t.Fatalf("rhel should not use Debian snippets; got %q", rhel.NginxPHPFastCGIInclude())
+	}
+}
+
 func TestEnsureEPELUnsupportedDistro(t *testing.T) {
 	info := &platform.Info{
 		Family: "rhel",

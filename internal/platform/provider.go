@@ -33,6 +33,10 @@ type Provider interface {
 	NginxSitesEnabled() string
 	NginxConfPath() string
 	NginxSitesEnabledInclude() string
+	// NginxPHPFastCGIInclude returns an nginx include used inside PHP location
+	// blocks (for example snippets/fastcgi-php.conf on Debian). An empty string
+	// means the caller should inline equivalent fastcgi directives.
+	NginxPHPFastCGIInclude() string
 	SudoGroup() string
 
 	// Database conventions
@@ -147,6 +151,9 @@ func (p *debianProvider) NginxSitesEnabled() string   { return p.provider.NginxS
 func (p *debianProvider) NginxConfPath() string       { return p.provider.NginxConfPath() }
 func (p *debianProvider) NginxSitesEnabledInclude() string {
 	return p.provider.NginxSitesEnabledInclude()
+}
+func (p *debianProvider) NginxPHPFastCGIInclude() string {
+	return "snippets/fastcgi-php.conf"
 }
 func (p *debianProvider) SudoGroup() string { return p.provider.SudoGroup() }
 
@@ -286,6 +293,10 @@ func (p *rhelProvider) NginxSitesEnabled() string   { return p.provider.NginxCon
 func (p *rhelProvider) NginxConfPath() string       { return p.provider.NginxConfPath() }
 func (p *rhelProvider) NginxSitesEnabledInclude() string {
 	return p.provider.NginxConfDInclude()
+}
+func (p *rhelProvider) NginxPHPFastCGIInclude() string {
+	// RHEL/Rocky/Alma nginx packages do not ship Debian's snippets/fastcgi-php.conf.
+	return ""
 }
 func (p *rhelProvider) SudoGroup() string { return p.provider.SudoGroup() }
 
