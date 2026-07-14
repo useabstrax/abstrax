@@ -116,7 +116,11 @@ func ensureCRBRepo(ctx context.Context, provider Provider, opts RepoOptions, ena
 	// dnf config-manager --set-enabled crb (Rocky/Alma/CentOS Stream 9+)
 	name := "crb"
 	if id == "rhel" {
-		name = "codeready-builder-for-rhel-9-x86_64-rpms"
+		major, err := EnterpriseLinuxMajor(provider)
+		if err != nil {
+			return err
+		}
+		name = fmt.Sprintf("codeready-builder-for-rhel-%d-x86_64-rpms", major)
 	}
 	if err := enabler.Run(ctx, "dnf", "config-manager", "--set-enabled", name); err != nil {
 		// Fallback common alias.
@@ -146,8 +150,13 @@ func ensureRemiRepo(ctx context.Context, provider Provider, opts RepoOptions, en
 	}
 	_ = ensureCRBRepo(ctx, provider, opts, enabler)
 
+	remiURL, err := RemiReleaseURL(provider)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("Installing Remi repository (required for multi-version PHP)...")
-	if err := enabler.Install(ctx, "https://rpms.remirepo.net/enterprise/remi-release-9.rpm"); err != nil {
+	if err := enabler.Install(ctx, remiURL); err != nil {
 		// Try generic remi-release package if URL install fails (already configured mirror).
 		if err2 := enabler.Install(ctx, "remi-release"); err2 != nil {
 			return fmt.Errorf("installing Remi release package: %w (fallback: %v)", err, err2)
@@ -155,6 +164,31 @@ func ensureRemiRepo(ctx context.Context, provider Provider, opts RepoOptions, en
 	}
 	_ = enabler.Run(ctx, "dnf", "makecache")
 	return nil
+}
+
+// EnterpriseLinuxMajor returns the major Enterprise Linux version from the
+// provider profile (for example 9 or 10).
+func EnterpriseLinuxMajor(provider Provider) (int, error) {
+	if provider == nil {
+		return 0, fmt.Errorf("platform provider is nil")
+	}
+	maj, _, ok := parseVersionID(provider.Profile().VersionID)
+	if !ok {
+		return 0, fmt.Errorf("could not determine Enterprise Linux major version from VERSION_ID %q", provider.Profile().VersionID)
+	}
+	if maj < 9 {
+		return 0, fmt.Errorf("Enterprise Linux %d is not supported; Rocky/Alma 9+ is required", maj)
+	}
+	return maj, nil
+}
+
+// RemiReleaseURL returns the Remi release RPM URL matching the host EL major.
+func RemiReleaseURL(provider Provider) (string, error) {
+	maj, err := EnterpriseLinuxMajor(provider)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("https://rpms.remirepo.net/enterprise/remi-release-%d.rpm", maj), nil
 }
 
 // EnsurePHPRepository enables Remi (and dependencies) when the provider requires

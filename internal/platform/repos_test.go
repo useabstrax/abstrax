@@ -10,12 +10,18 @@ import (
 
 func rhelProviderFor(t *testing.T, distroID, distroName string, level platform.SupportLevel) platform.Provider {
 	t.Helper()
+	return rhelProviderForVersion(t, distroID, distroName, "9.5", level)
+}
+
+func rhelProviderForVersion(t *testing.T, distroID, distroName, versionID string, level platform.SupportLevel) platform.Provider {
+	t.Helper()
 	info := &platform.Info{
 		Family: "rhel",
 		Profile: platform.Profile{
 			Family:       "rhel",
 			DistroID:     distroID,
 			DistroName:   distroName,
+			VersionID:    versionID,
 			SupportLevel: level,
 			WebUser:      "nginx",
 			WebGroup:     "nginx",
@@ -130,6 +136,54 @@ func TestEnsureRemiRequiresFlagOnRocky(t *testing.T) {
 	}
 	if installed[0] != "epel-release" {
 		t.Fatalf("first install should be epel-release, got %#v", installed)
+	}
+	if installed[1] != "https://rpms.remirepo.net/enterprise/remi-release-9.rpm" {
+		t.Fatalf("second install should be remi-release-9.rpm, got %#v", installed)
+	}
+}
+
+func TestRemiReleaseURLMatchesMajor(t *testing.T) {
+	rocky9 := rhelProviderForVersion(t, "rocky", "Rocky Linux 9.5", "9.5", platform.SupportOfficial)
+	url, err := platform.RemiReleaseURL(rocky9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url != "https://rpms.remirepo.net/enterprise/remi-release-9.rpm" {
+		t.Fatalf("rocky9 url = %q", url)
+	}
+
+	alma10 := rhelProviderForVersion(t, "almalinux", "AlmaLinux 10.0", "10.0", platform.SupportOfficial)
+	url, err = platform.RemiReleaseURL(alma10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url != "https://rpms.remirepo.net/enterprise/remi-release-10.rpm" {
+		t.Fatalf("alma10 url = %q", url)
+	}
+}
+
+func TestEnsureRemiUsesEL10URL(t *testing.T) {
+	provider := rhelProviderForVersion(t, "rocky", "Rocky Linux 10.0", "10.0", platform.SupportOfficial)
+	var installed []string
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoRemi, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error {
+			installed = append(installed, name)
+			return nil
+		},
+		Run: func(ctx context.Context, name string, args ...string) error { return nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, name := range installed {
+		if name == "https://rpms.remirepo.net/enterprise/remi-release-10.rpm" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected remi-release-10.rpm in %#v", installed)
 	}
 }
 
