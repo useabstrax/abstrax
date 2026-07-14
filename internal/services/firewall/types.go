@@ -32,6 +32,18 @@ type AllowOptions struct {
 	DryRun   bool
 }
 
+// InstallOptions holds options for installing the platform firewall package.
+type InstallOptions struct {
+	DryRun bool
+}
+
+// InstallResult describes the outcome of installing the firewall package.
+type InstallResult struct {
+	Backend          string `json:"backend"`
+	Package          string `json:"package"`
+	AlreadyInstalled bool   `json:"already_installed,omitempty"`
+}
+
 // EnableOptions holds options for enabling the firewall.
 type EnableOptions struct {
 	AllowSSH bool

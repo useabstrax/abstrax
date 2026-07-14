@@ -158,6 +158,18 @@ func TestFirewallNumberedRulesCapability(t *testing.T) {
 	}
 }
 
+func TestFirewallPackages(t *testing.T) {
+	if platform.DebianDefaults().FirewallPackage() != "ufw" {
+		t.Fatalf("debian firewall package = %q", platform.DebianDefaults().FirewallPackage())
+	}
+	if platform.RHELDefaults().FirewallPackage() != "firewalld" {
+		t.Fatalf("rhel firewall package = %q", platform.RHELDefaults().FirewallPackage())
+	}
+	if platform.RHELDefaults().FirewallServiceName() != "firewalld" {
+		t.Fatalf("rhel firewall service = %q", platform.RHELDefaults().FirewallServiceName())
+	}
+}
+
 func TestNginxPHPFastCGIInclude(t *testing.T) {
 	debian := platform.DebianDefaults()
 	if debian.NginxPHPFastCGIInclude() != "snippets/fastcgi-php.conf" {

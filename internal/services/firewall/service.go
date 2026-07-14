@@ -9,6 +9,7 @@ import (
 
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform"
+	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/sshcfg"
 )
 
@@ -51,9 +52,72 @@ func detectBackend() string {
 
 func (s *Service) requireBackend() error {
 	if s.backend == "" {
+		provider := platform.Resolve()
+		pkg := provider.FirewallPackage()
+		if pkg != "" {
+			return fmt.Errorf("no supported firewall backend found; install %s with `sudo abstrax firewall install`, then retry", pkg)
+		}
 		return fmt.Errorf("no supported firewall backend found (ufw or firewalld)")
 	}
 	return nil
+}
+
+// Install installs the platform firewall package (ufw on Debian-family, firewalld
+// on RHEL-family). It does not enable the firewall; use Enable for that.
+func (s *Service) Install(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
+	provider := platform.Resolve()
+	pkg := provider.FirewallPackage()
+	if pkg == "" {
+		return nil, fmt.Errorf("no supported firewall package for this platform")
+	}
+
+	result := &InstallResult{
+		Package: pkg,
+		Backend: backendForPackage(pkg),
+	}
+
+	if s.backend != "" {
+		result.AlreadyInstalled = true
+		result.Backend = s.backend
+		return result, nil
+	}
+
+	fmt.Printf("Installing %s...\n", pkg)
+	mgr, _, err := pkgmanager.NewFromPlatform(opts.DryRun, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg, DryRun: opts.DryRun}); err != nil {
+		return nil, fmt.Errorf("installing %s: %w", pkg, err)
+	}
+
+	s.backend = detectBackend()
+	if s.backend == "" && !opts.DryRun {
+		return nil, fmt.Errorf("installed %s but no firewall command was found on PATH", pkg)
+	}
+	if s.backend == "" && opts.DryRun {
+		s.backend = backendForPackage(pkg)
+	}
+	result.Backend = s.backend
+	return result, nil
+}
+
+func backendForPackage(pkg string) string {
+	switch pkg {
+	case "firewalld":
+		return "firewalld"
+	case "ufw":
+		return "ufw"
+	default:
+		return ""
+	}
+}
+
+// ensureBackendInstalled installs the platform firewall package when the CLI
+// binary (ufw / firewall-cmd) is missing, then re-detects the backend.
+func (s *Service) ensureBackendInstalled(ctx context.Context, dryRun bool) error {
+	_, err := s.Install(ctx, InstallOptions{DryRun: dryRun})
+	return err
 }
 
 // Backend returns the active firewall backend name.
@@ -99,12 +163,8 @@ func (s *Service) firewalldStatus(ctx context.Context) (*Status, error) {
 
 // Enable enables the firewall.
 func (s *Service) Enable(ctx context.Context, opts EnableOptions) (SSHProtectResult, error) {
-	protect, err := s.ensureClientSSHAllow(ctx)
-	if err != nil {
-		return protect, err
-	}
-	if err := s.requireBackend(); err != nil {
-		return protect, err
+	if err := s.ensureBackendInstalled(ctx, opts.DryRun); err != nil {
+		return SSHProtectResult{}, err
 	}
 
 	sshPort := opts.SSHPort
@@ -117,14 +177,25 @@ func (s *Service) Enable(ctx context.Context, opts EnableOptions) (SSHProtectRes
 		}
 	}
 
+	// firewalld needs to be running before firewall-cmd can add SSH protection rules.
+	if s.backend == "firewalld" {
+		if _, err := s.runner.Run(ctx, "systemctl", "enable", "--now", "firewalld"); err != nil {
+			return SSHProtectResult{}, fmt.Errorf("starting firewalld: %w", err)
+		}
+	}
+
+	protect, err := s.ensureClientSSHAllow(ctx)
+	if err != nil {
+		return protect, err
+	}
+
 	if s.backend == "firewalld" {
 		if opts.AllowSSH {
 			if err := s.firewalldAllowPort(ctx, strconv.Itoa(sshPort), "tcp"); err != nil {
 				return protect, fmt.Errorf("allowing SSH port: %w", err)
 			}
 		}
-		_, err = s.runner.Run(ctx, "systemctl", "enable", "--now", "firewalld")
-		return protect, err
+		return protect, nil
 	}
 
 	if opts.AllowSSH {

@@ -123,6 +123,7 @@ const (
 
 	// Firewall actions.
 	FirewallStatus        = "firewall.status"
+	FirewallInstall       = "firewall.install"
 	FirewallEnable        = "firewall.enable"
 	FirewallDisable       = "firewall.disable"
 	FirewallAllow         = "firewall.allow"

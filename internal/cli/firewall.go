@@ -36,6 +36,7 @@ func NewFirewallCmd() *cobra.Command {
 	removeCmd.AddCommand(newFirewallRemovePortCmd())
 
 	cmd.AddCommand(newFirewallStatusCmd())
+	cmd.AddCommand(newFirewallInstallCmd())
 	cmd.AddCommand(newFirewallEnableCmd())
 	cmd.AddCommand(newFirewallDisableCmd())
 	cmd.AddCommand(newFirewallAllowCmd())
@@ -81,6 +82,39 @@ func newFirewallStatusCmd() *cobra.Command {
 			}
 			p.Line("")
 			return nil
+		},
+	}
+}
+
+func newFirewallInstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "install",
+		Short: "Install the platform firewall package (ufw or firewalld)",
+		Long: `Install the firewall package for the current distro family.
+
+  Debian/Ubuntu: ufw
+  Rocky/Alma/RHEL: firewalld
+
+This installs the package only. It does not enable the firewall.
+Run "abstrax firewall enable --allow-ssh" afterwards to enable it safely.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+
+			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			result, err := svc.Install(cmd.Context(), firewall.InstallOptions{
+				DryRun: globals.Flags.DryRun,
+			})
+			if err != nil {
+				return err
+			}
+
+			msg := fmt.Sprintf("%s installed.", result.Package)
+			if result.AlreadyInstalled {
+				msg = fmt.Sprintf("%s is already installed.", result.Package)
+			}
+			return printSimpleResult(actions.FirewallInstall, msg, result)
 		},
 	}
 }

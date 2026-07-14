@@ -69,6 +69,8 @@ type Provider interface {
 
 	// Firewall
 	FirewallSupportsNumberedRules() bool
+	FirewallPackage() string
+	FirewallServiceName() string
 
 	// Cache (Redis / Memcached)
 	RedisPackage() string
@@ -211,6 +213,8 @@ func (p *debianProvider) RubyPackages(version string) ([]string, error) {
 func (p *debianProvider) RubySupportsExactVersion() bool { return true }
 
 func (p *debianProvider) FirewallSupportsNumberedRules() bool { return true }
+func (p *debianProvider) FirewallPackage() string             { return "ufw" }
+func (p *debianProvider) FirewallServiceName() string         { return "" }
 
 func (p *debianProvider) RedisPackage() string               { return "redis-server" }
 func (p *debianProvider) RedisServiceName() string           { return "redis-server" }
@@ -367,6 +371,8 @@ func (p *rhelProvider) RubyPackages(version string) ([]string, error) {
 func (p *rhelProvider) RubySupportsExactVersion() bool { return false }
 
 func (p *rhelProvider) FirewallSupportsNumberedRules() bool { return false }
+func (p *rhelProvider) FirewallPackage() string             { return "firewalld" }
+func (p *rhelProvider) FirewallServiceName() string         { return "firewalld" }
 
 func (p *rhelProvider) RedisPackage() string     { return "redis" }
 func (p *rhelProvider) RedisServiceName() string { return "redis" }
