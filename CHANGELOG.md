@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Repository helpers** — `abstrax repo enable <epel|crb|remi>` and global `--enable-required-repos` for explicit third-party repository consent (required for Remi; required for EPEL on RHEL/Oracle).
 - **RHEL runtime and service installs** — `mysql install` uses `mariadb-server`; `ssl install` uses dnf and EPEL (automatic on Rocky/Alma/CentOS Stream; explicit on RHEL/Oracle); daemon auto-install uses `supervisord` and `/etc/supervisord.d`; project runtime install uses NodeSource RPM scripts and stock `ruby`/`ruby-devel` (exact Ruby version pinning on RHEL is a deliberate limitation).
 - **SELinux warnings** — Enforcing mode is detected and surfaced in `doctor` and project/web flows; Abstrax never disables SELinux automatically.
+- **`firewall install`** — Installs the platform firewall package (`ufw` on Debian-family, `firewalld` on RHEL-family) without enabling it.
 
 ### Changed
 
@@ -26,6 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Mutating commands** — Commands that change system state verify platform support before running. Unsupported distributions receive a clear error without attempting destructive changes.
 - **Nginx site enable/disable** — Provider-aware: Debian continues to symlink `sites-available` → `sites-enabled`; RHEL writes `/etc/nginx/conf.d/{site}.conf` and disables by renaming to `.disabled`.
 - **Documentation** — Supported platforms documentation describes the functional parity model, Remi PHP, repository consent, firewalld rule removal, and remaining deliberate limitations.
+
+### Fixed
+
+- **Remi / CRB on EL10** — Remi release RPM URL and RHEL CodeReady Builder repo names now follow the host Enterprise Linux major version instead of hardcoding EL9.
+- **PHP nginx virtual hosts on RHEL** — No longer include Debian-only `snippets/fastcgi-php.conf`; equivalent fastcgi directives are inlined on RHEL-family nginx.
+- **Redis / Memcached on RHEL** — Uses provider-aware package, service, and config paths. Rocky/Alma 10+ enables the Remi Redis module stream (AppStream ships Valkey instead of Redis).
+- **Firewall on RHEL** — `firewall enable` installs and starts `firewalld` before applying SSH protection rules; missing backends point users at `firewall install`.
 
 ## [1.1.1] - 2026-06-24
 
