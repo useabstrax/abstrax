@@ -117,6 +117,10 @@ func (p *Provider) PHPFPMBinary(version string) string {
 	return fmt.Sprintf("php-fpm%s", normalizeVersion(version))
 }
 
+func (p *Provider) PHPCLIBinary(version string) string {
+	return fmt.Sprintf("php%s", normalizeVersion(version))
+}
+
 func (p *Provider) PHPFPMPoolDir(version string) string {
 	return filepath.Join(PHPConfigRoot, normalizeVersion(version), "fpm", "pool.d")
 }

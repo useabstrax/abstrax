@@ -1,14 +1,25 @@
 package firewall
 
+// RuleKind identifies how a listed rule should be removed on firewalld.
+type RuleKind string
+
+const (
+	RuleKindService RuleKind = "service"
+	RuleKindPort    RuleKind = "port"
+	RuleKindUFW     RuleKind = "ufw"
+)
+
 // Rule describes a firewall rule.
 type Rule struct {
-	ID       string `json:"id"`
-	Action   string `json:"action"`
-	Port     string `json:"port,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
-	From     string `json:"from,omitempty"`
-	To       string `json:"to,omitempty"`
-	Comment  string `json:"comment,omitempty"`
+	ID       string   `json:"id"`
+	Action   string   `json:"action"`
+	Port     string   `json:"port,omitempty"`
+	Protocol string   `json:"protocol,omitempty"`
+	From     string   `json:"from,omitempty"`
+	To       string   `json:"to,omitempty"`
+	Comment  string   `json:"comment,omitempty"`
+	Kind     RuleKind `json:"kind,omitempty"`
+	Target   string   `json:"target,omitempty"`
 }
 
 // AllowOptions holds options for allow/deny commands.
@@ -19,6 +30,18 @@ type AllowOptions struct {
 	To       string
 	Comment  string
 	DryRun   bool
+}
+
+// InstallOptions holds options for installing the platform firewall package.
+type InstallOptions struct {
+	DryRun bool
+}
+
+// InstallResult describes the outcome of installing the firewall package.
+type InstallResult struct {
+	Backend          string `json:"backend"`
+	Package          string `json:"package"`
+	AlreadyInstalled bool   `json:"already_installed,omitempty"`
 }
 
 // EnableOptions holds options for enabling the firewall.

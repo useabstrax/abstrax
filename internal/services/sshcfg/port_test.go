@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"abstrax/internal/platform/debian"
 )
 
 func TestPortFromEntries(t *testing.T) {
@@ -57,15 +55,6 @@ func TestSSHPortFromFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	origManaged := debian.AbstraxSSHConfig
-	origMain := sshdConfigPath
-	t.Cleanup(func() {
-		// restore not needed in test - we patch readConfigFileSafe indirectly
-		_ = origManaged
-		_ = origMain
-	})
-
-	// Test portFromEntries preference via managed entries
 	got := portFromEntries(readConfigFileSafe(managed))
 	if got != "2222" {
 		t.Errorf("managed port = %q, want 2222", got)

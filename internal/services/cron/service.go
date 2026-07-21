@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 )
 
 const (
@@ -25,7 +25,7 @@ type Service struct {
 
 // New creates a Service.
 func New() *Service {
-	return &Service{cronDir: debian.CronDir}
+	return &Service{cronDir: platform.Resolve().Paths().CronDir}
 }
 
 // Add creates a new managed cron job.

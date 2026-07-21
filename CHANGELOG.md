@@ -4,18 +4,36 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.2] - 2026-07-08
+## [2.0.0] - 2026-07-21
 
 ### Added
 
-- **Platform profiles** — Abstrax now reads `/etc/os-release` (including `ID_LIKE` and `VERSION_ID`) and derives a platform profile covering distro family, package and service managers, nginx layout, web user, default project root, PHP-FPM naming, firewall strategy, and support level (`official`, `compatible`, or `unsupported`).
-- **Debian-family provider** — Paths and naming conventions for apt/systemd, nginx `sites-available`/`sites-enabled`, `www-data`, `/var/www`, PHP-FPM services and sockets, and UFW are centralised in a single provider rather than scattered through command code.
-- **Enhanced `abstrax doctor`** — Reports distro ID, family, nginx layout, web user, project root, PHP-FPM strategy, firewall strategy, and support level alongside the existing tool and manager detection.
+- **Platform profiles and detection** — Reads `/etc/os-release` and derives distro family, package and service managers, nginx layout, web user, project root, PHP-FPM strategy, firewall strategy, and support level (`official`, `compatible`, or `unsupported`).
+- **Debian-family provider** — Centralises apt/systemd conventions: nginx `sites-available`/`sites-enabled`, `www-data`, `/var/www`, versioned PHP-FPM, and UFW.
+- **RHEL-family provider** — Rocky Linux 9+ and AlmaLinux 9+ (official); experimental support for RHEL 9+, CentOS Stream 9+, and Oracle Linux 9+. Uses `dnf`, nginx `conf.d`, `nginx` web user, firewalld, and SELinux reporting.
+- **DNF package backend** — Package commands use `dnf` on RHEL-family hosts and `apt` on Debian-family hosts.
+- **firewalld backend** — Firewall on RHEL-family systems via `firewall-cmd` (permanent rules + reload); UFW behaviour preserved on Debian-family systems.
+- **Firewalld rule removal** — `firewall rule list` assigns Abstrax IDs to services and ports; `firewall rule remove <id>` removes the matching entry. Also `firewall remove service` and `firewall remove port`.
+- **Remi multi-version PHP** — RHEL-family PHP installs use Remi SCL packages (`php83-php-fpm`, paths under `/opt/remi` and `/etc/opt/remi`) with the same version-oriented project commands as Debian.
+- **Repository helpers** — `abstrax repo enable <epel|crb|remi>` and global `--enable-required-repos` for explicit third-party repository consent (required for Remi; required for EPEL on RHEL/Oracle).
+- **RHEL runtime and service installs** — `mysql install` uses `mariadb-server`; `ssl install` uses dnf and EPEL (automatic on Rocky/Alma/CentOS Stream; explicit on RHEL/Oracle); daemon auto-install uses `supervisord` and `/etc/supervisord.d`; project runtime install uses NodeSource RPM scripts and stock `ruby`/`ruby-devel` (exact Ruby version pinning on RHEL is a deliberate limitation).
+- **SELinux warnings** — Enforcing mode is detected and surfaced in `doctor` and project/web flows; Abstrax never disables SELinux automatically.
+- **`firewall install`** — Installs the platform firewall package (`ufw` on Debian-family, `firewalld` on RHEL-family) without enabling it.
 
 ### Changed
 
-- **Supported operating systems** — Fully supported distros are now explicitly defined as Ubuntu 20.04+, Debian 11+, Linux Mint, Pop!_OS, and Raspbian / Raspberry Pi OS. Other Debian/Ubuntu-based systems are marked `compatible` (best-effort). Non-Debian-family distributions are `unsupported`.
-- **Mutating commands** — Commands that change system state now verify platform support before running. Unsupported distributions receive a clear error explaining what was detected and which distros are supported, without attempting destructive changes.
+- **`abstrax doctor`** — Reports distro profile, nginx config directory, web user/group, SELinux status, firewalld presence, and support level alongside existing tool and manager detection.
+- **Supported operating systems** — Fully supported distros are explicitly defined (Ubuntu 20.04+, Debian 11+, Linux Mint, Pop!_OS, Raspbian / Raspberry Pi OS; Rocky 9+, AlmaLinux 9+). Other Debian/Ubuntu derivatives are `compatible`; non-supported families are `unsupported`.
+- **Mutating commands** — Commands that change system state verify platform support before running. Unsupported distributions receive a clear error without attempting destructive changes.
+- **Nginx site enable/disable** — Provider-aware: Debian continues to symlink `sites-available` → `sites-enabled`; RHEL writes `/etc/nginx/conf.d/{site}.conf` and disables by renaming to `.disabled`.
+- **Documentation** — Supported platforms documentation describes the functional parity model, Remi PHP, repository consent, firewalld rule removal, and remaining deliberate limitations.
+
+### Fixed
+
+- **Remi / CRB on EL10** — Remi release RPM URL and RHEL CodeReady Builder repo names now follow the host Enterprise Linux major version instead of hardcoding EL9.
+- **PHP nginx virtual hosts on RHEL** — No longer include Debian-only `snippets/fastcgi-php.conf`; equivalent fastcgi directives are inlined on RHEL-family nginx.
+- **Redis / Memcached on RHEL** — Uses provider-aware package, service, and config paths. Rocky/Alma 10+ enables the Remi Redis module stream (AppStream ships Valkey instead of Redis).
+- **Firewall on RHEL** — `firewall enable` installs and starts `firewalld` before applying SSH protection rules; missing backends point users at `firewall install`.
 
 ## [1.1.1] - 2026-06-24
 

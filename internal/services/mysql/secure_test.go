@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"abstrax/internal/platform"
 )
 
 func TestEscapeSQLString(t *testing.T) {
@@ -23,8 +25,8 @@ func TestEscapeSQLString(t *testing.T) {
 	}
 }
 
-func TestBuildSetRootPasswordSQL(t *testing.T) {
-	sql := buildSetRootPasswordSQL("secret'pass")
+func TestBuildSetRootPasswordSQLMySQL(t *testing.T) {
+	sql := buildSetRootPasswordSQLWithPlugin("secret'pass", platform.DatabaseAuthCachingSHA2)
 	if !strings.Contains(sql, "secret''pass") {
 		t.Fatalf("expected escaped password in SQL, got: %s", sql)
 	}
@@ -41,15 +43,33 @@ func TestBuildSetRootPasswordSQL(t *testing.T) {
 	}
 }
 
-func TestBuildSecureInstallSQL(t *testing.T) {
-	sql := buildSecureInstallSQL("pw")
+func TestBuildSetRootPasswordSQLMariaDB(t *testing.T) {
+	sql := buildSetRootPasswordSQLWithPlugin("secret'pass", platform.DatabaseAuthNativePassword)
+	if strings.Contains(sql, "caching_sha2_password") {
+		t.Fatalf("MariaDB SQL should not use caching_sha2_password: %s", sql)
+	}
 	for _, fragment := range []string{
-		"ALTER USER 'root'@'localhost'",
-		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1'",
-		"caching_sha2_password",
+		"ALTER USER 'root'@'localhost' IDENTIFIED BY 'secret''pass'",
+		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY 'secret''pass'",
+		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1'",
+		"FLUSH PRIVILEGES",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("expected %q in SQL, got: %s", fragment, sql)
+		}
+	}
+}
+
+func TestBuildSecureInstallSQLMariaDB(t *testing.T) {
+	sql := buildSecureInstallSQLWithPlugin("pw", platform.DatabaseAuthNativePassword)
+	if strings.Contains(sql, "caching_sha2_password") {
+		t.Fatalf("MariaDB SQL should not use caching_sha2_password: %s", sql)
+	}
+	for _, fragment := range []string{
+		"ALTER USER 'root'@'localhost' IDENTIFIED BY 'pw'",
+		"CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY 'pw'",
 		"DELETE FROM mysql.user WHERE User=''",
 		"DROP DATABASE IF EXISTS test",
-		"FLUSH PRIVILEGES",
 	} {
 		if !strings.Contains(sql, fragment) {
 			t.Fatalf("expected %q in SQL, got: %s", fragment, sql)

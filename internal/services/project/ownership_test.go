@@ -328,8 +328,9 @@ func TestGeneratePHPPoolNameAndSocket(t *testing.T) {
 	if len(conf.SocketPath) > maxUnixSocketPathLen {
 		t.Fatalf("socket path too long: %d", len(conf.SocketPath))
 	}
-	if !strings.Contains(conf.SocketPath, "8.4") {
-		t.Fatalf("socket = %s", conf.SocketPath)
+	wantSocket := platformProvider.PHPFPMProjectSocket("8.4", strings.TrimPrefix(conf.PoolName, phpPoolPrefix))
+	if conf.SocketPath != wantSocket {
+		t.Fatalf("socket = %s, want %s", conf.SocketPath, wantSocket)
 	}
 }
 
@@ -348,8 +349,21 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 		t.Fatalf("config missing socket:\n%s", conf)
 	}
 	assertPHPRealpathRootParams(t, conf)
-	if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
-		t.Fatalf("config duplicates try_files already present in snippets/fastcgi-php.conf:\n%s", conf)
+	include := platformProvider.NginxPHPFastCGIInclude()
+	if include != "" {
+		if !strings.Contains(conf, "include "+include+";") {
+			t.Fatalf("config missing %s include:\n%s", include, conf)
+		}
+		if strings.Contains(conf, "location ~ \\.php$ {\n        try_files $uri =404;\n") {
+			t.Fatalf("config duplicates try_files already present in %s:\n%s", include, conf)
+		}
+	} else {
+		if !strings.Contains(conf, "include fastcgi_params;") {
+			t.Fatalf("config missing fastcgi_params for RHEL-style PHP location:\n%s", conf)
+		}
+		if !strings.Contains(conf, "try_files $uri =404;") {
+			t.Fatalf("config missing inline try_files for RHEL-style PHP location:\n%s", conf)
+		}
 	}
 }
 
@@ -360,7 +374,8 @@ func TestBuildNginxConfigSharedDefaultSocket(t *testing.T) {
 		Runtime:    RuntimePHP,
 		PHPVersion: "8.5",
 	})
-	if !strings.Contains(conf, "fastcgi_pass unix:/run/php/php8.5-fpm.sock;") {
+	socket := platformProvider.PHPFPMDefaultSocket("8.5")
+	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config = %s", conf)
 	}
 	assertPHPRealpathRootParams(t, conf)
@@ -391,7 +406,7 @@ func TestBuildNginxConfigCustomPort(t *testing.T) {
 func TestIdentityFromStateBackwardsCompatible(t *testing.T) {
 	state := &State{Owner: "www-data"}
 	id := IdentityFromState(state)
-	if id.Mode != OwnershipShared || id.User != SharedWebUser {
+	if id.Mode != OwnershipShared || id.User != "www-data" {
 		t.Fatalf("id = %#v", id)
 	}
 }
@@ -402,7 +417,7 @@ func TestRenderPHPPoolSocketPermissions(t *testing.T) {
 		SocketPath: "/run/php/php8.4-fpm-example.sock",
 	}
 	rendered := renderPHPPool(conf, RuntimeIdentity{User: "mike", Group: "mike", WebServerUser: NginxUser})
-	if !strings.Contains(rendered, "user = mike") || !strings.Contains(rendered, "listen.group = www-data") {
+	if !strings.Contains(rendered, "user = mike") || !strings.Contains(rendered, "listen.group = "+NginxUser) {
 		t.Fatalf("rendered = %s", rendered)
 	}
 	if !strings.Contains(rendered, "listen.mode = 0660") || strings.Contains(rendered, "0666") {

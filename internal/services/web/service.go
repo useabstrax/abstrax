@@ -9,28 +9,28 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
 )
 
 const defaultSiteConfigName = "default"
 
-var nginxPaths = debian.DefaultPaths()
-
 // Service manages web servers.
 type Service struct {
-	runner *executil.Runner
-	svc    *svcmanager.Service
-	dryRun bool
+	runner   *executil.Runner
+	svc      *svcmanager.Service
+	provider platform.Provider
+	dryRun   bool
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
 	return &Service{
-		runner: executil.New(dryRun, verbose),
-		svc:    svcmanager.New(dryRun, verbose),
-		dryRun: dryRun,
+		runner:   executil.New(dryRun, verbose),
+		svc:      svcmanager.New(dryRun, verbose),
+		provider: platform.Resolve(),
+		dryRun:   dryRun,
 	}
 }
 
@@ -47,7 +47,10 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 }
 
 func (s *Service) installNginx(ctx context.Context, opts InstallOptions) error {
-	mgr := pkgmanager.NewApt(s.dryRun, false)
+	mgr, _, err := pkgmanager.NewFromPlatform(s.dryRun, false)
+	if err != nil {
+		return err
+	}
 
 	if err := mgr.Update(ctx); err != nil {
 		return err
@@ -58,6 +61,10 @@ func (s *Service) installNginx(ctx context.Context, opts InstallOptions) error {
 
 	if err := s.configureNginx(ctx); err != nil {
 		return err
+	}
+
+	if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "nginx configuration"); note != "" {
+		fmt.Println("Security note: " + note)
 	}
 
 	if opts.Enable || opts.Start {
@@ -75,22 +82,36 @@ func (s *Service) installNginx(ctx context.Context, opts InstallOptions) error {
 }
 
 func (s *Service) configureNginx(ctx context.Context) error {
-	if s.dryRun {
-		fmt.Printf("[dry-run] would create %s and %s\n", debian.NginxSitesAvailable, debian.NginxSitesEnabled)
+	layout := s.provider.NginxLayout()
+	if layout == platform.NginxConfD {
+		confDir := s.provider.NginxConfigDir()
+		if s.dryRun {
+			fmt.Printf("[dry-run] would ensure %s exists\n", confDir)
+		} else if err := os.MkdirAll(confDir, 0755); err != nil {
+			return fmt.Errorf("creating %s: %w", confDir, err)
+		}
+		if err := s.disableDefaultConfDSite(); err != nil {
+			return err
+		}
 	} else {
-		if err := os.MkdirAll(debian.NginxSitesAvailable, 0755); err != nil {
-			return fmt.Errorf("creating %s: %w", debian.NginxSitesAvailable, err)
+		avail := s.provider.NginxSitesAvailable()
+		enabled := s.provider.NginxSitesEnabled()
+		if s.dryRun {
+			fmt.Printf("[dry-run] would create %s and %s\n", avail, enabled)
+		} else {
+			if err := os.MkdirAll(avail, 0755); err != nil {
+				return fmt.Errorf("creating %s: %w", avail, err)
+			}
+			if err := os.MkdirAll(enabled, 0755); err != nil {
+				return fmt.Errorf("creating %s: %w", enabled, err)
+			}
 		}
-		if err := os.MkdirAll(debian.NginxSitesEnabled, 0755); err != nil {
-			return fmt.Errorf("creating %s: %w", debian.NginxSitesEnabled, err)
+		if err := s.ensureNginxSitesInclude(); err != nil {
+			return err
 		}
-	}
-
-	if err := s.ensureNginxSitesInclude(); err != nil {
-		return err
-	}
-	if err := s.disableDefaultSite(); err != nil {
-		return err
+		if err := s.disableDefaultSite(); err != nil {
+			return err
+		}
 	}
 
 	res, err := s.runner.RunSilent(ctx, "nginx", "-t")
@@ -102,39 +123,41 @@ func (s *Service) configureNginx(ctx context.Context) error {
 }
 
 func (s *Service) ensureNginxSitesInclude() error {
+	confPath := s.provider.NginxConfPath()
+	includeLine := s.provider.NginxSitesEnabledInclude()
 	if s.dryRun {
-		fmt.Printf("[dry-run] would ensure %s includes sites-enabled\n", nginxPaths.NginxConfPath)
+		fmt.Printf("[dry-run] would ensure %s includes sites-enabled\n", confPath)
 		return nil
 	}
 
-	data, err := os.ReadFile(nginxPaths.NginxConfPath)
+	data, err := os.ReadFile(confPath)
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", nginxPaths.NginxConfPath, err)
+		return fmt.Errorf("reading %s: %w", confPath, err)
 	}
 
 	content := string(data)
-	if strings.Contains(content, nginxPaths.NginxSitesEnabledInclude) || strings.Contains(content, "sites-enabled") {
+	if strings.Contains(content, includeLine) || strings.Contains(content, "sites-enabled") {
 		return nil
 	}
 
 	confDInclude := "include /etc/nginx/conf.d/*.conf;"
 	if idx := strings.Index(content, confDInclude); idx != -1 {
 		insertPos := idx + len(confDInclude)
-		newContent := content[:insertPos] + "\n\t" + nginxPaths.NginxSitesEnabledInclude + content[insertPos:]
-		return os.WriteFile(nginxPaths.NginxConfPath, []byte(newContent), 0644)
+		newContent := content[:insertPos] + "\n\t" + includeLine + content[insertPos:]
+		return os.WriteFile(confPath, []byte(newContent), 0644)
 	}
 
 	httpIdx := strings.Index(content, "http {")
 	if httpIdx == -1 {
-		return fmt.Errorf("%s: no http block found; cannot add sites-enabled include", nginxPaths.NginxConfPath)
+		return fmt.Errorf("%s: no http block found; cannot add sites-enabled include", confPath)
 	}
 	insertPos := httpIdx + len("http {")
-	newContent := content[:insertPos] + "\n\t" + nginxPaths.NginxSitesEnabledInclude + content[insertPos:]
-	return os.WriteFile(nginxPaths.NginxConfPath, []byte(newContent), 0644)
+	newContent := content[:insertPos] + "\n\t" + includeLine + content[insertPos:]
+	return os.WriteFile(confPath, []byte(newContent), 0644)
 }
 
 func (s *Service) disableDefaultSite() error {
-	defaultLink := filepath.Join(debian.NginxSitesEnabled, defaultSiteConfigName)
+	defaultLink := filepath.Join(s.provider.NginxSitesEnabled(), defaultSiteConfigName)
 	if s.dryRun {
 		fmt.Printf("[dry-run] would remove %s\n", defaultLink)
 		return nil
@@ -144,6 +167,28 @@ func (s *Service) disableDefaultSite() error {
 		return nil
 	}
 	return os.Remove(defaultLink)
+}
+
+func (s *Service) disableDefaultConfDSite() error {
+	candidates := []string{
+		filepath.Join(s.provider.NginxConfigDir(), "default.conf"),
+		filepath.Join(s.provider.NginxConfigDir(), "nginx-default.conf"),
+	}
+	for _, path := range candidates {
+		if s.dryRun {
+			fmt.Printf("[dry-run] would disable %s if present\n", path)
+			continue
+		}
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		}
+		disabled := path + ".disabled"
+		_ = os.Remove(disabled)
+		if err := os.Rename(path, disabled); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // InstallCommand returns the abstrax command to install the given backend.

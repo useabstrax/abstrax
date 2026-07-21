@@ -47,8 +47,8 @@ func buildPHPPoolPaths(projectName, phpVersion string) PHPPoolConfig {
 	poolName := generatePHPPoolName(projectName)
 	poolName = truncatePoolNameForSocket(poolName, phpVersion)
 	suffix := strings.TrimPrefix(poolName, phpPoolPrefix)
-	socketPath := debianPlatform.PHPFPMProjectSocket(phpVersion, suffix)
-	configPath := filepath.Join(debianPlatform.PHPFPMPoolDir(phpVersion), poolName+".conf")
+	socketPath := platformProvider.PHPFPMProjectSocket(phpVersion, suffix)
+	configPath := filepath.Join(platformProvider.PHPFPMPoolDir(phpVersion), poolName+".conf")
 	return PHPPoolConfig{
 		PoolName:   poolName,
 		ConfigPath: configPath,
@@ -58,7 +58,7 @@ func buildPHPPoolPaths(projectName, phpVersion string) PHPPoolConfig {
 
 func truncatePoolNameForSocket(poolName, phpVersion string) string {
 	suffix := strings.TrimPrefix(poolName, phpPoolPrefix)
-	socket := debianPlatform.PHPFPMProjectSocket(phpVersion, suffix)
+	socket := platformProvider.PHPFPMProjectSocket(phpVersion, suffix)
 	if len(socket) <= maxUnixSocketPathLen {
 		return poolName
 	}
@@ -105,7 +105,7 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 		return nil, fmt.Errorf("writing php-fpm pool: %w", err)
 	}
 
-	fpmBin := debianPlatform.PHPFPMBinary(normalizePHPVersion(state.PHPVersion))
+	fpmBin := platformProvider.PHPFPMBinary(normalizePHPVersion(state.PHPVersion))
 	if res, err := s.runner.RunSilent(ctx, fpmBin, "--test"); err != nil || res.ExitCode != 0 {
 		_ = os.Remove(conf.ConfigPath)
 		msg := res.Stderr
@@ -116,7 +116,7 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 	}
 
 	svc := svcmanager.New(s.dryRun, false)
-	if err := svc.Reload(ctx, debianPlatform.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion))); err != nil {
+	if err := svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion))); err != nil {
 		_ = os.Remove(conf.ConfigPath)
 		return nil, fmt.Errorf("reloading php-fpm: %w", err)
 	}
@@ -133,7 +133,7 @@ func (s *Service) removePHPPool(ctx context.Context, state *State) error {
 	_ = os.Remove(state.PHPPoolPath())
 	if state.PHPVersion != "" {
 		svc := svcmanager.New(s.dryRun, false)
-		_ = svc.Reload(ctx, debianPlatform.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion)))
+		_ = svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion)))
 	}
 	_ = os.Remove(state.PHPSocketPath)
 	return nil
@@ -143,7 +143,7 @@ func (st *State) PHPPoolPath() string {
 	if st.PHPPoolName == "" || st.PHPVersion == "" {
 		return ""
 	}
-	return filepath.Join(debianPlatform.PHPFPMPoolDir(normalizePHPVersion(st.PHPVersion)), st.PHPPoolName+".conf")
+	return filepath.Join(platformProvider.PHPFPMPoolDir(normalizePHPVersion(st.PHPVersion)), st.PHPPoolName+".conf")
 }
 
 func phpSocketForState(state *State) string {
@@ -153,10 +153,10 @@ func phpSocketForState(state *State) string {
 	if state.PHPVersion == "" {
 		return ""
 	}
-	return debianPlatform.PHPFPMDefaultSocket(normalizePHPVersion(state.PHPVersion))
+	return platformProvider.PHPFPMDefaultSocket(normalizePHPVersion(state.PHPVersion))
 }
 
 func (s *Service) reloadPHPFPM(ctx context.Context, phpVersion string) error {
 	svc := svcmanager.New(s.dryRun, false)
-	return svc.Reload(ctx, debianPlatform.PHPFPMServiceName(normalizePHPVersion(phpVersion)))
+	return svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(phpVersion)))
 }

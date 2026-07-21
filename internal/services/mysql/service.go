@@ -13,7 +13,7 @@ import (
 	"time"
 
 	executil "abstrax/internal/exec"
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
 )
@@ -28,11 +28,12 @@ type Service struct {
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
+	paths := platform.Resolve().Paths()
 	svc := &Service{
 		runner:           executil.New(dryRun, verbose),
 		cfg:              &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
-		configPath:       debian.MySQLConfig,
-		legacyConfigPath: debian.MySQLConfigLegacy,
+		configPath:       paths.MySQLConfig,
+		legacyConfigPath: paths.MySQLConfigLegacy,
 	}
 	_ = svc.loadConfig()
 	return svc
@@ -75,29 +76,35 @@ func (s *Service) Test(ctx context.Context) error {
 }
 
 // Install installs MySQL/MariaDB, applies secure defaults, and sets the root password.
+// On RHEL-family systems this installs MariaDB as the MySQL-compatible database server.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswordResult, error) {
 	if opts.DryRun {
 		return dryRunPasswordResult(), nil
 	}
 
-	mgr := pkgmanager.NewApt(false, false)
+	mgr, _, err := pkgmanager.NewFromPlatform(false, false)
+	if err != nil {
+		return nil, err
+	}
+	provider := platform.Resolve()
 	svcMgr := svcmanager.New(false, false)
 
-	pkg := "mysql-server"
-	if opts.Version != "" {
-		pkg = fmt.Sprintf("mysql-server-%s", opts.Version)
+	pkg := provider.DatabasePackage(opts.Version)
+	if opts.Version != "" && provider.DatabaseEngine() == platform.DatabaseMariaDB {
+		fmt.Printf("Note: version pinning is ignored on RHEL-family systems; installing stock %s.\n", pkg)
+		pkg = provider.DatabasePackage("")
 	}
 
 	if err := mgr.Update(ctx); err != nil {
 		return nil, err
 	}
 	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
-		return nil, fmt.Errorf("installing mysql: %w", err)
+		return nil, fmt.Errorf("installing %s: %w", provider.DatabaseDisplayName(), err)
 	}
 
-	serviceName, err := s.detectServiceName(ctx)
-	if err != nil {
-		return nil, err
+	serviceName := provider.DatabaseServiceName()
+	if detected, err := s.detectServiceName(ctx); err == nil {
+		serviceName = detected
 	}
 	if err := svcMgr.Enable(ctx, serviceName); err != nil {
 		return nil, err
@@ -115,8 +122,9 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return nil, err
 	}
 
-	if err := s.execAsRootSocket(ctx, buildSecureInstallSQL(password)); err != nil {
-		return nil, fmt.Errorf("securing mysql installation: %w", err)
+	sql := buildSecureInstallSQLWithPlugin(password, provider.DatabaseAuthPlugin())
+	if err := s.execAsRootSocket(ctx, sql); err != nil {
+		return nil, fmt.Errorf("securing %s installation: %w", provider.DatabaseDisplayName(), err)
 	}
 
 	if err := s.verifyRootLogin(ctx, password); err != nil {

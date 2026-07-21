@@ -54,7 +54,8 @@ var PHPBundledWithCLI = map[string]bool{
 	"posix": true,
 }
 
-// PHPPackages returns apt package names for a PHP version and extension list.
+// PHPPackages returns package names for a PHP version and extension list
+// using the detected platform provider.
 func PHPPackages(version string, extensions []string) []string {
-	return platform.DebianDefaults().PHPPackageNames(version, extensions)
+	return platform.Resolve().PHPPackageNames(version, extensions)
 }

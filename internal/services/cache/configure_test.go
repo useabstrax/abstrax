@@ -33,11 +33,7 @@ func TestApplyRedisConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	orig := redisConfigPath
-	redisConfigPath = path
-	t.Cleanup(func() { redisConfigPath = orig })
-
-	if err := applyRedisConfig(InstallOptions{
+	if err := applyRedisConfig(path, InstallOptions{
 		Driver: DriverRedis,
 		Port:   6380,
 		Bind:   "10.0.0.1",
@@ -65,11 +61,7 @@ func TestApplyMemcachedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	orig := memcachedConfigPath
-	memcachedConfigPath = path
-	t.Cleanup(func() { memcachedConfigPath = orig })
-
-	if err := applyMemcachedConfig(InstallOptions{
+	if err := applyMemcachedConfig(path, InstallOptions{
 		Driver: DriverMemcached,
 		Port:   11212,
 		Bind:   "10.0.0.2",

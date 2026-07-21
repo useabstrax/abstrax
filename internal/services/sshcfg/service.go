@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 )
 
 const (
@@ -136,11 +136,12 @@ func (s *Service) sshAction(ctx context.Context, action string) error {
 
 // writeDirective writes or updates a directive in the managed include file.
 func (s *Service) writeDirective(_ context.Context, key, value string) error {
-	managed := debian.AbstraxSSHConfig
+	paths := platform.Resolve().Paths()
+	managed := paths.AbstraxSSHConfig
 
 	// Ensure include directory exists.
-	if _, err := os.Stat(debian.SSHConfigDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(debian.SSHConfigDir, 0755); err != nil {
+	if _, err := os.Stat(paths.SSHConfigDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(paths.SSHConfigDir, 0755); err != nil {
 			return fmt.Errorf("creating sshd_config.d: %w", err)
 		}
 	}
@@ -165,7 +166,7 @@ func (s *Service) writeDirective(_ context.Context, key, value string) error {
 }
 
 func (s *Service) readManaged() ([]ConfigEntry, error) {
-	return readConfigFile(debian.AbstraxSSHConfig)
+	return readConfigFile(platform.Resolve().Paths().AbstraxSSHConfig)
 }
 
 func (s *Service) validateAndReload(ctx context.Context) error {

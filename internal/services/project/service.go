@@ -12,7 +12,7 @@ import (
 
 	executil "abstrax/internal/exec"
 	"abstrax/internal/identity"
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/config"
 	"abstrax/internal/services/web"
 )
@@ -22,21 +22,29 @@ type Service struct {
 	runner       *executil.Runner
 	dryRun       bool
 	identity     identity.Resolver
+	provider     platform.Provider
 	stateDir     string
+	nginxLayout  platform.NginxLayout
 	nginxAvail   string
 	nginxEnabled string
+	nginxConfDir string
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
 	runner := executil.New(dryRun, verbose)
+	provider := platform.Resolve()
+	paths := provider.Paths()
 	svc := &Service{
 		runner:       runner,
 		dryRun:       dryRun,
 		identity:     identity.NewOSResolver(runner),
-		stateDir:     debian.AbstraxProjectsDir,
-		nginxAvail:   debian.NginxSitesAvailable,
-		nginxEnabled: debian.NginxSitesEnabled,
+		provider:     provider,
+		stateDir:     paths.AbstraxProjectsDir,
+		nginxLayout:  provider.NginxLayout(),
+		nginxAvail:   provider.NginxSitesAvailable(),
+		nginxEnabled: provider.NginxSitesEnabled(),
+		nginxConfDir: provider.NginxConfigDir(),
 	}
 	_ = svc.migrateLegacyProjects()
 	return svc
@@ -184,6 +192,9 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 	for _, warning := range CheckSecurityWarnings(state.Path) {
 		fmt.Println(formatWarnings([]SecurityWarning{warning}))
 	}
+	if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "project paths, nginx config, or PHP-FPM settings"); note != "" {
+		fmt.Println("Security note: " + note)
+	}
 
 	return state, nil
 }
@@ -198,10 +209,9 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	id := IdentityFromState(state)
 
 	if state.VhostPath != "" && opts.RemoveVhost {
-		enabledLink := filepath.Join(s.nginxEnabled, filepath.Base(state.VhostPath))
-		_ = os.Remove(enabledLink)
-
+		_ = s.disableVhostFile(state.VhostPath)
 		_ = os.Remove(state.VhostPath)
+		_ = os.Remove(disabledVhostPath(state.VhostPath))
 		_, _ = s.runner.Run(ctx, "nginx", "-s", "reload")
 	}
 
@@ -324,8 +334,7 @@ func (s *Service) Enable(ctx context.Context, name string) error {
 	if state.VhostPath == "" {
 		return fmt.Errorf("project %q has no vhost", name)
 	}
-	link := filepath.Join(s.nginxEnabled, filepath.Base(state.VhostPath))
-	if err := os.Symlink(state.VhostPath, link); err != nil && !os.IsExist(err) {
+	if err := s.enableVhostFile(state.VhostPath); err != nil {
 		return fmt.Errorf("enabling vhost: %w", err)
 	}
 	_, err = s.runner.Run(ctx, "nginx", "-s", "reload")
@@ -341,8 +350,7 @@ func (s *Service) Disable(ctx context.Context, name string) error {
 	if state.VhostPath == "" {
 		return fmt.Errorf("project %q has no vhost", name)
 	}
-	link := filepath.Join(s.nginxEnabled, filepath.Base(state.VhostPath))
-	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+	if err := s.disableVhostFile(state.VhostPath); err != nil {
 		return fmt.Errorf("disabling vhost: %w", err)
 	}
 	_, err = s.runner.Run(ctx, "nginx", "-s", "reload")
@@ -362,12 +370,19 @@ func (s *Service) Reload(ctx context.Context, name string) error {
 }
 
 func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (string, error) {
-	if err := os.MkdirAll(s.nginxAvail, 0755); err != nil {
-		return "", err
-	}
-
 	confName := "abstrax-" + opts.Name
-	vhostPath := filepath.Join(s.nginxAvail, confName)
+	var vhostPath string
+	if s.nginxLayout == platform.NginxConfD {
+		if err := os.MkdirAll(s.nginxConfDir, 0755); err != nil {
+			return "", err
+		}
+		vhostPath = s.provider.NginxSiteConfigPath(confName)
+	} else {
+		if err := os.MkdirAll(s.nginxAvail, 0755); err != nil {
+			return "", err
+		}
+		vhostPath = filepath.Join(s.nginxAvail, confName)
+	}
 
 	conf := buildNginxConfig(opts)
 
@@ -381,19 +396,55 @@ func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (strin
 		return "", fmt.Errorf("nginx config validation failed: %s", res.Stderr)
 	}
 
-	// Enable.
-	if err := os.MkdirAll(s.nginxEnabled, 0755); err != nil {
-		return "", err
-	}
-	link := filepath.Join(s.nginxEnabled, confName)
-	_ = os.Remove(link)
-	if err := os.Symlink(vhostPath, link); err != nil {
+	if err := s.enableVhostFile(vhostPath); err != nil {
+		_ = os.Remove(vhostPath)
 		return "", fmt.Errorf("enabling nginx vhost: %w", err)
 	}
 
 	_, _ = s.runner.Run(ctx, "nginx", "-s", "reload")
 
 	return vhostPath, nil
+}
+
+func disabledVhostPath(vhostPath string) string {
+	return vhostPath + ".disabled"
+}
+
+func (s *Service) enableVhostFile(vhostPath string) error {
+	if s.nginxLayout == platform.NginxConfD {
+		disabled := disabledVhostPath(vhostPath)
+		if _, err := os.Stat(disabled); err == nil {
+			if err := os.Rename(disabled, vhostPath); err != nil {
+				return err
+			}
+		}
+		// Files present in conf.d are enabled by default.
+		return nil
+	}
+
+	if err := os.MkdirAll(s.nginxEnabled, 0755); err != nil {
+		return err
+	}
+	link := filepath.Join(s.nginxEnabled, filepath.Base(vhostPath))
+	_ = os.Remove(link)
+	return os.Symlink(vhostPath, link)
+}
+
+func (s *Service) disableVhostFile(vhostPath string) error {
+	if s.nginxLayout == platform.NginxConfD {
+		disabled := disabledVhostPath(vhostPath)
+		if _, err := os.Stat(vhostPath); os.IsNotExist(err) {
+			return nil
+		}
+		_ = os.Remove(disabled)
+		return os.Rename(vhostPath, disabled)
+	}
+
+	link := filepath.Join(s.nginxEnabled, filepath.Base(vhostPath))
+	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func buildNginxConfig(opts vhostConfig) string {
@@ -427,13 +478,20 @@ func buildNginxConfig(opts vhostConfig) string {
 	case RuntimePHP:
 		socket := opts.PHPSocket
 		if socket == "" {
-			socket = debianPlatform.PHPFPMDefaultSocket(normalizePHPVersion(opts.PHPVersion))
+			socket = platformProvider.PHPFPMDefaultSocket(normalizePHPVersion(opts.PHPVersion))
 		}
 		sb.WriteString("    location / {\n")
 		sb.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		sb.WriteString("    }\n\n")
 		sb.WriteString("    location ~ \\.php$ {\n")
-		sb.WriteString("        include snippets/fastcgi-php.conf;\n")
+		if include := platformProvider.NginxPHPFastCGIInclude(); include != "" {
+			sb.WriteString(fmt.Sprintf("        include %s;\n", include))
+		} else {
+			// RHEL-family nginx has no snippets/fastcgi-php.conf; inline equivalents.
+			sb.WriteString("        try_files $uri =404;\n")
+			sb.WriteString("        fastcgi_index index.php;\n")
+			sb.WriteString("        include fastcgi_params;\n")
+		}
 		sb.WriteString(fmt.Sprintf("        fastcgi_pass unix:%s;\n", socket))
 		sb.WriteString("        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;\n")
 		sb.WriteString("        fastcgi_param DOCUMENT_ROOT $realpath_root;\n")
@@ -508,7 +566,7 @@ func (s *Service) deleteState(name string) error {
 }
 
 func (s *Service) migrateLegacyProjects() error {
-	return migrateProjects(s.stateDir, debian.AbstraxProjectsDirLegacy)
+	return migrateProjects(s.stateDir, s.provider.Paths().AbstraxProjectsDirLegacy)
 }
 
 func migrateProjects(newDir, legacyDir string) error {

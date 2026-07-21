@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 )
 
@@ -17,13 +17,20 @@ import (
 type Service struct {
 	runner  *executil.Runner
 	confDir string
+	confExt string
+	svcName string
+	pkgName string
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
+	provider := platform.Resolve()
 	return &Service{
 		runner:  executil.New(dryRun, verbose),
-		confDir: debian.SupervisorConfDir,
+		confDir: provider.SupervisorConfigDir(),
+		confExt: provider.SupervisorConfigExtension(),
+		svcName: provider.SupervisorServiceName(),
+		pkgName: provider.SupervisorPackage(),
 	}
 }
 
@@ -31,18 +38,21 @@ func New(dryRun, verbose bool) *Service {
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*DaemonInfo, error) {
 	if !executil.Exists("supervisorctl") {
 		if opts.InstallSupervisor {
-			mgr := pkgmanager.NewApt(false, false)
-			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: "supervisor"}); err != nil {
+			mgr, _, err := pkgmanager.NewFromPlatform(false, false)
+			if err != nil {
+				return nil, err
+			}
+			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: s.pkgName}); err != nil {
 				return nil, fmt.Errorf("installing supervisor: %w", err)
 			}
 			r := executil.New(false, false)
 			if executil.SystemctlWorks() {
-				if _, err := r.Run(ctx, "systemctl", "enable", "--now", "supervisor"); err != nil {
-					return nil, fmt.Errorf("enabling supervisor: %w", err)
+				if _, err := r.Run(ctx, "systemctl", "enable", "--now", s.svcName); err != nil {
+					return nil, fmt.Errorf("enabling %s: %w", s.svcName, err)
 				}
 			} else if executil.Exists("service") {
-				if _, err := r.Run(ctx, "service", "supervisor", "start"); err != nil {
-					return nil, fmt.Errorf("starting supervisor: %w", err)
+				if _, err := r.Run(ctx, "service", s.svcName, "start"); err != nil {
+					return nil, fmt.Errorf("starting %s: %w", s.svcName, err)
 				}
 			}
 		} else {
@@ -222,7 +232,14 @@ func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 }
 
 func (s *Service) confPath(name string) string {
-	return filepath.Join(s.confDir, "abstrax-"+name+".conf")
+	ext := s.confExt
+	if ext == "" {
+		ext = ".conf"
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return filepath.Join(s.confDir, "abstrax-"+name+ext)
 }
 
 func (s *Service) rereadUpdate(ctx context.Context) error {

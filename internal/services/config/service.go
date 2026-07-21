@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"abstrax/internal/platform/debian"
+	"abstrax/internal/platform"
 )
 
 // Service manages Abstrax configuration.
@@ -20,7 +20,7 @@ type Service struct {
 
 // New creates a Service using the default config path.
 func New() *Service {
-	return &Service{path: debian.AbstraxConfig}
+	return &Service{path: platform.Resolve().Paths().AbstraxConfig}
 }
 
 // NewWithPath creates a Service with a custom config path (for tests).

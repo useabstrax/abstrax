@@ -122,15 +122,21 @@ const (
 	CacheConfig  = "cache.config"
 
 	// Firewall actions.
-	FirewallStatus   = "firewall.status"
-	FirewallEnable   = "firewall.enable"
-	FirewallDisable  = "firewall.disable"
-	FirewallAllow    = "firewall.allow"
-	FirewallDeny     = "firewall.deny"
-	FirewallAllowIP  = "firewall.allow_ip"
-	FirewallDenyIP   = "firewall.deny_ip"
-	FirewallRuleList = "firewall.rule.list"
-	FirewallRuleRm   = "firewall.rule.remove"
+	FirewallStatus        = "firewall.status"
+	FirewallInstall       = "firewall.install"
+	FirewallEnable        = "firewall.enable"
+	FirewallDisable       = "firewall.disable"
+	FirewallAllow         = "firewall.allow"
+	FirewallDeny          = "firewall.deny"
+	FirewallAllowIP       = "firewall.allow_ip"
+	FirewallDenyIP        = "firewall.deny_ip"
+	FirewallRuleList      = "firewall.rule.list"
+	FirewallRuleRm        = "firewall.rule.remove"
+	FirewallRemoveService = "firewall.remove.service"
+	FirewallRemovePort    = "firewall.remove.port"
+
+	// Repository actions.
+	RepoEnable = "repo.enable"
 
 	// Server info actions.
 	ServerStatus   = "server.status"

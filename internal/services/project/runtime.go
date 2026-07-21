@@ -9,6 +9,8 @@ import (
 
 	"abstrax/internal/confirm"
 	executil "abstrax/internal/exec"
+	"abstrax/internal/globals"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/config"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
@@ -86,7 +88,7 @@ func (spec RuntimeSpec) label() string {
 func (spec RuntimeSpec) Installed() bool {
 	switch spec.Runtime {
 	case RuntimePHP:
-		return packageInstalled(debianPlatform.PHPFPMServiceName(spec.Version))
+		return packageInstalled(platformProvider.PHPFPMServiceName(spec.Version))
 	case RuntimeNode:
 		return nodeMajorVersion() == nodeMajor(spec.Version)
 	case RuntimeRuby:
@@ -125,7 +127,11 @@ func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryR
 }
 
 func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun bool) error {
-	mgr := pkgmanager.NewApt(dryRun, false)
+	mgr, _, err := pkgmanager.NewFromPlatform(dryRun, false)
+	if err != nil {
+		return err
+	}
+	provider := platformProvider
 	svc := svcmanager.New(dryRun, false)
 
 	if err := mgr.Update(ctx); err != nil {
@@ -134,10 +140,31 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 
 	switch spec.Runtime {
 	case RuntimePHP:
+		if err := provider.ValidatePHPVersion(spec.Version); err != nil {
+			return err
+		}
 		cfg := config.New()
 		extensions, err := cfg.PHPExtensions()
 		if err != nil {
 			return fmt.Errorf("loading PHP extension config: %w", err)
+		}
+		repoOpts := platform.RepoOptions{
+			EnableRequiredRepos: globals.Flags.EnableRequiredRepos,
+			Yes:                 globals.Flags.Yes,
+			DryRun:              dryRun,
+			Verbose:             globals.Flags.Verbose,
+		}
+		enabler := platform.DefaultRepoEnabler(
+			func(ctx context.Context, name string) error {
+				return mgr.Install(ctx, pkgmanager.InstallOptions{Name: name, DryRun: dryRun})
+			},
+			func(ctx context.Context, name string, args ...string) error {
+				_, err := s.runner.Run(ctx, name, args...)
+				return err
+			},
+		)
+		if err := platform.EnsurePHPRepository(ctx, provider, spec.Version, repoOpts, enabler); err != nil {
+			return err
 		}
 		pkgs := config.PHPPackages(spec.Version, extensions)
 		for _, pkg := range pkgs {
@@ -145,34 +172,64 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 				return fmt.Errorf("installing %s: %w", pkg, err)
 			}
 		}
-		fpmPkg := debianPlatform.PHPFPMServiceName(spec.Version)
-		if err := svc.Enable(ctx, fpmPkg); err != nil {
+		fpmSvc := provider.PHPFPMServiceName(spec.Version)
+		if err := svc.Enable(ctx, fpmSvc); err != nil {
 			return err
 		}
-		return svc.Start(ctx, fpmPkg)
+		return svc.Start(ctx, fpmSvc)
 
 	case RuntimeNode:
-		major := nodeMajor(spec.Version)
-		setupScript := fmt.Sprintf("curl -fsSL https://deb.nodesource.com/setup_%s.x | bash -", major)
+		setupURL, err := provider.NodeSourceSetupURL(spec.Version)
+		if err != nil {
+			return err
+		}
+		setupScript := fmt.Sprintf("curl -fsSL %s | bash -", setupURL)
 		if _, err := s.runner.Run(ctx, "bash", "-c", setupScript); err != nil {
 			return fmt.Errorf("configuring NodeSource repository for Node.js %s: %w", spec.Version, err)
 		}
-		if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: "nodejs"}); err != nil {
+		if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: provider.NodePackage()}); err != nil {
 			return fmt.Errorf("installing Node.js %s: %w", spec.Version, err)
 		}
-		if nodeMajorVersion() != major {
+		wantMajor, err := platform.ValidateNodeMajor(spec.Version)
+		if err != nil {
+			return err
+		}
+		if nodeMajorVersion() != wantMajor {
 			return fmt.Errorf("Node.js %s was requested but a different version is installed", spec.Version)
 		}
 
 	case RuntimeRuby:
-		pkg := fmt.Sprintf("ruby%s", spec.Version)
-		if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
-			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: "ruby-full"}); err != nil {
-				return fmt.Errorf("installing Ruby %s: %w", spec.Version, err)
-			}
+		pkgs, err := provider.RubyPackages(spec.Version)
+		if err != nil {
+			return err
 		}
-		if !rubyMatchesVersion(spec.Version) {
-			return fmt.Errorf("Ruby %s was requested but a different version is installed", spec.Version)
+		if provider.RubySupportsExactVersion() {
+			// Debian: try versioned package, then ruby-full.
+			installed := false
+			for _, pkg := range pkgs {
+				if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err == nil {
+					installed = true
+					break
+				}
+			}
+			if !installed {
+				if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: "ruby-full"}); err != nil {
+					return fmt.Errorf("installing Ruby %s: %w", spec.Version, err)
+				}
+			}
+			if !rubyMatchesVersion(spec.Version) {
+				return fmt.Errorf("Ruby %s was requested but a different version is installed", spec.Version)
+			}
+		} else {
+			// RHEL: install stock ruby packages (typically ruby + ruby-devel).
+			for _, pkg := range pkgs {
+				if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg}); err != nil {
+					return fmt.Errorf("installing %s: %w", pkg, err)
+				}
+			}
+			if !executil.Exists("ruby") {
+				return fmt.Errorf("Ruby was installed but the ruby binary was not found")
+			}
 		}
 
 	default:
@@ -183,12 +240,7 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 }
 
 func packageInstalled(name string) bool {
-	cmd := exec.Command("dpkg-query", "-W", "-f=${Status}", name)
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(out), "install ok installed")
+	return pkgmanager.PackageInstalled(name)
 }
 
 var nodeVersionRE = regexp.MustCompile(`^v?(\d+)`)

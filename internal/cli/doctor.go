@@ -77,9 +77,19 @@ func NewDoctorCmd() *cobra.Command {
 			p.Line("  %-20s %s", "Service manager:", info.ServiceManager)
 			p.Line("  %-20s %s", "Firewall strategy:", profile.FirewallStrategy)
 			p.Line("  %-20s %s", "Nginx layout:", string(profile.NginxLayout))
-			p.Line("  %-20s %s", "Web user:", profile.WebUser)
+			if profile.NginxConfigDir != "" {
+				p.Line("  %-20s %s", "Nginx config dir:", profile.NginxConfigDir)
+			}
+			webIdentity := profile.WebUser
+			if profile.WebGroup != "" {
+				webIdentity = profile.WebUser + "/" + profile.WebGroup
+			}
+			p.Line("  %-20s %s", "Web user/group:", webIdentity)
 			p.Line("  %-20s %s", "Project root:", profile.DefaultProjectRoot)
 			p.Line("  %-20s %s", "PHP-FPM strategy:", profile.PHPFPMStrategy)
+			if profile.Family == "rhel" || (profile.SELinuxStatus != "" && profile.SELinuxStatus != platform.SELinuxUnknown) {
+				p.Line("  %-20s %s", "SELinux:", profile.SELinuxStatus)
+			}
 			p.Line("")
 
 			rootStr := "no"
@@ -92,11 +102,14 @@ func NewDoctorCmd() *cobra.Command {
 			if profile.SupportNote != "" {
 				p.Warn(profile.SupportNote)
 			}
+			if note := platform.SELinuxWarning(profile.SELinuxStatus, ""); note != "" {
+				p.Warn(note)
+			}
 
 			p.Line("")
 			p.Line("  Tools:")
 			printTool(p, "nginx", tools.Nginx)
-			printTool(p, "apache2", tools.Apache2)
+			printTool(p, "apache2/httpd", tools.Apache2)
 			printTool(p, "certbot", tools.Certbot)
 			printTool(p, "mysql", tools.MySQL)
 			printTool(p, "mariadb", tools.MariaDB)
@@ -104,6 +117,7 @@ func NewDoctorCmd() *cobra.Command {
 			printTool(p, "redis", tools.Redis)
 			printTool(p, "memcached", tools.Memcached)
 			printTool(p, "ufw", tools.UFW)
+			printTool(p, "firewalld", tools.Firewalld)
 			printTool(p, "curl", tools.Curl)
 			printTool(p, "git", tools.Git)
 			p.Line("")

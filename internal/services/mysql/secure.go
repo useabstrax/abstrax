@@ -9,6 +9,7 @@ import (
 	"time"
 
 	executil "abstrax/internal/exec"
+	"abstrax/internal/platform"
 	"abstrax/internal/random"
 )
 
@@ -19,33 +20,59 @@ const (
 	defaultMySQLDataDir  = "/var/lib/mysql"
 )
 
+func databaseProvider() platform.Provider {
+	return platform.Resolve()
+}
+
 // escapeSQLString escapes a string for use inside single-quoted SQL literals.
 func escapeSQLString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
 // buildRootPasswordSQL returns SQL to enable password auth for root over both
-// the localhost socket and TCP (127.0.0.1). Explicitly sets caching_sha2_password
-// so auth_socket/unix_socket is replaced on Debian/Ubuntu default installs.
+// the localhost socket and TCP (127.0.0.1).
 func buildRootPasswordSQL(password string) string {
+	return buildRootPasswordSQLWithPlugin(password, databaseProvider().DatabaseAuthPlugin())
+}
+
+func buildRootPasswordSQLWithPlugin(password string, plugin platform.DatabaseAuthPlugin) string {
 	esc := escapeSQLString(password)
-	return fmt.Sprintf(`ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '%s';
-CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED WITH caching_sha2_password BY '%s';
+	switch plugin {
+	case platform.DatabaseAuthNativePassword:
+		// MariaDB-compatible: avoid MySQL-8-only caching_sha2_password.
+		return fmt.Sprintf(`ALTER USER 'root'@'localhost' IDENTIFIED BY '%s';
+CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY '%s';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;`, esc, esc)
+	default:
+		if plugin == "" {
+			plugin = platform.DatabaseAuthCachingSHA2
+		}
+		return fmt.Sprintf(`ALTER USER 'root'@'localhost' IDENTIFIED WITH %s BY '%s';
+CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED WITH %s BY '%s';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION;`, plugin, esc, plugin, esc)
+	}
 }
 
 // buildSetRootPasswordSQL returns SQL to set root passwords for local connections.
 func buildSetRootPasswordSQL(password string) string {
-	return fmt.Sprintf("FLUSH PRIVILEGES;\n%s\nFLUSH PRIVILEGES;", buildRootPasswordSQL(password))
+	return buildSetRootPasswordSQLWithPlugin(password, databaseProvider().DatabaseAuthPlugin())
 }
 
-// buildSecureInstallSQL returns SQL to harden a fresh MySQL installation.
+func buildSetRootPasswordSQLWithPlugin(password string, plugin platform.DatabaseAuthPlugin) string {
+	return fmt.Sprintf("FLUSH PRIVILEGES;\n%s\nFLUSH PRIVILEGES;", buildRootPasswordSQLWithPlugin(password, plugin))
+}
+
+// buildSecureInstallSQL returns SQL to harden a fresh MySQL/MariaDB installation.
 func buildSecureInstallSQL(password string) string {
+	return buildSecureInstallSQLWithPlugin(password, databaseProvider().DatabaseAuthPlugin())
+}
+
+func buildSecureInstallSQLWithPlugin(password string, plugin platform.DatabaseAuthPlugin) string {
 	return fmt.Sprintf(`%s
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-FLUSH PRIVILEGES;`, buildRootPasswordSQL(password))
+FLUSH PRIVILEGES;`, buildRootPasswordSQLWithPlugin(password, plugin))
 }
 
 func resolveOrGeneratePassword(provided string) (password string, generated bool, err error) {
@@ -67,10 +94,13 @@ func (s *Service) defaultSocket() string {
 }
 
 func discoverMySQLSocket() string {
-	for _, path := range []string{
-		defaultMySQLSocket,
-		"/run/mysqld/mysqld.sock",
-	} {
+	for _, path := range databaseProvider().DatabaseSocketCandidates() {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	// Also try Debian defaults when provider resolution falls back unexpectedly.
+	for _, path := range []string{defaultMySQLSocket, "/run/mysqld/mysqld.sock"} {
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
@@ -89,23 +119,24 @@ func parseSocketFromMySQLConfig() string {
 
 func mysqlConfigPaths() []string {
 	var paths []string
-	if _, err := os.Stat(defaultMySQLConfFile); err == nil {
-		paths = append(paths, defaultMySQLConfFile)
-	}
-	for _, dir := range []string{
-		"/etc/mysql/conf.d",
-		"/etc/mysql/mysql.conf.d",
-		"/etc/mysql/mariadb.conf.d",
-	} {
-		entries, err := os.ReadDir(dir)
+	for _, entry := range databaseProvider().DatabaseConfigPaths() {
+		info, err := os.Stat(entry)
 		if err != nil {
 			continue
 		}
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cnf") {
+		if !info.IsDir() {
+			paths = append(paths, entry)
+			continue
+		}
+		entries, err := os.ReadDir(entry)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".cnf") {
 				continue
 			}
-			paths = append(paths, filepath.Join(dir, entry.Name()))
+			paths = append(paths, filepath.Join(entry, e.Name()))
 		}
 	}
 	return paths
@@ -159,15 +190,24 @@ func classifyRootConnectError(detail string) rootConnectStatus {
 }
 
 func mysqlDataDirExists() bool {
-	info, err := os.Stat(filepath.Join(defaultMySQLDataDir, "mysql"))
+	dataDir := databaseProvider().DatabaseDataDir()
+	if dataDir == "" {
+		dataDir = defaultMySQLDataDir
+	}
+	info, err := os.Stat(filepath.Join(dataDir, "mysql"))
 	return err == nil && info.IsDir()
 }
 
 func errMySQLAlreadyConfigured() error {
-	if mysqlDataDirExists() {
-		return fmt.Errorf("mysql is already configured: database files in %s were kept by `package remove` (only the package was removed, not the data). Use `mysql reset-root-password`, or run `package remove mysql-server --purge` and remove %s for a fresh install", defaultMySQLDataDir, defaultMySQLDataDir)
+	dataDir := databaseProvider().DatabaseDataDir()
+	if dataDir == "" {
+		dataDir = defaultMySQLDataDir
 	}
-	return fmt.Errorf("mysql is already configured; use `mysql reset-root-password` if you have lost the root password")
+	pkg := databaseProvider().DatabasePackage("")
+	if mysqlDataDirExists() {
+		return fmt.Errorf("%s is already configured: database files in %s were kept by `package remove` (only the package was removed, not the data). Use `mysql reset-root-password`, or run `package remove %s --purge` and remove %s for a fresh install", databaseProvider().DatabaseDisplayName(), dataDir, pkg, dataDir)
+	}
+	return fmt.Errorf("%s is already configured; use `mysql reset-root-password` if you have lost the root password", databaseProvider().DatabaseDisplayName())
 }
 
 func (s *Service) probeRootConnection(ctx context.Context) (rootConnectStatus, string) {
@@ -399,9 +439,12 @@ func (s *Service) startRecoveryMysqld(ctx context.Context) error {
 		return err
 	}
 
+	defaults := databaseProvider().DatabaseDefaultsFile()
 	args := []string{"--skip-grant-tables", "--skip-networking", "--daemonize"}
-	if _, err := os.Stat(defaultMySQLConfFile); err == nil {
-		args = append([]string{"--defaults-file=" + defaultMySQLConfFile}, args...)
+	if defaults != "" {
+		if _, err := os.Stat(defaults); err == nil {
+			args = append([]string{"--defaults-file=" + defaults}, args...)
+		}
 	}
 	if sock := s.defaultSocket(); sock != "" {
 		args = append(args, "--socket="+sock)
@@ -420,7 +463,11 @@ func (s *Service) stopRecoveryMysqld(ctx context.Context) error {
 		return nil
 	}
 
-	data, err := os.ReadFile(defaultMySQLPIDFile)
+	pidFile := databaseProvider().DatabasePIDFile()
+	if pidFile == "" {
+		pidFile = defaultMySQLPIDFile
+	}
+	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		return fmt.Errorf("stopping recovery mysqld: %w", err)
 	}

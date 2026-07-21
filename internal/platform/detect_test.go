@@ -39,3 +39,28 @@ func TestDebianDefaultsProvider(t *testing.T) {
 		t.Fatalf("DefaultProjectRoot = %q", p.DefaultProjectRoot())
 	}
 }
+
+func TestRHELDefaultsProvider(t *testing.T) {
+	p := platform.RHELDefaults()
+	if p.WebUser() != "nginx" {
+		t.Fatalf("WebUser = %q", p.WebUser())
+	}
+	if p.WebGroup() != "nginx" {
+		t.Fatalf("WebGroup = %q", p.WebGroup())
+	}
+	if p.DefaultProjectRoot() != "/var/www" {
+		t.Fatalf("DefaultProjectRoot = %q", p.DefaultProjectRoot())
+	}
+	if p.NginxLayout() != platform.NginxConfD {
+		t.Fatalf("NginxLayout = %q", p.NginxLayout())
+	}
+	if p.PHPFPMServiceName("8.2") != "php82-php-fpm" {
+		t.Fatalf("PHPFPMServiceName = %q", p.PHPFPMServiceName("8.2"))
+	}
+	if p.NginxSiteConfigPath("app") != "/etc/nginx/conf.d/app.conf" {
+		t.Fatalf("NginxSiteConfigPath = %q", p.NginxSiteConfigPath("app"))
+	}
+	if p.Profile().FirewallStrategy != "firewalld" {
+		t.Fatalf("FirewallStrategy = %q", p.Profile().FirewallStrategy)
+	}
+}

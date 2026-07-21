@@ -30,6 +30,11 @@ func NewPackageCmd() *cobra.Command {
 	return cmd
 }
 
+func packageManager(dryRun, verbose bool) (pkgmanager.Backend, error) {
+	mgr, _, err := pkgmanager.NewFromPlatform(dryRun, verbose)
+	return mgr, err
+}
+
 func newPkgInstallCmd() *cobra.Command {
 	var version string
 
@@ -46,7 +51,10 @@ func newPkgInstallCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)
+			mgr, err := packageManager(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			if err := mgr.Install(cmd.Context(), pkgmanager.InstallOptions{
 				Name:    name,
 				Version: version,
@@ -80,7 +88,10 @@ func newPkgRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)
+			mgr, err := packageManager(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			if err := mgr.Remove(cmd.Context(), pkgmanager.RemoveOptions{
 				Name:   name,
 				Purge:  purge,
@@ -106,7 +117,10 @@ func newPkgUpdateCmd() *cobra.Command {
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
-			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)
+			mgr, err := packageManager(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			if err := mgr.Update(cmd.Context()); err != nil {
 				return err
 			}
@@ -125,7 +139,10 @@ func newPkgUpgradeCmd() *cobra.Command {
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
-			mgr := pkgmanager.NewApt(globals.Flags.DryRun, globals.Flags.Verbose)
+			mgr, err := packageManager(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			if err := mgr.Upgrade(cmd.Context(), securityOnly); err != nil {
 				return err
 			}
@@ -143,7 +160,10 @@ func newPkgSearchCmd() *cobra.Command {
 		Short: "Search for packages",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr := pkgmanager.NewApt(false, globals.Flags.Verbose)
+			mgr, err := packageManager(false, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			pkgs, err := mgr.Search(cmd.Context(), args[0])
 			if err != nil {
 				return err
@@ -175,7 +195,10 @@ func newPkgInfoCmd() *cobra.Command {
 		Short: "Show information about a package",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr := pkgmanager.NewApt(false, globals.Flags.Verbose)
+			mgr, err := packageManager(false, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			info, err := mgr.Info(cmd.Context(), args[0])
 			if err != nil {
 				return err
@@ -204,7 +227,10 @@ func newPkgListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List installed packages",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr := pkgmanager.NewApt(false, globals.Flags.Verbose)
+			mgr, err := packageManager(false, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
 			pkgs, err := mgr.List(cmd.Context())
 			if err != nil {
 				return err
