@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-07-29
+
+### Fixed
+
+- **Passwordless sudo for managed users** — `user add --grant-sudo` and `user grant-sudo` now install an `/etc/sudoers.d/abstrax-<user>` drop-in with `NOPASSWD`. Previously only group membership was set, so Ubuntu/Debian and RHEL-family hosts still prompted for a password — which made sudo unusable for accounts created with `--disabled-password` (or without `--password`). Covered by unit tests for drop-in path/content, write/remove, dry-run, `visudo` validation, and grant/revoke wiring.
+
 ## [2.0.0] - 2026-07-21
 
 ### Added

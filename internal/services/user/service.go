@@ -14,12 +14,18 @@ import (
 
 // Service provides user management methods.
 type Service struct {
-	runner *executil.Runner
+	runner     *executil.Runner
+	dryRun     bool
+	sudoersDir string
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
-	return &Service{runner: executil.New(dryRun, verbose)}
+	return &Service{
+		runner:     executil.New(dryRun, verbose),
+		dryRun:     dryRun,
+		sudoersDir: defaultSudoersDir,
+	}
 }
 
 // Add creates a Linux user. The operation is idempotent - if the user already
@@ -114,7 +120,7 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) 
 	}
 
 	if opts.GrantSudo {
-		if err := s.addToGroup(ctx, opts.Username, SudoGroup()); err != nil {
+		if err := s.GrantSudo(ctx, opts.Username, opts.DryRun); err != nil {
 			return nil, fmt.Errorf("granting sudo to %s: %w", opts.Username, err)
 		}
 	}
@@ -167,17 +173,29 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 		_, _ = s.runner.Run(ctx, "crontab", "-r", "-u", opts.Username)
 	}
 
+	// Best effort: remove any Abstrax-managed passwordless sudoers drop-in.
+	_ = s.removePasswordlessSudo(opts.Username)
+
 	return nil
 }
 
-// GrantSudo adds a user to the platform sudo group (sudo or wheel).
+// GrantSudo adds a user to the platform sudo group (sudo or wheel) and installs
+// a passwordless sudoers drop-in. Group membership alone still requires a
+// password on Ubuntu/Debian, which breaks accounts created without one.
 func (s *Service) GrantSudo(ctx context.Context, username string, dryRun bool) error {
-	return s.addToGroup(ctx, username, SudoGroup())
+	if err := s.addToGroup(ctx, username, SudoGroup()); err != nil {
+		return err
+	}
+	return s.writePasswordlessSudo(username)
 }
 
-// RevokeSudo removes a user from the platform sudo group (sudo or wheel).
+// RevokeSudo removes a user from the platform sudo group (sudo or wheel) and
+// removes any Abstrax-managed passwordless sudoers drop-in.
 func (s *Service) RevokeSudo(ctx context.Context, username string, dryRun bool) error {
-	return s.removeFromGroup(ctx, username, SudoGroup())
+	if err := s.removeFromGroup(ctx, username, SudoGroup()); err != nil {
+		return err
+	}
+	return s.removePasswordlessSudo(username)
 }
 
 // SetGroups sets a user's supplementary groups, replacing existing ones.
