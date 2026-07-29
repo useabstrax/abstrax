@@ -112,7 +112,7 @@ func newUserAddCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&opts.CreateHome, "create-home", true, "Create home directory")
 	cmd.Flags().BoolVar(&opts.NoCreateHome, "no-create-home", false, "Do not create home directory")
-	cmd.Flags().BoolVar(&opts.GrantSudo, "grant-sudo", false, "Add user to sudo group")
+	cmd.Flags().BoolVar(&opts.GrantSudo, "grant-sudo", false, "Grant passwordless sudo (sudo group + sudoers drop-in)")
 	cmd.Flags().StringVar(&groupsStr, "groups", "", "Additional groups (comma-separated)")
 	cmd.Flags().StringVar(&opts.Shell, "shell", "", "Login shell")
 	cmd.Flags().StringVar(&opts.UID, "uid", "", "Custom UID")
@@ -183,7 +183,7 @@ func newUserRemoveCmd() *cobra.Command {
 func newUserGrantSudoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "grant-sudo <name>",
-		Short: "Grant sudo privileges to a user",
+		Short: "Grant passwordless sudo privileges to a user",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			username := args[0]
