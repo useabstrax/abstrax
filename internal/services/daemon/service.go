@@ -11,6 +11,7 @@ import (
 	executil "abstrax/internal/exec"
 	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
+	"abstrax/internal/services/svcmanager"
 )
 
 // Service manages daemons via Supervisor.
@@ -34,29 +35,60 @@ func New(dryRun, verbose bool) *Service {
 	}
 }
 
+func errSupervisorMissing() error {
+	return fmt.Errorf("supervisor is not installed; run `sudo abstrax daemon install`")
+}
+
+func (s *Service) requireSupervisor() error {
+	if executil.Exists("supervisorctl") {
+		return nil
+	}
+	return errSupervisorMissing()
+}
+
+// Install installs Supervisor and enables/starts its service.
+func (s *Service) Install(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
+	result := &InstallResult{
+		Package: s.pkgName,
+		Service: s.svcName,
+	}
+	if executil.Exists("supervisorctl") {
+		result.AlreadyInstalled = true
+		return result, nil
+	}
+
+	fmt.Printf("Installing %s...\n", s.pkgName)
+	mgr, _, err := pkgmanager.NewFromPlatform(opts.DryRun, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: s.pkgName, DryRun: opts.DryRun}); err != nil {
+		return nil, fmt.Errorf("installing %s: %w", s.pkgName, err)
+	}
+
+	svcMgr := svcmanager.New(opts.DryRun, false)
+	if err := svcMgr.Enable(ctx, s.svcName); err != nil {
+		return nil, err
+	}
+	if err := svcMgr.Start(ctx, s.svcName); err != nil {
+		return nil, err
+	}
+
+	if !opts.DryRun && !executil.Exists("supervisorctl") {
+		return nil, fmt.Errorf("installed %s but supervisorctl was not found on PATH", s.pkgName)
+	}
+	return result, nil
+}
+
 // Add creates a new Supervisor-managed daemon.
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*DaemonInfo, error) {
 	if !executil.Exists("supervisorctl") {
 		if opts.InstallSupervisor {
-			mgr, _, err := pkgmanager.NewFromPlatform(false, false)
-			if err != nil {
+			if _, err := s.Install(ctx, InstallOptions{DryRun: opts.DryRun}); err != nil {
 				return nil, err
 			}
-			if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: s.pkgName}); err != nil {
-				return nil, fmt.Errorf("installing supervisor: %w", err)
-			}
-			r := executil.New(false, false)
-			if executil.SystemctlWorks() {
-				if _, err := r.Run(ctx, "systemctl", "enable", "--now", s.svcName); err != nil {
-					return nil, fmt.Errorf("enabling %s: %w", s.svcName, err)
-				}
-			} else if executil.Exists("service") {
-				if _, err := r.Run(ctx, "service", s.svcName, "start"); err != nil {
-					return nil, fmt.Errorf("starting %s: %w", s.svcName, err)
-				}
-			}
 		} else {
-			return nil, fmt.Errorf("supervisor is not installed; pass --install-supervisor to install it")
+			return nil, fmt.Errorf("supervisor is not installed; run `sudo abstrax daemon install` (or pass --install-supervisor)")
 		}
 	}
 
@@ -86,6 +118,10 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*DaemonInfo, error)
 
 // Remove removes a daemon.
 func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
+	if err := s.requireSupervisor(); err != nil {
+		return err
+	}
+
 	path := s.confPath(opts.Name)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -113,6 +149,10 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 
 // Modify updates an existing daemon's configuration.
 func (s *Service) Modify(ctx context.Context, opts AddOptions) (*DaemonInfo, error) {
+	if err := s.requireSupervisor(); err != nil {
+		return nil, err
+	}
+
 	path := s.confPath(opts.Name)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -132,24 +172,37 @@ func (s *Service) Modify(ctx context.Context, opts AddOptions) (*DaemonInfo, err
 
 // Start starts a daemon.
 func (s *Service) Start(ctx context.Context, name string) error {
+	if err := s.requireSupervisor(); err != nil {
+		return err
+	}
 	_, err := s.runner.Run(ctx, "supervisorctl", "start", name)
 	return err
 }
 
 // Stop stops a daemon.
 func (s *Service) Stop(ctx context.Context, name string) error {
+	if err := s.requireSupervisor(); err != nil {
+		return err
+	}
 	_, err := s.runner.Run(ctx, "supervisorctl", "stop", name)
 	return err
 }
 
 // Restart restarts a daemon.
 func (s *Service) Restart(ctx context.Context, name string) error {
+	if err := s.requireSupervisor(); err != nil {
+		return err
+	}
 	_, err := s.runner.Run(ctx, "supervisorctl", "restart", name)
 	return err
 }
 
 // Status returns the status of a daemon.
 func (s *Service) Status(ctx context.Context, name string) (*DaemonInfo, error) {
+	if err := s.requireSupervisor(); err != nil {
+		return nil, err
+	}
+
 	res, err := s.runner.RunSilent(ctx, "supervisorctl", "status", name)
 	if err != nil {
 		return nil, fmt.Errorf("supervisor status %s: %w", name, err)
@@ -168,8 +221,12 @@ func (s *Service) Status(ctx context.Context, name string) (*DaemonInfo, error) 
 
 // List returns all supervisor-managed daemons.
 func (s *Service) List(ctx context.Context) ([]DaemonInfo, error) {
+	if err := s.requireSupervisor(); err != nil {
+		return nil, err
+	}
+
 	res, err := s.runner.RunSilent(ctx, "supervisorctl", "status")
-	if err != nil && res.ExitCode == 0 {
+	if err != nil && res.Stdout == "" {
 		return nil, fmt.Errorf("supervisor status: %w", err)
 	}
 
@@ -197,6 +254,10 @@ func (s *Service) List(ctx context.Context) ([]DaemonInfo, error) {
 
 // Logs returns the log output for a daemon.
 func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
+	if err := s.requireSupervisor(); err != nil {
+		return "", err
+	}
+
 	stream := ""
 	switch {
 	case opts.Stderr && !opts.Stdout:
