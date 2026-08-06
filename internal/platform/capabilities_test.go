@@ -29,6 +29,42 @@ func TestRHELDatabaseProvider(t *testing.T) {
 
 func TestDebianDatabaseProvider(t *testing.T) {
 	p := platform.DebianDefaults()
+	if p.DatabaseEngine() != platform.DatabaseMariaDB {
+		t.Fatalf("engine = %q", p.DatabaseEngine())
+	}
+	if p.DatabasePackage("") != "mariadb-server" {
+		t.Fatalf("package = %q", p.DatabasePackage(""))
+	}
+	if p.DatabasePackage("8.0") != "mariadb-server" {
+		t.Fatalf("versioned package = %q", p.DatabasePackage("8.0"))
+	}
+	if p.DatabaseServiceName() != "mariadb" {
+		t.Fatalf("service = %q", p.DatabaseServiceName())
+	}
+	if !strings.Contains(p.DatabaseDisplayName(), "MariaDB") {
+		t.Fatalf("display = %q", p.DatabaseDisplayName())
+	}
+	if p.DatabaseAuthPlugin() != platform.DatabaseAuthNativePassword {
+		t.Fatalf("auth plugin = %q", p.DatabaseAuthPlugin())
+	}
+}
+
+func TestUbuntuDatabaseProvider(t *testing.T) {
+	info := &platform.Info{
+		Family: "debian",
+		Profile: platform.Profile{
+			Family:       "debian",
+			DistroID:     "ubuntu",
+			DistroName:   "Ubuntu 24.04 LTS",
+			SupportLevel: platform.SupportOfficial,
+			WebUser:      "www-data",
+			WebGroup:     "www-data",
+		},
+	}
+	p, err := platform.For(info)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if p.DatabaseEngine() != platform.DatabaseMySQL {
 		t.Fatalf("engine = %q", p.DatabaseEngine())
 	}

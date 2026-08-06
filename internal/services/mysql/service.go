@@ -76,7 +76,8 @@ func (s *Service) Test(ctx context.Context) error {
 }
 
 // Install installs MySQL/MariaDB, applies secure defaults, and sets the root password.
-// On RHEL-family systems this installs MariaDB as the MySQL-compatible database server.
+// On RHEL-family systems and Debian (not Ubuntu), this installs MariaDB as the
+// MySQL-compatible database server.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswordResult, error) {
 	if opts.DryRun {
 		return dryRunPasswordResult(), nil
@@ -91,7 +92,7 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 
 	pkg := provider.DatabasePackage(opts.Version)
 	if opts.Version != "" && provider.DatabaseEngine() == platform.DatabaseMariaDB {
-		fmt.Printf("Note: version pinning is ignored on RHEL-family systems; installing stock %s.\n", pkg)
+		fmt.Printf("Note: version pinning is ignored when installing MariaDB; installing stock %s.\n", pkg)
 		pkg = provider.DatabasePackage("")
 	}
 
