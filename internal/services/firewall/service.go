@@ -51,15 +51,23 @@ func detectBackend() string {
 }
 
 func (s *Service) requireBackend() error {
-	if s.backend == "" {
-		provider := platform.Resolve()
-		pkg := provider.FirewallPackage()
-		if pkg != "" {
-			return fmt.Errorf("no supported firewall backend found; install %s with `sudo abstrax firewall install`, then retry", pkg)
-		}
-		return fmt.Errorf("no supported firewall backend found (ufw or firewalld)")
+	if s.backend != "" {
+		return nil
 	}
-	return nil
+	provider := platform.Resolve()
+	pkg := provider.FirewallPackage()
+	if pkg == "" {
+		switch provider.Profile().Family {
+		case "debian":
+			pkg = "ufw"
+		case "rhel":
+			pkg = "firewalld"
+		}
+	}
+	if pkg != "" {
+		return fmt.Errorf("no supported firewall backend found; install %s with `sudo abstrax firewall install`, then retry", pkg)
+	}
+	return fmt.Errorf("no supported firewall backend found (ufw or firewalld)")
 }
 
 // Install installs the platform firewall package (ufw on Debian-family, firewalld

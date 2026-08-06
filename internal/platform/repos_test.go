@@ -2,6 +2,7 @@ package platform_test
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -46,6 +47,14 @@ func TestSupportsAutomaticRepoEnable(t *testing.T) {
 	rhel := rhelProviderFor(t, "rhel", "Red Hat Enterprise Linux 9.5", platform.SupportCompatible)
 	if platform.SupportsAutomaticRepoEnable(rhel, platform.RepoEPEL) {
 		t.Fatal("rhel should not auto-enable EPEL")
+	}
+
+	debian := platform.DebianDefaults()
+	if !platform.SupportsAutomaticRepoEnable(debian, platform.RepoOndrej) {
+		t.Fatal("debian should auto-enable Ondřej")
+	}
+	if platform.SupportsAutomaticRepoEnable(debian, platform.RepoRemi) {
+		t.Fatal("debian should not auto-enable Remi")
 	}
 }
 
@@ -187,16 +196,70 @@ func TestEnsureRemiUsesEL10URL(t *testing.T) {
 	}
 }
 
-func TestEnsurePHPRepositoryDebianNoop(t *testing.T) {
-	err := platform.EnsurePHPRepository(context.Background(), platform.DebianDefaults(), "8.3", platform.RepoOptions{}, platform.RepoEnabler{
+func TestEnsurePHPRepositoryDebianConfiguresOndrej(t *testing.T) {
+	files := map[string][]byte{}
+	var installed []string
+	var ran []string
+	err := platform.EnsurePHPRepository(context.Background(), platform.DebianDefaults(), "8.5", platform.RepoOptions{}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
-			t.Fatal("should not install repos on debian")
+			installed = append(installed, name)
 			return nil
 		},
-		Run: func(ctx context.Context, name string, args ...string) error { return nil },
+		Run: func(ctx context.Context, name string, args ...string) error {
+			ran = append(ran, name+" "+strings.Join(args, " "))
+			if name == "bash" {
+				// Simulate keyring package installing the sury keyring path.
+				files["/usr/share/keyrings/debsuryorg-archive-keyring.gpg"] = []byte("key")
+			}
+			return nil
+		},
+		FileExists: func(path string) bool {
+			_, ok := files[path]
+			return ok
+		},
+		ReadFile: func(path string) ([]byte, error) {
+			data, ok := files[path]
+			if !ok {
+				return nil, os.ErrNotExist
+			}
+			return data, nil
+		},
+		WriteFile: func(path string, data []byte, perm os.FileMode) error {
+			files[path] = append([]byte(nil), data...)
+			return nil
+		},
+		RemoveFile: func(path string) error {
+			delete(files, path)
+			return nil
+		},
+		Glob: func(pattern string) ([]string, error) { return nil, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(installed) < 2 {
+		t.Fatalf("expected ca-certificates/curl installs, got %#v", installed)
+	}
+	list, ok := files["/etc/apt/sources.list.d/abstrax-ondrej-php.list"]
+	if !ok {
+		t.Fatal("expected abstrax ondrej list to be written")
+	}
+	body := string(list)
+	if !strings.Contains(body, "packages.sury.org/php/") {
+		t.Fatalf("list = %q", body)
+	}
+	if !strings.Contains(body, " bookworm ") {
+		t.Fatalf("expected bookworm suite in %q", body)
+	}
+	foundUpdate := false
+	for _, cmd := range ran {
+		if strings.HasPrefix(cmd, "apt-get update") {
+			foundUpdate = true
+			break
+		}
+	}
+	if !foundUpdate {
+		t.Fatalf("expected apt-get update, got %#v", ran)
 	}
 }
 
@@ -205,8 +268,8 @@ func TestPHPProviderParity(t *testing.T) {
 	if !debian.SupportsMultiplePHPVersions() {
 		t.Fatal("debian should support multiple PHP versions")
 	}
-	if debian.RequiresExternalRepoForPHP("8.3") {
-		t.Fatal("debian should not require Remi")
+	if !debian.RequiresExternalRepoForPHP("8.3") {
+		t.Fatal("debian should require Ondřej for multi-version PHP")
 	}
 	if debian.PHPFPMServiceName("8.3") != "php8.3-fpm" {
 		t.Fatalf("debian service = %q", debian.PHPFPMServiceName("8.3"))

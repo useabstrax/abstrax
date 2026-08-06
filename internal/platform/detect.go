@@ -93,7 +93,9 @@ func firewallStrategy(backend, family string) string {
 		if backend == "ufw" {
 			return "ufw"
 		}
-		return "unknown"
+		// Prefer the family default even when ufw is missing so doctor
+		// and profiles report the intended strategy.
+		return "ufw"
 	case "rhel":
 		if backend == "firewalld" {
 			return "firewalld"

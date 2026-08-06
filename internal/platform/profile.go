@@ -44,6 +44,8 @@ type Profile struct {
 	DistroID           string        `json:"distro_id"`
 	DistroName         string        `json:"distro_name"`
 	VersionID          string        `json:"version_id"`
+	VersionCodename    string        `json:"version_codename,omitempty"`
+	UbuntuCodename     string        `json:"ubuntu_codename,omitempty"`
 	Family             string        `json:"family"`
 	PackageManager     string        `json:"package_manager"`
 	ServiceManager     string        `json:"service_manager"`

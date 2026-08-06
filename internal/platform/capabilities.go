@@ -20,9 +20,9 @@ const (
 type DatabaseAuthPlugin string
 
 const (
-	// DatabaseAuthCachingSHA2 is MySQL 8's default password plugin (Debian mysql-server).
+	// DatabaseAuthCachingSHA2 is MySQL 8's default password plugin (Ubuntu mysql-server).
 	DatabaseAuthCachingSHA2 DatabaseAuthPlugin = "caching_sha2_password"
-	// DatabaseAuthNativePassword is MariaDB-compatible password auth (RHEL mariadb-server).
+	// DatabaseAuthNativePassword is MariaDB-compatible password auth (Debian/RHEL mariadb-server).
 	DatabaseAuthNativePassword DatabaseAuthPlugin = "mysql_native_password"
 )
 

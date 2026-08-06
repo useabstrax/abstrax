@@ -135,7 +135,9 @@ func (p *debianProvider) PHPFPMPoolDir(version string) string {
 func (p *debianProvider) SupportsMultiplePHPVersions() bool { return true }
 func (p *debianProvider) RequiresExternalRepoForPHP(version string) bool {
 	_ = version
-	return false
+	// Multi-version PHP packages come from Ondřej Surý's PPA/DPA
+	// (ppa:ondrej/php on Ubuntu-like, packages.sury.org on Debian).
+	return true
 }
 func (p *debianProvider) ValidatePHPVersion(version string) error {
 	_, err := NormalizePHPVersion(version)
@@ -169,20 +171,59 @@ func (p *debianProvider) NginxPHPFastCGIInclude() string {
 }
 func (p *debianProvider) SudoGroup() string { return p.provider.SudoGroup() }
 
-func (p *debianProvider) DatabaseEngine() DatabaseEngine { return DatabaseMySQL }
+// debianUsesDistroMariaDB reports whether this Debian-family distro ships MariaDB
+// rather than Oracle MySQL in its default apt repositories.
+func (p *debianProvider) debianUsesDistroMariaDB() bool {
+	id := strings.ToLower(p.profile.DistroID)
+	switch id {
+	case "ubuntu", "pop", "linuxmint":
+		return false
+	default:
+		// Debian and Raspberry Pi OS provide mariadb-server; mysql-server is absent.
+		return true
+	}
+}
+
+func (p *debianProvider) DatabaseEngine() DatabaseEngine {
+	if p.debianUsesDistroMariaDB() {
+		return DatabaseMariaDB
+	}
+	return DatabaseMySQL
+}
+
 func (p *debianProvider) DatabasePackage(version string) string {
+	if p.debianUsesDistroMariaDB() {
+		return "mariadb-server"
+	}
 	if version != "" {
 		return "mysql-server-" + version
 	}
 	return "mysql-server"
 }
-func (p *debianProvider) DatabaseServiceName() string { return "mysql" }
-func (p *debianProvider) DatabaseDisplayName() string { return "MySQL" }
+
+func (p *debianProvider) DatabaseServiceName() string {
+	if p.debianUsesDistroMariaDB() {
+		return "mariadb"
+	}
+	return "mysql"
+}
+
+func (p *debianProvider) DatabaseDisplayName() string {
+	if p.debianUsesDistroMariaDB() {
+		return "MariaDB (MySQL-compatible)"
+	}
+	return "MySQL"
+}
+
 func (p *debianProvider) DatabaseAuthPlugin() DatabaseAuthPlugin {
+	if p.debianUsesDistroMariaDB() {
+		return DatabaseAuthNativePassword
+	}
 	return DatabaseAuthCachingSHA2
 }
+
 func (p *debianProvider) DatabaseSocketCandidates() []string {
-	return []string{"/var/run/mysqld/mysqld.sock", "/run/mysqld/mysqld.sock"}
+	return []string{"/var/run/mysqld/mysqld.sock", "/run/mysqld/mysqld.sock", "/run/mariadb/mariadb.sock"}
 }
 func (p *debianProvider) DatabaseConfigPaths() []string {
 	return []string{"/etc/mysql/my.cnf", "/etc/mysql/conf.d", "/etc/mysql/mysql.conf.d", "/etc/mysql/mariadb.conf.d"}
@@ -435,6 +476,8 @@ func Current() (Provider, *Info, error) {
 func DebianDefaults() Provider {
 	return newDebianProvider(Profile{
 		Family:             "debian",
+		DistroID:           "debian",
+		VersionCodename:    "bookworm",
 		NginxLayout:        NginxSitesAvailableEnabled,
 		NginxConfigDir:     "/etc/nginx/sites-available",
 		WebUser:            "www-data",
