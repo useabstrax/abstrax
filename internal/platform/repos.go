@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -11,15 +12,17 @@ import (
 type RepoName string
 
 const (
-	RepoEPEL RepoName = "epel"
-	RepoCRB  RepoName = "crb"
-	RepoRemi RepoName = "remi"
+	RepoEPEL   RepoName = "epel"
+	RepoCRB    RepoName = "crb"
+	RepoRemi   RepoName = "remi"
+	RepoOndrej RepoName = "ondrej"
 )
 
 // RepoOptions controls repository enablement behaviour.
 type RepoOptions struct {
 	// EnableRequiredRepos allows automatic enablement of policy-sensitive repos
 	// (EPEL/Remi on RHEL/Oracle). Rocky/Alma may enable EPEL without this flag.
+	// Ondřej on Debian-family is enabled automatically when PHP is installed.
 	EnableRequiredRepos bool
 	// Yes skips confirmation prompts when confirmation is used by callers.
 	Yes     bool
@@ -29,9 +32,14 @@ type RepoOptions struct {
 
 // RepoEnabler installs packages and runs commands for repository setup.
 type RepoEnabler struct {
-	Install func(ctx context.Context, name string) error
-	Run     func(ctx context.Context, name string, args ...string) error
-	Exists  func(name string) bool
+	Install    func(ctx context.Context, name string) error
+	Run        func(ctx context.Context, name string, args ...string) error
+	Exists     func(name string) bool
+	FileExists func(path string) bool
+	ReadFile   func(path string) ([]byte, error)
+	WriteFile  func(path string, data []byte, perm os.FileMode) error
+	RemoveFile func(path string) error
+	Glob       func(pattern string) ([]string, error)
 }
 
 // DefaultRepoEnabler builds a RepoEnabler using the system package manager helpers.
@@ -49,7 +57,13 @@ func DefaultRepoEnabler(install func(ctx context.Context, name string) error, ru
 // SupportsAutomaticRepoEnable reports whether the provider may enable a repo without
 // an explicit --enable-required-repos flag.
 func SupportsAutomaticRepoEnable(provider Provider, repo RepoName) bool {
-	if provider == nil || !provider.Profile().IsRHELFamily() {
+	if provider == nil {
+		return false
+	}
+	if provider.Profile().IsDebianFamily() {
+		return repo == RepoOndrej
+	}
+	if !provider.Profile().IsRHELFamily() {
 		return false
 	}
 	id := strings.ToLower(provider.Profile().DistroID)
@@ -70,8 +84,21 @@ func SupportsAutomaticRepoEnable(provider Provider, repo RepoName) bool {
 
 // EnsureRepository enables a named repository according to provider policy.
 func EnsureRepository(ctx context.Context, provider Provider, repo RepoName, opts RepoOptions, enabler RepoEnabler) error {
-	if provider == nil || !provider.Profile().IsRHELFamily() {
+	if provider == nil {
 		return nil
+	}
+	switch repo {
+	case RepoEPEL, RepoCRB, RepoRemi:
+		if !provider.Profile().IsRHELFamily() {
+			return nil
+		}
+	case RepoOndrej:
+		if !provider.Profile().IsDebianFamily() {
+			return fmt.Errorf("Ondřej PHP repository is only available on Debian-family systems")
+		}
+		return ensureOndrejRepo(ctx, provider, opts, enabler)
+	default:
+		return fmt.Errorf("unknown repository %q", repo)
 	}
 	switch repo {
 	case RepoEPEL:
@@ -191,11 +218,14 @@ func RemiReleaseURL(provider Provider) (string, error) {
 	return fmt.Sprintf("https://rpms.remirepo.net/enterprise/remi-release-%d.rpm", maj), nil
 }
 
-// EnsurePHPRepository enables Remi (and dependencies) when the provider requires
-// an external repo for the requested PHP version.
+// EnsurePHPRepository enables the third-party PHP repository required by the
+// provider (Ondřej on Debian-family, Remi on RHEL-family).
 func EnsurePHPRepository(ctx context.Context, provider Provider, version string, opts RepoOptions, enabler RepoEnabler) error {
 	if provider == nil || !provider.RequiresExternalRepoForPHP(version) {
 		return nil
+	}
+	if provider.Profile().IsDebianFamily() {
+		return EnsureRepository(ctx, provider, RepoOndrej, opts, enabler)
 	}
 	return EnsureRepository(ctx, provider, RepoRemi, opts, enabler)
 }

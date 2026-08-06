@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **PHP install on Debian-family** — `project add --php` (and runtime install) now enables Ondřej Surý’s PHP repository before installing versioned packages. Debian uses `packages.sury.org`; Ubuntu and derivatives use `ppa:ondrej/php`. This fixes failures such as `Unable to locate package php8.5-fpm` on Debian 13, where stock apt does not ship that version. Also available via `abstrax repo enable ondrej`.
+
 ## [2.0.1] - 2026-07-29
 
 ### Fixed

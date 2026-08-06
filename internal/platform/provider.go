@@ -135,7 +135,9 @@ func (p *debianProvider) PHPFPMPoolDir(version string) string {
 func (p *debianProvider) SupportsMultiplePHPVersions() bool { return true }
 func (p *debianProvider) RequiresExternalRepoForPHP(version string) bool {
 	_ = version
-	return false
+	// Multi-version PHP packages come from Ondřej Surý's PPA/DPA
+	// (ppa:ondrej/php on Ubuntu-like, packages.sury.org on Debian).
+	return true
 }
 func (p *debianProvider) ValidatePHPVersion(version string) error {
 	_, err := NormalizePHPVersion(version)
@@ -435,6 +437,8 @@ func Current() (Provider, *Info, error) {
 func DebianDefaults() Provider {
 	return newDebianProvider(Profile{
 		Family:             "debian",
+		DistroID:           "debian",
+		VersionCodename:    "bookworm",
 		NginxLayout:        NginxSitesAvailableEnabled,
 		NginxConfigDir:     "/etc/nginx/sites-available",
 		WebUser:            "www-data",

@@ -8,11 +8,13 @@ import (
 
 // OSRelease holds parsed fields from /etc/os-release.
 type OSRelease struct {
-	ID         string
-	IDLike     string
-	Name       string
-	PrettyName string
-	VersionID  string
+	ID              string
+	IDLike          string
+	Name            string
+	PrettyName      string
+	VersionID       string
+	VersionCodename string
+	UbuntuCodename  string
 }
 
 func parseOSReleaseReader(r io.Reader) (OSRelease, error) {
@@ -34,11 +36,13 @@ func parseOSReleaseReader(r io.Reader) (OSRelease, error) {
 	}
 
 	return OSRelease{
-		ID:         strings.ToLower(kv["ID"]),
-		IDLike:     strings.ToLower(kv["ID_LIKE"]),
-		Name:       kv["NAME"],
-		PrettyName: kv["PRETTY_NAME"],
-		VersionID:  kv["VERSION_ID"],
+		ID:              strings.ToLower(kv["ID"]),
+		IDLike:          strings.ToLower(kv["ID_LIKE"]),
+		Name:            kv["NAME"],
+		PrettyName:      kv["PRETTY_NAME"],
+		VersionID:       kv["VERSION_ID"],
+		VersionCodename: strings.ToLower(kv["VERSION_CODENAME"]),
+		UbuntuCodename:  strings.ToLower(kv["UBUNTU_CODENAME"]),
 	}, nil
 }
 
@@ -47,6 +51,8 @@ func classifyRelease(rel OSRelease) Profile {
 		DistroID:         rel.ID,
 		DistroName:       rel.PrettyName,
 		VersionID:        rel.VersionID,
+		VersionCodename:  rel.VersionCodename,
+		UbuntuCodename:   rel.UbuntuCodename,
 		Family:           detectFamily(rel),
 		NginxLayout:      NginxLayoutUnknown,
 		PHPFPMStrategy:   "unknown",
