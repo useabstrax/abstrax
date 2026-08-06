@@ -72,6 +72,7 @@ const (
 	DaemonStatus  = "daemon.status"
 	DaemonList    = "daemon.list"
 	DaemonLogs    = "daemon.logs"
+	DaemonInstall = "daemon.install"
 
 	// Project actions.
 	ProjectAdd     = "project.add"

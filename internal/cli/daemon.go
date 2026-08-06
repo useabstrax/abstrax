@@ -20,6 +20,7 @@ func NewDaemonCmd() *cobra.Command {
 		Short: "Manage background processes (Supervisor)",
 	}
 
+	cmd.AddCommand(newDaemonInstallCmd())
 	cmd.AddCommand(newDaemonAddCmd())
 	cmd.AddCommand(newDaemonRemoveCmd())
 	cmd.AddCommand(newDaemonModifyCmd())
@@ -31,6 +32,38 @@ func NewDaemonCmd() *cobra.Command {
 	cmd.AddCommand(newDaemonLogsCmd())
 
 	return cmd
+}
+
+func newDaemonInstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "install",
+		Short: "Install Supervisor",
+		Long: `Install Supervisor and enable/start its service.
+
+  Debian/Ubuntu: package supervisor, service supervisor
+  Rocky/Alma/RHEL: package supervisor, service supervisord
+
+After install, manage processes with abstrax daemon add/list/start/stop.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+
+			svc := daemon.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			result, err := svc.Install(cmd.Context(), daemon.InstallOptions{
+				DryRun: globals.Flags.DryRun,
+			})
+			if err != nil {
+				return err
+			}
+
+			msg := fmt.Sprintf("%s installed.", result.Package)
+			if result.AlreadyInstalled {
+				msg = fmt.Sprintf("%s is already installed.", result.Package)
+			}
+			return printSimpleResult(actions.DaemonInstall, msg, result)
+		},
+	}
 }
 
 func newDaemonAddCmd() *cobra.Command {

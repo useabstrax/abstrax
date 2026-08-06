@@ -6,11 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`daemon install`** - Installs Supervisor and enables/starts its service, matching `mysql install` / `firewall install`.
+
 ### Fixed
 
 - **PHP install on Debian-family** - PHP installs now enable Ondřej Surý’s repository first (`packages.sury.org` on Debian, `ppa:ondrej/php` on Ubuntu), fixing missing packages like `php8.5-fpm`.
 - **MySQL install on Debian** - `mysql install` now installs `mariadb-server` on Debian and Raspberry Pi OS, where `mysql-server` is not available in default apt repos.
 - **Firewall strategy on Debian-family** - Doctor and firewall commands now treat UFW as the intended backend even when it is not installed yet, and point users at `firewall install`.
+- **Daemon commands without Supervisor** - Missing `supervisorctl` now hints at `sudo abstrax daemon install` instead of a raw executable-not-found error.
 
 ## [2.0.1] - 2026-07-29
 

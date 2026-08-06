@@ -39,6 +39,18 @@ type LogOptions struct {
 	Stdout bool
 }
 
+// InstallOptions holds options for installing Supervisor.
+type InstallOptions struct {
+	DryRun bool
+}
+
+// InstallResult describes the outcome of installing Supervisor.
+type InstallResult struct {
+	Package          string `json:"package"`
+	Service          string `json:"service"`
+	AlreadyInstalled bool   `json:"already_installed,omitempty"`
+}
+
 // DaemonInfo describes a supervisor-managed daemon.
 type DaemonInfo struct {
 	Name        string `json:"name"`
