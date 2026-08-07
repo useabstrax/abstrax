@@ -99,8 +99,8 @@ func newMySQLConfigShowCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.MySQLConfigShow, "", cfg))
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLConfigShow, "", cfg))
 				return nil
 			}
 
@@ -217,8 +217,8 @@ func resolveMySQLRootPassword(flagValue string) string {
 func printRootPasswordResult(action, summary string, result *mysql.RootPasswordResult) error {
 	r := output.Success(action, summary, result)
 
-	if globals.Flags.JSON {
-		output.PrintJSON(r)
+	if machineOutput() {
+		emitResult(r)
 		return nil
 	}
 
@@ -248,8 +248,8 @@ func printUserAddResult(result *mysql.UserAddResult) error {
 	summary := fmt.Sprintf("MySQL user %s created.", result.Name)
 	r := output.Success(actions.MySQLUserAdd, summary, result)
 
-	if globals.Flags.JSON {
-		output.PrintJSON(r)
+	if machineOutput() {
+		emitResult(r)
 		return nil
 	}
 
@@ -354,8 +354,8 @@ func newMySQLDBListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.MySQLDBList, "", dbs))
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLDBList, "", dbs))
 				return nil
 			}
 
@@ -473,8 +473,8 @@ func newMySQLUserListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.MySQLUserList, "", users))
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLUserList, "", users))
 				return nil
 			}
 
@@ -501,8 +501,8 @@ func newMySQLUserInfoCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.MySQLUserInfo, "", info))
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLUserInfo, "", info))
 				return nil
 			}
 

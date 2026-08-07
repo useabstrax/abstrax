@@ -61,8 +61,8 @@ func newFirewallStatusCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.FirewallStatus, "", status))
+			if machineOutput() {
+				emitResult(output.Success(actions.FirewallStatus, "", status))
 				return nil
 			}
 
@@ -339,8 +339,8 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.FirewallRuleList, "", rules))
+			if machineOutput() {
+				emitResult(output.Success(actions.FirewallRuleList, "", rules))
 				return nil
 			}
 

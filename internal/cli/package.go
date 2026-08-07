@@ -169,8 +169,8 @@ func newPkgSearchCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.PackageSearch, "", pkgs))
+			if machineOutput() {
+				emitResult(output.Success(actions.PackageSearch, "", pkgs))
 				return nil
 			}
 
@@ -205,8 +205,8 @@ func newPkgInfoCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.PackageInfo, "", info))
+			if machineOutput() {
+				emitResult(output.Success(actions.PackageInfo, "", info))
 				return nil
 			}
 
@@ -236,8 +236,8 @@ func newPkgListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.PackageList, "", pkgs))
+			if machineOutput() {
+				emitResult(output.Success(actions.PackageList, "", pkgs))
 				return nil
 			}
 

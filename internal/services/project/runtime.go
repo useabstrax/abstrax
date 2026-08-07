@@ -98,7 +98,7 @@ func (spec RuntimeSpec) Installed() bool {
 	}
 }
 
-func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryRun bool) error {
+func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryRun bool, progress func(step, message string)) error {
 	if spec.Runtime == "" || spec.Runtime == RuntimeStatic {
 		return nil
 	}
@@ -107,11 +107,19 @@ func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryR
 		return nil
 	}
 
-	fmt.Printf("%s is not installed on this server.\n", spec.label())
-	fmt.Printf("Abstrax can install %s.\n", spec.label())
+	quiet := progress != nil
+	if !quiet {
+		fmt.Printf("%s is not installed on this server.\n", spec.label())
+		fmt.Printf("Abstrax can install %s.\n", spec.label())
+	}
 
 	if dryRun {
-		fmt.Printf("[dry-run] would prompt to install %s\n", spec.label())
+		if !quiet {
+			fmt.Printf("[dry-run] would prompt to install %s\n", spec.label())
+		}
+		if progress != nil {
+			progress("package_update", fmt.Sprintf("Would install %s (dry-run)", spec.label()))
+		}
 		return nil
 	}
 
@@ -123,10 +131,10 @@ func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryR
 		return fmt.Errorf("%s is not installed", spec.label())
 	}
 
-	return s.installRuntime(ctx, spec, dryRun)
+	return s.installRuntime(ctx, spec, dryRun, progress)
 }
 
-func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun bool) error {
+func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun bool, progress func(step, message string)) error {
 	mgr, _, err := pkgmanager.NewFromPlatform(dryRun, false)
 	if err != nil {
 		return err
@@ -134,6 +142,9 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 	provider := platformProvider
 	svc := svcmanager.New(dryRun, false)
 
+	if progress != nil {
+		progress("package_update", "Updating package lists")
+	}
 	if err := mgr.Update(ctx); err != nil {
 		return fmt.Errorf("updating package lists: %w", err)
 	}
@@ -163,8 +174,14 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 				return err
 			},
 		)
+		if progress != nil {
+			progress("ensure_php_repo", "Ensuring PHP package repository is configured")
+		}
 		if err := platform.EnsurePHPRepository(ctx, provider, spec.Version, repoOpts, enabler); err != nil {
 			return err
+		}
+		if progress != nil {
+			progress("ensure_php", fmt.Sprintf("Ensuring PHP %s is installed", spec.Version))
 		}
 		pkgs := config.PHPPackages(spec.Version, extensions)
 		for _, pkg := range pkgs {
@@ -179,6 +196,9 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 		return svc.Start(ctx, fpmSvc)
 
 	case RuntimeNode:
+		if progress != nil {
+			progress("ensure_node", fmt.Sprintf("Ensuring Node.js %s is installed", spec.Version))
+		}
 		setupURL, err := provider.NodeSourceSetupURL(spec.Version)
 		if err != nil {
 			return err
@@ -199,6 +219,9 @@ func (s *Service) installRuntime(ctx context.Context, spec RuntimeSpec, dryRun b
 		}
 
 	case RuntimeRuby:
+		if progress != nil {
+			progress("ensure_ruby", fmt.Sprintf("Ensuring Ruby %s is installed", spec.Version))
+		}
 		pkgs, err := provider.RubyPackages(spec.Version)
 		if err != nil {
 			return err

@@ -99,8 +99,8 @@ func newCronAddCmd() *cobra.Command {
 			r := output.Success(actions.CronAdd,
 				fmt.Sprintf("Cron job %s created.", opts.ID), job)
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 			p.Success("Cron job %s created.", opts.ID)
@@ -221,8 +221,8 @@ func newCronListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.CronList, "", jobs))
+			if machineOutput() {
+				emitResult(output.Success(actions.CronList, "", jobs))
 				return nil
 			}
 
@@ -262,8 +262,8 @@ func newCronInfoCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.CronInfo, "", job))
+			if machineOutput() {
+				emitResult(output.Success(actions.CronInfo, "", job))
 				return nil
 			}
 
