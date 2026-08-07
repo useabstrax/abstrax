@@ -26,7 +26,7 @@ abstrax package install nginx
 abstrax firewall allow 443 --protocol=tcp
 ```
 
-Every command validates its input, performs the requested change, and prints a clear result. Add `--json` for machine-readable output, `--dry-run` to preview changes, or `--yes` to skip confirmation prompts. See the [documentation](https://useabstrax.com/docs) for all global flags.
+Every command validates its input, performs the requested change, and prints a clear result. Add `--json` for a single machine-readable result, `--json-stream` for NDJSON progress on long-running commands such as `project add`, `--dry-run` to preview changes, or `--yes` to skip confirmation prompts. See the [documentation](https://useabstrax.com/docs) for all global flags.
 
 Abstrax is in active development. A hosted management platform and local agent are planned as an optional official plugin (`abstrax plugin install agent`), not as part of the core CLI package.
 
@@ -39,17 +39,29 @@ Abstrax runs on **Linux only**. Release builds are published for:
 | `linux/amd64` | x86_64 servers |
 | `linux/arm64` | ARM / aarch64 servers |
 
-**Fully supported distributions** (Debian/Ubuntu based):
+**Fully supported** (official):
+
+Debian/Ubuntu family:
 
 - Ubuntu 20.04+
 - Debian 11+
 - Linux Mint
 - Pop!\_OS
-- Raspbian
+- Raspbian / Raspberry Pi OS
 
-**Planned:** RHEL / CentOS / Rocky Linux and other Debian derivatives.
+RHEL-compatible family:
 
-Abstrax detects unsupported platforms and returns a clear error rather than attempting unsafe operations. Run `abstrax doctor` to see what was detected on your server. See [supported platforms](https://useabstrax.com/docs/reference/supported-platforms) for details.
+- Rocky Linux 9+
+- AlmaLinux 9+
+
+**Experimental / compatible** (mutating commands allowed, best-effort):
+
+- Other Debian/Ubuntu derivatives
+- Red Hat Enterprise Linux 9+
+- CentOS Stream 9+
+- Oracle Linux 9+
+
+Other families, and RHEL-family releases older than major version 9, are unsupported. Abstrax detects them and exits cleanly before making unsafe changes. Run `abstrax doctor` to see what was detected, including support level. See [supported platforms](https://useabstrax.com/docs/reference/supported-platforms) for family conventions (`apt`/`dnf`, UFW/firewalld, Remi PHP, and SELinux).
 
 ## Installation
 
