@@ -184,8 +184,8 @@ func newCacheStatusCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.CacheStatus, "", statuses))
+			if machineOutput() {
+				emitResult(output.Success(actions.CacheStatus, "", statuses))
 				return nil
 			}
 
@@ -220,8 +220,8 @@ func newCacheConfigCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(output.Success(actions.CacheConfig, "", map[string]string{"config": cfg}))
+			if machineOutput() {
+				emitResult(output.Success(actions.CacheConfig, "", map[string]string{"config": cfg}))
 				return nil
 			}
 

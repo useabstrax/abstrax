@@ -38,8 +38,8 @@ func NewWebCmd() *cobra.Command {
 				r = output.Failure(actions.WebTest, "config_invalid", result.Output)
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 

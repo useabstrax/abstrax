@@ -89,8 +89,8 @@ func newUserAddCmd() *cobra.Command {
 				r.Summary = fmt.Sprintf("User %s already exists.", opts.Username)
 			}
 
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 
@@ -162,8 +162,8 @@ func newUserRemoveCmd() *cobra.Command {
 
 			p := printer()
 			r := output.Success(actions.UserRemove, fmt.Sprintf("User %s removed.", opts.Username), nil)
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 			p.Success("User %s removed.", opts.Username)
@@ -417,8 +417,8 @@ func newUserInfoCmd() *cobra.Command {
 			p := printer()
 			r := output.Success(actions.UserInfo, "", info)
 
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 
@@ -464,9 +464,9 @@ func newUserListCmd() *cobra.Command {
 				return err
 			}
 
-			if globals.Flags.JSON {
+			if machineOutput() {
 				r := output.Success(actions.UserList, "", users)
-				output.PrintJSON(r)
+				emitResult(r)
 				return nil
 			}
 
@@ -500,8 +500,8 @@ func newUserListCmd() *cobra.Command {
 func printSimpleResult(action, summary string, data interface{}) error {
 	p := printer()
 	r := output.Success(action, summary, data)
-	if globals.Flags.JSON {
-		output.PrintJSON(r)
+	if machineOutput() {
+		emitResult(r)
 		return nil
 	}
 	p.Success(summary)
