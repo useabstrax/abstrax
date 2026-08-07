@@ -63,7 +63,6 @@ Run 'abstrax --help' for a list of commands.`,
 	root.AddCommand(NewRepoCmd())
 	root.AddCommand(NewServerCmd())
 	root.AddCommand(NewLogCmd())
-	root.AddCommand(NewAgentCmd())
 	root.AddCommand(NewPluginCmd())
 
 	defaultHelp := root.HelpFunc()
