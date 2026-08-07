@@ -120,8 +120,8 @@ func newSvcStatusCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ServiceStatus, "", st))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServiceStatus, "", st))
 				return nil
 			}
 

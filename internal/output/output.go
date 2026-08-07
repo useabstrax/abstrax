@@ -11,27 +11,8 @@ import (
 )
 
 // Result is the standard structured result returned by all service methods.
-// It is rendered as human text or JSON depending on the --json / --json-stream flags.
+// It is rendered as human text or JSON depending on the --json flag.
 type Result struct {
-	Status    string      `json:"status"`
-	Action    string      `json:"action"`
-	Summary   string      `json:"summary,omitempty"`
-	Message   string      `json:"message,omitempty"`
-	ErrorCode string      `json:"error_code,omitempty"`
-	Data      interface{} `json:"data,omitempty"`
-}
-
-// ProgressEvent is one NDJSON progress line under --json-stream.
-type ProgressEvent struct {
-	Type    string `json:"type"`
-	Action  string `json:"action"`
-	Step    string `json:"step"`
-	Message string `json:"message"`
-}
-
-// streamResult wraps Result with a type discriminant for --json-stream.
-type streamResult struct {
-	Type      string      `json:"type"`
 	Status    string      `json:"status"`
 	Action    string      `json:"action"`
 	Summary   string      `json:"summary,omitempty"`
@@ -62,37 +43,27 @@ func Failure(action, errorCode, message string) Result {
 
 // Printer writes output to stdout/stderr, respecting global flags.
 type Printer struct {
-	jsonMode   bool
-	jsonStream bool
-	quiet      bool
-	verbose    bool
-	noColor    bool
+	jsonMode bool
+	quiet    bool
+	verbose  bool
+	noColor  bool
 }
 
 // NewPrinter creates a Printer configured from the provided flags.
-func NewPrinter(jsonMode, jsonStream, quiet, verbose, noColor bool) *Printer {
+func NewPrinter(jsonMode, quiet, verbose, noColor bool) *Printer {
 	if noColor {
 		color.NoColor = true
 	}
 	return &Printer{
-		jsonMode:   jsonMode,
-		jsonStream: jsonStream,
-		quiet:      quiet,
-		verbose:    verbose,
-		noColor:    noColor,
+		jsonMode: jsonMode,
+		quiet:    quiet,
+		verbose:  verbose,
+		noColor:  noColor,
 	}
-}
-
-func (p *Printer) machine() bool {
-	return p.jsonMode || p.jsonStream
 }
 
 // Print renders a Result to stdout.
 func (p *Printer) Print(r Result) {
-	if p.jsonStream {
-		PrintStreamResult(r)
-		return
-	}
 	if p.jsonMode {
 		PrintJSON(r)
 		return
@@ -106,15 +77,7 @@ func (p *Printer) Print(r Result) {
 	}
 }
 
-// Progress emits one flushed NDJSON progress line when stream mode is on.
-func (p *Printer) Progress(action, step, message string) {
-	if !p.jsonStream {
-		return
-	}
-	PrintProgress(action, step, message)
-}
-
-// PrintJSON encodes v as indented JSON to stdout (--json behaviour).
+// PrintJSON encodes v as indented JSON to stdout.
 func PrintJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -123,53 +86,12 @@ func PrintJSON(v interface{}) {
 	}
 }
 
-// PrintProgress writes one flushed NDJSON progress event to stdout.
-func PrintProgress(action, step, message string) {
-	writeNDJSON(ProgressEvent{
-		Type:    "progress",
-		Action:  action,
-		Step:    step,
-		Message: message,
-	})
-}
-
-// PrintStreamResult writes one flushed NDJSON result event to stdout.
-func PrintStreamResult(r Result) {
-	writeNDJSON(streamResult{
-		Type:      "result",
-		Status:    r.Status,
-		Action:    r.Action,
-		Summary:   r.Summary,
-		Message:   r.Message,
-		ErrorCode: r.ErrorCode,
-		Data:      r.Data,
-	})
-}
-
-// WriteResult prints a final result for --json or --json-stream.
-func WriteResult(r Result, stream bool) {
-	if stream {
-		PrintStreamResult(r)
-		return
-	}
-	PrintJSON(r)
-}
-
-func writeNDJSON(v interface{}) {
-	enc := json.NewEncoder(os.Stdout)
-	if err := enc.Encode(v); err != nil {
-		fmt.Fprintf(os.Stderr, "json encode error: %v\n", err)
-		return
-	}
-	_ = os.Stdout.Sync()
-}
-
 // Info prints an informational message unless --quiet is set.
 func (p *Printer) Info(format string, args ...interface{}) {
 	if p.quiet {
 		return
 	}
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	fmt.Printf(format+"\n", args...)
@@ -177,7 +99,7 @@ func (p *Printer) Info(format string, args ...interface{}) {
 
 // Success prints a green success message.
 func (p *Printer) Success(format string, args ...interface{}) {
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -190,7 +112,7 @@ func (p *Printer) Success(format string, args ...interface{}) {
 
 // Warn prints a yellow warning message.
 func (p *Printer) Warn(format string, args ...interface{}) {
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -203,7 +125,7 @@ func (p *Printer) Warn(format string, args ...interface{}) {
 
 // Error prints a red error message to stderr.
 func (p *Printer) Error(format string, args ...interface{}) {
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -216,7 +138,7 @@ func (p *Printer) Error(format string, args ...interface{}) {
 
 // Verbose prints a message only when --verbose is set.
 func (p *Printer) Verbose(format string, args ...interface{}) {
-	if !p.verbose || p.machine() {
+	if !p.verbose || p.jsonMode {
 		return
 	}
 	fmt.Printf("[verbose] "+format+"\n", args...)
@@ -224,7 +146,7 @@ func (p *Printer) Verbose(format string, args ...interface{}) {
 
 // DryRun prints a dry-run notice.
 func (p *Printer) DryRun(format string, args ...interface{}) {
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -237,7 +159,7 @@ func (p *Printer) DryRun(format string, args ...interface{}) {
 
 // Line prints a plain line regardless of quiet mode (useful for list output).
 func (p *Printer) Line(format string, args ...interface{}) {
-	if p.machine() {
+	if p.jsonMode {
 		return
 	}
 	fmt.Printf(format+"\n", args...)

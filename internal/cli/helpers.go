@@ -17,21 +17,10 @@ func skipConfirm(force bool) bool {
 func printer() *output.Printer {
 	return output.NewPrinter(
 		globals.Flags.JSON,
-		globals.Flags.JSONStream,
 		globals.Flags.Quiet,
 		globals.Flags.Verbose,
 		globals.Flags.NoColor,
 	)
-}
-
-// machineOutput reports whether --json or --json-stream is set.
-func machineOutput() bool {
-	return globals.MachineOutput()
-}
-
-// emitResult writes a final Result for --json or --json-stream.
-func emitResult(r output.Result) {
-	output.WriteResult(r, globals.Flags.JSONStream)
 }
 
 // requireRootAndSupported ensures mutating commands run as root on a supported platform.

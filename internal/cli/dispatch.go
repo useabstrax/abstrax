@@ -56,16 +56,10 @@ func isBuiltinCommand(name string) bool {
 }
 
 func printCommandError(err error) {
-	switch {
-	case globals.Flags.JSON && globals.Flags.JSONStream:
-		// Mutual exclusion failure: keep the message human-readable.
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-	case globals.Flags.JSONStream:
-		output.PrintStreamResult(output.Failure("", errorCode(err), err.Error()))
-	case globals.Flags.JSON:
+	p := output.NewPrinter(globals.Flags.JSON, globals.Flags.Quiet, globals.Flags.Verbose, globals.Flags.NoColor)
+	if globals.Flags.JSON {
 		output.PrintJSON(output.Failure("", errorCode(err), err.Error()))
-	default:
-		p := output.NewPrinter(false, false, globals.Flags.Quiet, globals.Flags.Verbose, globals.Flags.NoColor)
+	} else {
 		p.Error("%v", err)
 	}
 	fmt.Fprintln(os.Stderr)

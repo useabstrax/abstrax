@@ -42,8 +42,8 @@ func newServerStatusCmd() *cobra.Command {
 			p := printer()
 			r := output.Success(actions.ServerStatus, "", status)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 
@@ -106,8 +106,8 @@ func newServerCPUCmd() *cobra.Command {
 			cpu := svc.CPU(cmd.Context())
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ServerCPU, "", cpu))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServerCPU, "", cpu))
 				return nil
 			}
 
@@ -126,8 +126,8 @@ func newServerMemoryCmd() *cobra.Command {
 			mem := svc.Memory()
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ServerMemory, "", mem))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServerMemory, "", mem))
 				return nil
 			}
 
@@ -150,8 +150,8 @@ func newServerDiskCmd() *cobra.Command {
 			svc := serverinfo.New(globals.Flags.Verbose)
 			disks := svc.Disk(cmd.Context(), path)
 
-			if machineOutput() {
-				emitResult(output.Success(actions.ServerDisk, "", disks))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServerDisk, "", disks))
 				return nil
 			}
 
@@ -183,8 +183,8 @@ func newServerLoadCmd() *cobra.Command {
 			load := svc.Load()
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ServerLoad, "", load))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServerLoad, "", load))
 				return nil
 			}
 
@@ -208,8 +208,8 @@ func newServerServicesCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ServerServices, "", services))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ServerServices, "", services))
 				return nil
 			}
 

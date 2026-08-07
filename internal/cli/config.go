@@ -42,8 +42,8 @@ func newConfigShowCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.ConfigShow, "", settings))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ConfigShow, "", settings))
 				return nil
 			}
 
@@ -77,8 +77,8 @@ func newConfigGetCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.ConfigGet, "", map[string]any{
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ConfigGet, "", map[string]any{
 					"key":   args[0],
 					"value": value,
 				}))

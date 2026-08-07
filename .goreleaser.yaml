@@ -33,6 +33,7 @@ archives:
       - NOTICE
       - README.md
       - CHANGELOG.md
+      - packaging/systemd/abstrax-agent.service
 
 nfpms:
   - id: abstrax-packages
@@ -47,6 +48,11 @@ nfpms:
       - rpm
     bindir: /usr/bin
     contents:
+      - src: packaging/systemd/abstrax-agent.service
+        dst: /etc/systemd/system/abstrax-agent.service
+        type: config
+        file_info:
+          mode: 0644
       - dst: /etc/abstrax
         type: dir
         file_info:

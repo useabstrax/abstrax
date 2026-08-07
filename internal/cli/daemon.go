@@ -103,8 +103,8 @@ func newDaemonAddCmd() *cobra.Command {
 			r := output.Success(actions.DaemonAdd,
 				fmt.Sprintf("Daemon %s added.", opts.Name), info)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 
@@ -283,8 +283,8 @@ func newDaemonStatusCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.DaemonStatus, "", info))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.DaemonStatus, "", info))
 				return nil
 			}
 
@@ -312,8 +312,8 @@ func newDaemonListCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.DaemonList, "", daemons))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.DaemonList, "", daemons))
 				return nil
 			}
 
@@ -348,8 +348,8 @@ func newDaemonLogsCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.DaemonLogs, "",
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.DaemonLogs, "",
 					map[string]string{"output": logs}))
 				return nil
 			}
