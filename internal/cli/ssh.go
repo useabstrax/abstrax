@@ -54,8 +54,8 @@ func newSSHConfigShowCmd() *cobra.Command {
 			p := printer()
 			r := output.Success(actions.SSHConfigShow, "", cfg)
 
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 

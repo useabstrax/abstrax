@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/actions"
-	"abstrax/internal/globals"
 	"abstrax/internal/output"
 	"abstrax/internal/platform"
 )
@@ -60,8 +59,8 @@ func NewDoctorCmd() *cobra.Command {
 
 			r := output.Success(actions.DoctorCheck, "System inspection complete.", data)
 
-			if globals.Flags.JSON {
-				output.PrintJSON(r)
+			if machineOutput() {
+				emitResult(r)
 				return nil
 			}
 

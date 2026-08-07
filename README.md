@@ -28,7 +28,7 @@ abstrax firewall allow 443 --protocol=tcp
 
 Every command validates its input, performs the requested change, and prints a clear result. Add `--json` for a single machine-readable result, `--json-stream` for NDJSON progress on long-running commands such as `project add`, `--dry-run` to preview changes, or `--yes` to skip confirmation prompts. See the [documentation](https://useabstrax.com/docs) for all global flags.
 
-Abstrax is in active development. A hosted management platform and local agent are planned but not yet available.
+Abstrax is in active development. A hosted management platform and local agent are planned as an optional official plugin (`abstrax plugin install agent`), not as part of the core CLI package.
 
 ## Supported platforms
 
