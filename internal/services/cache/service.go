@@ -68,7 +68,7 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) error {
 	if err := mgr.Install(ctx, pkgmanager.InstallOptions{Name: pkg, DryRun: opts.DryRun}); err != nil {
 		hint := ""
 		if opts.Driver == DriverRedis && provider.RequiresExternalRepoForRedis() && !globals.Flags.EnableRequiredRepos {
-			hint = "; for Rocky/Alma 10+ Redis requires Remi — re-run with --enable-required-repos (or run `sudo abstrax repo enable remi --enable-required-repos` first)"
+			hint = "; for Rocky/Alma 10+ Redis requires Remi - re-run with --enable-required-repos (or run `sudo abstrax repo enable remi --enable-required-repos` first)"
 		}
 		return fmt.Errorf("installing %s: %w%s", pkg, err, hint)
 	}
