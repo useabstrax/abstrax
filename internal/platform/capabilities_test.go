@@ -247,7 +247,24 @@ func TestEnsureRedisRepositoryRocky10(t *testing.T) {
 	provider := rhelProviderForVersion(t, "rocky", "Rocky Linux 10.1", "10.1", platform.SupportOfficial)
 	var installed []string
 	var ran []string
-	err := platform.EnsureRedisRepository(context.Background(), provider, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
+	err := platform.EnsureRedisRepository(context.Background(), provider, platform.RepoOptions{}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error {
+			t.Fatalf("should require --enable-required-repos before installing, got %s", name)
+			return nil
+		},
+		Run: func(ctx context.Context, name string, args ...string) error { return nil },
+	})
+	if err == nil {
+		t.Fatal("expected Remi consent error for Redis")
+	}
+	if !strings.Contains(err.Error(), "Remi is required for Redis") {
+		t.Fatalf("expected Redis purpose in error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "PHP") {
+		t.Fatalf("Redis Remi error should not mention PHP: %v", err)
+	}
+
+	err = platform.EnsureRedisRepository(context.Background(), provider, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{
 		Install: func(ctx context.Context, name string) error {
 			installed = append(installed, name)
 			return nil

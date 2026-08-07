@@ -28,6 +28,10 @@ type RepoOptions struct {
 	Yes     bool
 	DryRun  bool
 	Verbose bool
+	// Purpose is a short reason shown in Remi enablement messages
+	// (for example "multi-version PHP" or "Redis"). Empty defaults to a
+	// generic Remi description.
+	Purpose string
 }
 
 // RepoEnabler installs packages and runs commands for repository setup.
@@ -158,16 +162,25 @@ func ensureCRBRepo(ctx context.Context, provider Provider, opts RepoOptions, ena
 	return nil
 }
 
+func remiPurpose(opts RepoOptions) string {
+	purpose := strings.TrimSpace(opts.Purpose)
+	if purpose == "" {
+		return "Remi packages"
+	}
+	return purpose
+}
+
 func ensureRemiRepo(ctx context.Context, provider Provider, opts RepoOptions, enabler RepoEnabler) error {
+	purpose := remiPurpose(opts)
 	if !opts.EnableRequiredRepos && !SupportsAutomaticRepoEnable(provider, RepoRemi) {
 		// Allow Rocky/Alma to proceed when EnableRequiredRepos is set; otherwise require flag.
 		id := strings.ToLower(provider.Profile().DistroID)
 		if id == "rocky" || id == "almalinux" || id == "centos" {
 			if !opts.EnableRequiredRepos {
-				return fmt.Errorf("Remi is required for multi-version PHP on %s; re-run with --enable-required-repos (or run `sudo abstrax repo enable remi --enable-required-repos`)", provider.Profile().DistroName)
+				return fmt.Errorf("Remi is required for %s on %s; re-run with --enable-required-repos (or run `sudo abstrax repo enable remi --enable-required-repos`)", purpose, provider.Profile().DistroName)
 			}
 		} else {
-			return fmt.Errorf("Remi is required for multi-version PHP on %s; run `sudo abstrax repo enable remi --enable-required-repos`", provider.Profile().DistroName)
+			return fmt.Errorf("Remi is required for %s on %s; run `sudo abstrax repo enable remi --enable-required-repos`", purpose, provider.Profile().DistroName)
 		}
 	}
 
@@ -182,7 +195,7 @@ func ensureRemiRepo(ctx context.Context, provider Provider, opts RepoOptions, en
 		return err
 	}
 
-	fmt.Println("Installing Remi repository (required for multi-version PHP)...")
+	fmt.Printf("Installing Remi repository (required for %s)...\n", purpose)
 	if err := enabler.Install(ctx, remiURL); err != nil {
 		// Try generic remi-release package if URL install fails (already configured mirror).
 		if err2 := enabler.Install(ctx, "remi-release"); err2 != nil {
@@ -224,6 +237,9 @@ func EnsurePHPRepository(ctx context.Context, provider Provider, version string,
 	if provider == nil || !provider.RequiresExternalRepoForPHP(version) {
 		return nil
 	}
+	if opts.Purpose == "" {
+		opts.Purpose = "multi-version PHP"
+	}
 	if provider.Profile().IsDebianFamily() {
 		return EnsureRepository(ctx, provider, RepoOndrej, opts, enabler)
 	}
@@ -236,6 +252,9 @@ func EnsurePHPRepository(ctx context.Context, provider Provider, version string,
 func EnsureRedisRepository(ctx context.Context, provider Provider, opts RepoOptions, enabler RepoEnabler) error {
 	if provider == nil || !provider.RequiresExternalRepoForRedis() {
 		return nil
+	}
+	if opts.Purpose == "" {
+		opts.Purpose = "Redis"
 	}
 	if err := EnsureRepository(ctx, provider, RepoRemi, opts, enabler); err != nil {
 		return err

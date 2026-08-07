@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **MySQL install on Debian** - `mysql install` now installs `mariadb-server` on Debian and Raspberry Pi OS, where `mysql-server` is not available in default apt repos.
 - **Firewall strategy on Debian-family** - Doctor and firewall commands now treat UFW as the intended backend even when it is not installed yet, and point users at `firewall install`.
 - **Daemon commands without Supervisor** - Missing `supervisorctl` now hints at `sudo abstrax daemon install` instead of a raw executable-not-found error.
+- **Redis install Remi messaging** - Enabling Remi for Redis on Rocky/Alma 10+ no longer says it is required for multi-version PHP.
 
 ## [2.0.1] - 2026-07-29
 

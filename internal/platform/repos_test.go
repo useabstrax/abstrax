@@ -128,6 +128,23 @@ func TestEnsureRemiRequiresFlagOnRocky(t *testing.T) {
 	if !strings.Contains(err.Error(), "Remi") {
 		t.Fatalf("error = %v", err)
 	}
+	if !strings.Contains(err.Error(), "Remi packages") {
+		t.Fatalf("expected generic Remi purpose in error, got %v", err)
+	}
+
+	err = platform.EnsureRepository(context.Background(), provider, platform.RepoRemi, platform.RepoOptions{Purpose: "Redis"}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error { return nil },
+		Run:     func(ctx context.Context, name string, args ...string) error { return nil },
+	})
+	if err == nil {
+		t.Fatal("expected Remi to require --enable-required-repos")
+	}
+	if !strings.Contains(err.Error(), "Remi is required for Redis") {
+		t.Fatalf("expected Redis purpose in error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "multi-version PHP") {
+		t.Fatalf("Redis Remi error should not mention PHP: %v", err)
+	}
 
 	var installed []string
 	err = platform.EnsureRepository(context.Background(), provider, platform.RepoRemi, platform.RepoOptions{EnableRequiredRepos: true}, platform.RepoEnabler{

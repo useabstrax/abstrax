@@ -33,7 +33,7 @@ func newRepoEnableCmd() *cobra.Command {
 Supported repositories:
   epel    Extra Packages for Enterprise Linux (Certbot and Remi dependency; RHEL-family)
   crb     CodeReady Builder / CRB (Remi dependency on EL9; RHEL-family)
-  remi    Remi repository (multi-version PHP via Software Collections; RHEL-family)
+  remi    Remi repository (multi-version PHP and Redis on EL10+; RHEL-family)
   ondrej  Ondřej Surý PHP repository (ppa:ondrej/php on Ubuntu; packages.sury.org on Debian)
 
 On Rocky Linux and AlmaLinux, EPEL/CRB may be enabled without extra flags.
