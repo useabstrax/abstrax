@@ -62,7 +62,7 @@ Examples:
 				return err
 			}
 
-			if globals.Flags.DryRun && !machineOutput() {
+			if globals.Flags.DryRun && !globals.Flags.JSON {
 				p.DryRun("%s", result.Message)
 				if result.Notice != "" {
 					p.Warn(result.Notice)
@@ -71,8 +71,8 @@ Examples:
 			}
 
 			r := output.Success(actions.SelfUpdate, result.Message, result)
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 

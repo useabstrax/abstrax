@@ -62,8 +62,8 @@ func newSSHKeyAddCmd() *cobra.Command {
 			r := output.Success(actions.SSHKeyAdd,
 				fmt.Sprintf("SSH key %s added for %s.", info.ID, opts.Username), info)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 
@@ -135,8 +135,8 @@ func newSSHKeyListCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.SSHKeyList, "", keys))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.SSHKeyList, "", keys))
 				return nil
 			}
 
@@ -180,8 +180,8 @@ func newSSHKeyInfoCmd() *cobra.Command {
 			p := printer()
 			r := output.Success(actions.SSHKeyInfo, "", info)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 

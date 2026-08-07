@@ -25,11 +25,8 @@ administration tasks behind a consistent, friendly command interface.
 Run 'abstrax doctor' to inspect the current system.
 Run 'abstrax --help' for a list of commands.`,
 		Version: version.String(),
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if globals.Flags.JSON && globals.Flags.JSONStream {
-				return fmt.Errorf("--json and --json-stream are mutually exclusive; use --json for a single result object or --json-stream for NDJSON progress")
-			}
-			return nil
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Nothing to do here - flags are read directly from globals.Flags.
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -37,7 +34,6 @@ Run 'abstrax --help' for a list of commands.`,
 
 	// Global flags.
 	root.PersistentFlags().BoolVar(&globals.Flags.JSON, "json", false, "Output machine-readable JSON")
-	root.PersistentFlags().BoolVar(&globals.Flags.JSONStream, "json-stream", false, "Output NDJSON progress events and a final result line")
 	root.PersistentFlags().BoolVar(&globals.Flags.DryRun, "dry-run", false, "Show what would happen without making changes")
 	root.PersistentFlags().BoolVar(&globals.Flags.Yes, "yes", false, "Skip confirmation prompts")
 	root.PersistentFlags().BoolVar(&globals.Flags.Quiet, "quiet", false, "Reduce output")
@@ -67,6 +63,7 @@ Run 'abstrax --help' for a list of commands.`,
 	root.AddCommand(NewRepoCmd())
 	root.AddCommand(NewServerCmd())
 	root.AddCommand(NewLogCmd())
+	root.AddCommand(NewAgentCmd())
 	root.AddCommand(NewPluginCmd())
 
 	defaultHelp := root.HelpFunc()

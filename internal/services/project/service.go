@@ -57,13 +57,6 @@ func (s *Service) SetIdentityResolver(resolver identity.Resolver) {
 
 // Add creates a new project and its web server configuration.
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
-	report := func(step, message string) {
-		if opts.Progress != nil {
-			opts.Progress(step, message)
-		}
-	}
-
-	report("validate", "Validating options")
 	if opts.WebServer == WebServerApache {
 		return nil, fmt.Errorf("Apache support is not yet implemented")
 	}
@@ -77,13 +70,11 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		return nil, fmt.Errorf("project %q already exists", opts.Name)
 	}
 
-	report("identity", "Resolving project ownership")
 	id, err := ResolveIdentity(ctx, s.identity, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	report("path", "Resolving project path")
 	projectPath, err := ResolveProjectPath(opts.Name, opts.Path, id)
 	if err != nil {
 		return nil, err
@@ -123,12 +114,10 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		opts.RubyVersion = normalizeRubyVersion(opts.RubyVersion)
 	}
 
-	report("runtime", fmt.Sprintf("Checking runtime availability (%s)", opts.Runtime))
-	if err := s.ensureRuntime(ctx, runtimeSpecFromAdd(opts), opts.Yes, opts.DryRun, opts.Progress); err != nil {
+	if err := s.ensureRuntime(ctx, runtimeSpecFromAdd(opts), opts.Yes, opts.DryRun); err != nil {
 		return nil, err
 	}
 
-	report("directories", "Creating project directories")
 	mkdirResult, err := mkdirProjectTree(validated, id, 0755)
 	if err != nil {
 		return nil, err
@@ -167,17 +156,13 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 	}
 
 	if id.Mode == OwnershipIsolated {
-		report("ownership", "Configuring ownership and nginx filesystem access")
 		if err := ensureWebTraverseAccess(validated, id); err != nil {
 			rb.undo(ctx)
 			return nil, fmt.Errorf("configuring nginx filesystem access: %w", err)
 		}
-	} else {
-		report("ownership", "Using shared web user ownership")
 	}
 
 	if state.Runtime == RuntimePHP && id.Mode == OwnershipIsolated {
-		report("php_pool", fmt.Sprintf("Creating PHP %s FPM pool", state.PHPVersion))
 		pool, err := s.createPHPPool(ctx, state, id)
 		if err != nil {
 			rb.undo(ctx)
@@ -186,13 +171,10 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		if pool != nil {
 			rb.trackPool(pool.ConfigPath)
 		}
-	} else if state.Runtime == RuntimePHP {
-		report("php_pool", fmt.Sprintf("Using shared PHP %s FPM socket", state.PHPVersion))
 	}
 
 	vhostOpts := vhostOptionsFromAdd(opts, state, validated)
 	if opts.WebServer == WebServerNginx && !opts.NoVhost {
-		report("nginx_vhost", "Creating nginx virtual host")
 		vhostPath, err := s.createNginxVhost(ctx, vhostOpts)
 		if err != nil {
 			rb.undo(ctx)
@@ -202,22 +184,18 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		rb.trackVhost(vhostPath)
 	}
 
-	report("state", "Saving project state")
 	if err := s.saveState(state); err != nil {
 		rb.undo(ctx)
 		return nil, fmt.Errorf("saving project state: %w", err)
 	}
 
-	if opts.Progress == nil {
-		for _, warning := range CheckSecurityWarnings(state.Path) {
-			fmt.Println(formatWarnings([]SecurityWarning{warning}))
-		}
-		if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "project paths, nginx config, or PHP-FPM settings"); note != "" {
-			fmt.Println("Security note: " + note)
-		}
+	for _, warning := range CheckSecurityWarnings(state.Path) {
+		fmt.Println(formatWarnings([]SecurityWarning{warning}))
+	}
+	if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "project paths, nginx config, or PHP-FPM settings"); note != "" {
+		fmt.Println("Security note: " + note)
 	}
 
-	report("complete", "Project created successfully")
 	return state, nil
 }
 
@@ -259,7 +237,7 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 		return nil, fmt.Errorf("project %q not found", opts.Name)
 	}
 
-	if err := s.ensureRuntime(ctx, runtimeSpecFromState(state, opts), opts.Yes, opts.DryRun, nil); err != nil {
+	if err := s.ensureRuntime(ctx, runtimeSpecFromState(state, opts), opts.Yes, opts.DryRun); err != nil {
 		return nil, err
 	}
 

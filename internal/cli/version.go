@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/actions"
+	"abstrax/internal/globals"
 	"abstrax/internal/output"
 	"abstrax/internal/version"
 )
@@ -31,8 +32,8 @@ func NewVersionCmd() *cobra.Command {
 			r := output.Success(actions.VersionShow,
 				"abstrax "+version.String(), data)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 			} else {
 				p.Line("abstrax %s", version.String())
 			}

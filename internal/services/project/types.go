@@ -50,7 +50,6 @@ type AddOptions struct {
 	Chmod        string
 	Yes          bool
 	DryRun       bool
-	Progress     func(step, message string)
 }
 
 // RemoveOptions holds options for removing a project.

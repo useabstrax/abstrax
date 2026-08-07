@@ -65,8 +65,8 @@ func newPluginListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if machineOutput() {
-				emitResult(output.Success(actions.PluginList, "", entries))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.PluginList, "", entries))
 				return nil
 			}
 			if len(entries) == 0 {
@@ -105,8 +105,8 @@ func newPluginInfoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if machineOutput() {
-				emitResult(output.Success(actions.PluginInfo, "", info))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.PluginInfo, "", info))
 				return nil
 			}
 			p := printer()
@@ -164,8 +164,8 @@ func newPluginSearchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if machineOutput() {
-				emitResult(output.Success(actions.PluginSearch, "", results))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.PluginSearch, "", results))
 				return nil
 			}
 			if len(results) == 0 {
@@ -227,8 +227,8 @@ func newPluginInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if machineOutput() {
-				emitResult(output.Success(actions.PluginInstall,
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.PluginInstall,
 					fmt.Sprintf("Installed plugin %s %s from %s.", result.Name, result.Version, result.Source),
 					result))
 				return nil

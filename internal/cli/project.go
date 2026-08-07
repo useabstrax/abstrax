@@ -98,12 +98,6 @@ func newProjectAddCmd() *cobra.Command {
 				}
 			}
 
-			if globals.Flags.JSONStream {
-				opts.Progress = func(step, message string) {
-					output.PrintProgress(actions.ProjectAdd, step, message)
-				}
-			}
-
 			svc := project.New(opts.DryRun, globals.Flags.Verbose)
 			state, err := svc.Add(cmd.Context(), opts)
 			if err != nil {
@@ -124,8 +118,8 @@ func newProjectAddCmd() *cobra.Command {
 			r := output.Success(actions.ProjectAdd,
 				fmt.Sprintf("Project %s created.", opts.Name), state)
 
-			if machineOutput() {
-				emitResult(r)
+			if globals.Flags.JSON {
+				output.PrintJSON(r)
 				return nil
 			}
 
@@ -341,8 +335,8 @@ func newProjectListCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.ProjectList, "", projects))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ProjectList, "", projects))
 				return nil
 			}
 
@@ -380,8 +374,8 @@ func newProjectInfoCmd() *cobra.Command {
 			}
 
 			p := printer()
-			if machineOutput() {
-				emitResult(output.Success(actions.ProjectInfo, "", state))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.ProjectInfo, "", state))
 				return nil
 			}
 
@@ -450,10 +444,6 @@ func newProjectInspectCmd() *cobra.Command {
 			resp, err := svc.Inspect(cmd.Context(), args[0])
 			if err != nil {
 				return err
-			}
-			if globals.Flags.JSONStream {
-				emitResult(output.Success(actions.ProjectInspect, "", resp))
-				return nil
 			}
 			if globals.Flags.JSON {
 				output.PrintJSON(resp)

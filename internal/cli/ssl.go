@@ -153,8 +153,8 @@ func newSSLStatusCmd() *cobra.Command {
 				return err
 			}
 
-			if machineOutput() {
-				emitResult(output.Success(actions.SSLStatus, "", statuses))
+			if globals.Flags.JSON {
+				output.PrintJSON(output.Success(actions.SSLStatus, "", statuses))
 				return nil
 			}
 

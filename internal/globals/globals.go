@@ -9,7 +9,6 @@ var Flags = &GlobalFlags{}
 // GlobalFlags contains the parsed global flag values.
 type GlobalFlags struct {
 	JSON                bool
-	JSONStream          bool
 	DryRun              bool
 	Yes                 bool
 	Quiet               bool
@@ -17,9 +16,4 @@ type GlobalFlags struct {
 	NoColor             bool
 	EnableRequiredRepos bool
 	AllowBlockedPlugin  []string
-}
-
-// MachineOutput reports whether output should be machine-readable (--json or --json-stream).
-func MachineOutput() bool {
-	return Flags.JSON || Flags.JSONStream
 }

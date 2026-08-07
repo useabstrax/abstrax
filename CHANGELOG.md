@@ -8,12 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **`--json-stream`** - NDJSON progress events plus a final `type=result` line for machine consumers; mutually exclusive with `--json`. `project add` emits staged progress (`validate`, `directories`, `nginx_vhost`, and related steps).
 - **`daemon install`** - Installs Supervisor and enables/starts its service, matching `mysql install` / `firewall install`.
-
-### Removed
-
-- **Built-in agent stubs** - Removed the placeholder `abstrax agent` command, unused `Agent*` action constants, and the packaged disabled `abstrax-agent.service` unit so an official `agent` plugin can own that name later.
 
 ### Fixed
 
