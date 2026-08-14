@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-14
+
+### Added
+
+- **Local plugin install** - `plugin install --path <binary>` (or a filesystem path as the argument) links a non-registry plugin into the install directory. Shows an unofficial/unverified warning and confirmation. `plugin remove` deletes only the symlink, not the original binary. Local plugins cannot be updated via `plugin update`; reinstall with `--path` instead.
+
 ## [2.1.0] - 2026-08-08
 
 ### Added
