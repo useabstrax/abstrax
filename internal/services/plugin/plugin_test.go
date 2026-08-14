@@ -330,6 +330,215 @@ func TestRegistryBlockedInstall(t *testing.T) {
 	}
 }
 
+func TestLocalInstallAndRemovePreservesSource(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceBin := filepath.Join(sourceDir, "abstrax-localplug")
+	script := `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"localplug","display_name":"Local","description":"Local plugin","version":"2.0.0","requires_abstrax":">=0.0.0","commands":[{"name":"hello","description":"Hello"}]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	paths := testPaths(dir)
+	svc := NewWithPaths(paths, "http://127.0.0.1:1")
+	result, err := svc.Install(context.Background(), InstallOptions{
+		Name:       "localplug",
+		BinaryPath: sourceBin,
+	})
+	if err != nil {
+		t.Fatalf("install failed: %v", err)
+	}
+	if result.Source != SourceLocal {
+		t.Fatalf("source %q, want %q", result.Source, SourceLocal)
+	}
+	if result.TrustLevel != TrustCommunity {
+		t.Fatalf("trust %q, want %q", result.TrustLevel, TrustCommunity)
+	}
+
+	linkPath := filepath.Join(paths.InstallDir, "abstrax-localplug")
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("expected install path to be a symlink")
+	}
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != sourceBin {
+		t.Fatalf("symlink target %q, want %q", target, sourceBin)
+	}
+
+	rec, err := svc.Store().Load("localplug")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Source != SourceLocal || rec.SourcePath != sourceBin {
+		t.Fatalf("unexpected record: %+v", rec)
+	}
+	if cache, err := svc.MetadataCache().Load(); err != nil {
+		t.Fatal(err)
+	} else if _, ok := cache.Plugins["localplug"]; !ok {
+		t.Fatal("expected metadata cache entry")
+	}
+
+	if err := svc.Remove("localplug"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(linkPath); !os.IsNotExist(err) {
+		t.Fatalf("expected symlink removed, got err=%v", err)
+	}
+	if _, err := os.Stat(sourceBin); err != nil {
+		t.Fatalf("source binary should remain: %v", err)
+	}
+	if _, err := svc.Store().Load("localplug"); err == nil {
+		t.Fatal("expected install record removed")
+	}
+}
+
+func TestLocalInstallNameMismatch(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceBin := filepath.Join(sourceDir, "abstrax-bar")
+	script := `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"bar","display_name":"Bar","description":"Bar","version":"1.0.0","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	_, err := svc.Install(context.Background(), InstallOptions{
+		Name:       "foo",
+		BinaryPath: sourceBin,
+	})
+	if err == nil {
+		t.Fatal("expected name mismatch error")
+	}
+}
+
+func TestLocalInstallMissingPath(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	_, err := svc.Install(context.Background(), InstallOptions{
+		BinaryPath: filepath.Join(dir, "missing-binary"),
+	})
+	if err == nil {
+		t.Fatal("expected missing path error")
+	}
+}
+
+func TestLocalInstallNonExecutable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "not-exec")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	_, err := svc.Install(context.Background(), InstallOptions{BinaryPath: path})
+	if err == nil {
+		t.Fatal("expected non-executable error")
+	}
+}
+
+func TestLocalInstallInfersNameFromMetadata(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceBin := filepath.Join(sourceDir, "custom-bin")
+	script := `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"inferred","display_name":"Inferred","description":"Inferred","version":"1.0.0","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	result, err := svc.Install(context.Background(), InstallOptions{BinaryPath: sourceBin})
+	if err != nil {
+		t.Fatalf("install failed: %v", err)
+	}
+	if result.Name != "inferred" {
+		t.Fatalf("name %q, want inferred", result.Name)
+	}
+}
+
+func TestLocalUpdateRejected(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceBin := filepath.Join(sourceDir, "abstrax-localupd")
+	script := `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"localupd","display_name":"Local","description":"Local","version":"1.0.0","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	if _, err := svc.Install(context.Background(), InstallOptions{
+		Name:       "localupd",
+		BinaryPath: sourceBin,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.Update(context.Background(), "localupd")
+	if err == nil {
+		t.Fatal("expected update error for local plugin")
+	}
+	if !strings.Contains(err.Error(), "cannot update local plugin") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestInstallPathAndManifestMutuallyExclusive(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	_, err := svc.Install(context.Background(), InstallOptions{
+		Name:        "example",
+		BinaryPath:  filepath.Join(dir, "bin"),
+		ManifestURL: "https://example.com/manifest.json",
+	})
+	if err == nil {
+		t.Fatal("expected mutual exclusion error")
+	}
+}
+
 func TestRegistryCache(t *testing.T) {
 	dir := t.TempDir()
 	requests := 0

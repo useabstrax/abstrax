@@ -21,6 +21,7 @@ import (
 type InstallOptions struct {
 	Name        string
 	ManifestURL string
+	BinaryPath  string
 	RegistryURL string
 	Force       bool
 }
@@ -94,8 +95,14 @@ func (s *Service) NewDispatcher() (*Dispatcher, error) {
 	return NewDispatcher(s.paths, s.store)
 }
 
-// Install installs a plugin from the registry or a manifest URL.
+// Install installs a plugin from the registry, a manifest URL, or a local binary path.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
+	if opts.BinaryPath != "" {
+		if opts.ManifestURL != "" {
+			return nil, fmt.Errorf("--path and --manifest are mutually exclusive")
+		}
+		return s.installFromPath(ctx, opts)
+	}
 	if err := validate.PluginName(opts.Name); err != nil {
 		return nil, err
 	}
@@ -200,6 +207,70 @@ func (s *Service) installFromManifest(ctx context.Context, opts InstallOptions) 
 	})
 }
 
+func (s *Service) installFromPath(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
+	sourcePath, err := resolveLocalBinaryPath(opts.BinaryPath)
+	if err != nil {
+		return nil, err
+	}
+
+	meta, err := FetchMetadata(ctx, sourcePath)
+	if err != nil {
+		return nil, err
+	}
+	if opts.Name != "" {
+		if err := ValidateMetadata(meta, opts.Name); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := ValidateMetadata(meta, meta.Name); err != nil {
+			return nil, err
+		}
+	}
+	if err := ValidateAbstraxConstraint(meta.RequiresAbstrax); err != nil {
+		return nil, err
+	}
+
+	name := meta.Name
+	if opts.Name != "" {
+		name = opts.Name
+	}
+
+	destPath := filepath.Join(s.paths.InstallDir, PluginBinaryName(name))
+	if err := os.MkdirAll(s.paths.InstallDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating plugin directory: %w", err)
+	}
+	if err := atomicSymlink(sourcePath, destPath); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	rec := &InstallRecord{
+		Name:        name,
+		Version:     meta.Version,
+		Publisher:   "",
+		TrustLevel:  TrustCommunity,
+		Source:      SourceLocal,
+		InstalledAt: now,
+		BinaryPath:  destPath,
+		SourcePath:  sourcePath,
+	}
+	if err := s.store.Save(rec); err != nil {
+		return nil, err
+	}
+	if err := s.metaCache.UpdateEntry(name, meta); err != nil {
+		return nil, err
+	}
+
+	return &InstallResult{
+		Name:       name,
+		Version:    meta.Version,
+		Publisher:  "",
+		TrustLevel: TrustCommunity,
+		Source:     SourceLocal,
+		BinaryPath: destPath,
+	}, nil
+}
+
 type installBinaryOpts struct {
 	name           string
 	version        string
@@ -276,19 +347,29 @@ func (s *Service) installBinary(ctx context.Context, opts installBinaryOpts) (*I
 
 // Update reinstalls a plugin using the safe replacement flow.
 func (s *Service) Update(ctx context.Context, name string) (*InstallResult, error) {
-	if _, err := s.store.Load(name); err != nil {
+	rec, err := s.store.Load(name)
+	if err != nil {
 		return nil, err
+	}
+	if rec.Source == SourceLocal {
+		return nil, fmt.Errorf("cannot update local plugin %q; reinstall with --path", name)
 	}
 	return s.installFromRegistry(ctx, InstallOptions{Name: name})
 }
 
-// Remove deletes a plugin binary and its installation record.
+// Remove deletes a plugin binary (or local symlink) and its installation record.
+// For local plugins, only the install-directory symlink is removed; the source binary is left intact.
 func (s *Service) Remove(name string) error {
 	rec, err := s.store.Load(name)
 	if err != nil {
 		return err
 	}
-	if rec.BinaryPath != "" {
+	if rec.Source == SourceLocal {
+		linkPath := filepath.Join(s.paths.InstallDir, PluginBinaryName(name))
+		if err := removeLocalPluginLink(linkPath); err != nil {
+			return err
+		}
+	} else if rec.BinaryPath != "" {
 		if err := os.Remove(rec.BinaryPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing plugin binary: %w", err)
 		}
@@ -319,11 +400,13 @@ func (s *Service) ListInstalled(ctx context.Context) ([]ListEntry, error) {
 		if entry.Status == "" {
 			entry.Status = StatusActive
 		}
-		if latest, err := s.RegistryClient().GetLatestVersion(ctx, rec.Name, LatestVersionOptions{
-			AbstraxVersion: AbstraxVersionString(),
-			Channel:        "stable",
-		}); err == nil && latest.Version != rec.Version {
-			entry.UpdateAvailable = latest.Version
+		if rec.Source != SourceLocal {
+			if latest, err := s.RegistryClient().GetLatestVersion(ctx, rec.Name, LatestVersionOptions{
+				AbstraxVersion: AbstraxVersionString(),
+				Channel:        "stable",
+			}); err == nil && latest.Version != rec.Version {
+				entry.UpdateAvailable = latest.Version
+			}
 		}
 		entries = append(entries, entry)
 	}
@@ -353,6 +436,7 @@ type InfoEntry struct {
 	Homepage        string            `json:"homepage,omitempty"`
 	RequiresAbstrax string            `json:"requires_abstrax,omitempty"`
 	InstalledPath   string            `json:"installed_path"`
+	SourcePath      string            `json:"source_path,omitempty"`
 	Commands        []MetadataCommand `json:"commands"`
 	RegistryStatus  string            `json:"registry_status"`
 	UpdateAvailable string            `json:"update_available,omitempty"`
@@ -372,6 +456,7 @@ func (s *Service) Info(ctx context.Context, name string) (*InfoEntry, error) {
 		TrustLevel:     rec.TrustLevel,
 		Source:         rec.Source,
 		InstalledPath:  rec.BinaryPath,
+		SourcePath:     rec.SourcePath,
 		RegistryStatus: rec.RegistryStatus,
 	}
 	if entry.RegistryStatus == "" {
@@ -397,17 +482,19 @@ func (s *Service) Info(ctx context.Context, name string) (*InfoEntry, error) {
 		}
 	}
 
-	if pluginInfo, err := s.RegistryClient().GetPlugin(ctx, name); err == nil {
-		entry.RegistryStatus = pluginInfo.Status
-		rec.RegistryStatus = pluginInfo.Status
-		rec.StatusCachedAt = time.Now().UTC()
-		_ = s.store.Save(rec)
-	}
-	if latest, err := s.RegistryClient().GetLatestVersion(ctx, name, LatestVersionOptions{
-		AbstraxVersion: AbstraxVersionString(),
-		Channel:        "stable",
-	}); err == nil && latest.Version != rec.Version {
-		entry.UpdateAvailable = latest.Version
+	if rec.Source != SourceLocal {
+		if pluginInfo, err := s.RegistryClient().GetPlugin(ctx, name); err == nil {
+			entry.RegistryStatus = pluginInfo.Status
+			rec.RegistryStatus = pluginInfo.Status
+			rec.StatusCachedAt = time.Now().UTC()
+			_ = s.store.Save(rec)
+		}
+		if latest, err := s.RegistryClient().GetLatestVersion(ctx, name, LatestVersionOptions{
+			AbstraxVersion: AbstraxVersionString(),
+			Channel:        "stable",
+		}); err == nil && latest.Version != rec.Version {
+			entry.UpdateAvailable = latest.Version
+		}
 	}
 
 	return entry, nil
@@ -564,6 +651,83 @@ func atomicInstall(src, dest string) error {
 	if err := os.Rename(tmpDest, dest); err != nil {
 		os.Remove(tmpDest)
 		return fmt.Errorf("installing plugin to %s: %w", dest, err)
+	}
+	return nil
+}
+
+func resolveLocalBinaryPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("binary path is required")
+	}
+	if strings.HasPrefix(path, "~/") {
+		home, err := userHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolving home directory: %w", err)
+		}
+		path = filepath.Join(home, path[2:])
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolving binary path: %w", err)
+	}
+
+	info, err := os.Lstat(abs)
+	if err != nil {
+		return "", fmt.Errorf("binary path %q: %w", abs, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			return "", fmt.Errorf("resolving symlink %q: %w", abs, err)
+		}
+		info, err = os.Stat(target)
+		if err != nil {
+			return "", fmt.Errorf("binary path %q: %w", abs, err)
+		}
+		if info.IsDir() || !info.Mode().IsRegular() {
+			return "", fmt.Errorf("binary path %q is not a regular file", abs)
+		}
+		if info.Mode()&0o111 == 0 {
+			return "", fmt.Errorf("binary path %q is not executable", abs)
+		}
+		return abs, nil
+	}
+	if info.IsDir() || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("binary path %q is not a regular file", abs)
+	}
+	if info.Mode()&0o111 == 0 {
+		return "", fmt.Errorf("binary path %q is not executable", abs)
+	}
+	return abs, nil
+}
+
+func atomicSymlink(target, dest string) error {
+	destDir := filepath.Dir(dest)
+	tmpDest := filepath.Join(destDir, fmt.Sprintf(".%s.link.%d", filepath.Base(dest), os.Getpid()))
+	if err := os.Remove(tmpDest); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("preparing symlink: %w", err)
+	}
+	if err := os.Symlink(target, tmpDest); err != nil {
+		return fmt.Errorf("creating symlink to %s: %w", target, err)
+	}
+	if err := os.Rename(tmpDest, dest); err != nil {
+		_ = os.Remove(tmpDest)
+		return fmt.Errorf("installing plugin symlink to %s: %w", dest, err)
+	}
+	return nil
+}
+
+func removeLocalPluginLink(linkPath string) error {
+	_, err := os.Lstat(linkPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("removing plugin link: %w", err)
+	}
+	if err := os.Remove(linkPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing plugin link: %w", err)
 	}
 	return nil
 }
