@@ -121,6 +121,9 @@ func newPluginInfoCmd() *cobra.Command {
 			p.Info("Publisher:    %s", info.Publisher)
 			p.Info("Trust level:  %s", formatTrustLevel(info.TrustLevel))
 			p.Info("Source:       %s", info.Source)
+			if info.SourcePath != "" {
+				p.Info("Source path:  %s", info.SourcePath)
+			}
 			if info.Homepage != "" {
 				p.Info("Homepage:     %s", info.Homepage)
 			}
@@ -190,24 +193,59 @@ func newPluginSearchCmd() *cobra.Command {
 
 func newPluginInstallCmd() *cobra.Command {
 	var manifestURL string
+	var binaryPath string
 
 	cmd := &cobra.Command{
-		Use:   "install <name>",
-		Short: "Install a plugin from the registry",
+		Use:   "install <name|path>",
+		Short: "Install a plugin from the registry, a manifest URL, or a local binary",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validate.PluginName(args[0]); err != nil {
-				return err
+			name := args[0]
+			localPath := binaryPath
+
+			if looksLikeFilesystemPath(name) {
+				if localPath != "" {
+					return fmt.Errorf("provide either a binary path argument or --path, not both")
+				}
+				if manifestURL != "" {
+					return fmt.Errorf("--manifest cannot be combined with a local binary path")
+				}
+				localPath = name
+				name = ""
 			}
-			if manifestURL == "" {
+
+			if localPath != "" && manifestURL != "" {
+				return fmt.Errorf("--path and --manifest are mutually exclusive")
+			}
+
+			if name != "" {
+				if err := validate.PluginName(name); err != nil {
+					return err
+				}
+			}
+
+			if localPath == "" && manifestURL == "" {
 				if err := requireRootAndSupported(); err != nil {
 					return err
 				}
 			}
+
 			if manifestURL != "" {
 				fmt.Fprintf(os.Stderr, "WARNING: Installing plugin from a direct manifest URL, not the official Abstrax registry.\n")
 				fmt.Fprintf(os.Stderr, "WARNING: Manifest source: %s\n", manifestURL)
 				ok, err := confirm.Ask("Continue with manifest installation?", globals.Flags.Yes)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
+			}
+
+			if localPath != "" {
+				fmt.Fprintf(os.Stderr, "WARNING: Installing a local plugin binary, not an official or verified plugin from the Abstrax registry.\n")
+				fmt.Fprintf(os.Stderr, "WARNING: Binary path: %s\n", localPath)
+				ok, err := confirm.Ask("Continue with local plugin installation?", globals.Flags.Yes)
 				if err != nil {
 					return err
 				}
@@ -221,8 +259,9 @@ func newPluginInstallCmd() *cobra.Command {
 				return err
 			}
 			result, err := svc.Install(cmd.Context(), plugin.InstallOptions{
-				Name:        args[0],
+				Name:        name,
 				ManifestURL: manifestURL,
+				BinaryPath:  localPath,
 			})
 			if err != nil {
 				return err
@@ -240,7 +279,21 @@ func newPluginInstallCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&manifestURL, "manifest", "", "Install from a direct manifest JSON URL")
+	cmd.Flags().StringVar(&binaryPath, "path", "", "Install from a local plugin binary path (symlink, not copy)")
 	return cmd
+}
+
+func looksLikeFilesystemPath(s string) bool {
+	if s == "" {
+		return false
+	}
+	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "~/") {
+		return true
+	}
+	if s == "." || s == ".." || s == "~" {
+		return true
+	}
+	return strings.Contains(s, string(os.PathSeparator))
 }
 
 func newPluginUpdateCmd() *cobra.Command {

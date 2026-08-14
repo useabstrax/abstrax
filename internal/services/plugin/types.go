@@ -45,6 +45,9 @@ const (
 	// SourceManifest indicates installation from a direct manifest URL.
 	SourceManifest = "manifest"
 
+	// SourceLocal indicates installation from a local binary path (symlink).
+	SourceLocal = "local"
+
 	// RegistryCacheTTL is how long registry cache entries remain fresh.
 	RegistryCacheTTL = time.Hour
 )
@@ -79,6 +82,7 @@ type InstallRecord struct {
 	InstalledAt    time.Time `json:"installed_at"`
 	SHA256         string    `json:"sha256"`
 	BinaryPath     string    `json:"binary_path"`
+	SourcePath     string    `json:"source_path,omitempty"`
 	RegistryStatus string    `json:"registry_status,omitempty"`
 	StatusCachedAt time.Time `json:"status_cached_at,omitempty"`
 }
