@@ -55,6 +55,7 @@ const (
 // MetadataCommand describes a subcommand exposed by a plugin.
 type MetadataCommand struct {
 	Name        string `json:"name"`
+	Action      string `json:"action,omitempty"`
 	Description string `json:"description"`
 }
 

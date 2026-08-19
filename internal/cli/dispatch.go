@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"abstrax/internal/actions"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
 	"abstrax/internal/services/plugin"
@@ -93,6 +94,10 @@ func errorCode(err error) string {
 		return "blocked_plugin"
 	case isError(err, plugin.ErrProcessFailure):
 		return "plugin_process_failure"
+	case isError(err, plugin.ErrUnknownPluginCommand):
+		return "unknown_action"
+	case isError(err, actions.ErrUnknownAction):
+		return "unknown_action"
 	default:
 		return "command_error"
 	}
