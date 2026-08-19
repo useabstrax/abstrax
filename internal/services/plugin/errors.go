@@ -33,6 +33,9 @@ var (
 	// ErrProcessFailure indicates the plugin process failed to start.
 	ErrProcessFailure = errors.New("plugin process failure")
 
+	// ErrUnknownPluginCommand indicates the plugin does not expose the requested command.
+	ErrUnknownPluginCommand = errors.New("unknown plugin command")
+
 	// ErrRegistryPluginNotFound indicates the registry has no matching plugin.
 	ErrRegistryPluginNotFound = errors.New("registry plugin not found")
 

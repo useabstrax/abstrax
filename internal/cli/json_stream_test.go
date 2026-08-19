@@ -14,8 +14,12 @@ import (
 func resetGlobalFlags(t *testing.T) {
 	t.Helper()
 	globals.Flags = &globals.GlobalFlags{}
+	actionFlags.Action = ""
+	actionFlags.Payload = "{}"
 	t.Cleanup(func() {
 		globals.Flags = &globals.GlobalFlags{}
+		actionFlags.Action = ""
+		actionFlags.Payload = "{}"
 	})
 }
 

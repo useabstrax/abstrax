@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +32,12 @@ Run 'abstrax --help' for a list of commands.`,
 			}
 			return nil
 		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(actionFlags.Action) == "" {
+				return cmd.Help()
+			}
+			return runAction(args)
+		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -45,6 +52,8 @@ Run 'abstrax --help' for a list of commands.`,
 	root.PersistentFlags().BoolVar(&globals.Flags.NoColor, "no-color", false, "Disable colour output")
 	root.PersistentFlags().BoolVar(&globals.Flags.EnableRequiredRepos, "enable-required-repos", false, "Allow enabling required third-party repositories (EPEL, Remi, etc.)")
 	root.PersistentFlags().StringSliceVar(&globals.Flags.AllowBlockedPlugin, "allow-blocked-plugin", nil, "Allow execution of blocked plugins (repeatable)")
+	root.Flags().StringVar(&actionFlags.Action, "action", "", "Run a stable action (for example user.add or plugin.deploy.now)")
+	root.Flags().StringVar(&actionFlags.Payload, "payload", "{}", "JSON object payload for --action (`-` reads stdin)")
 
 	// Subcommands.
 	root.AddCommand(NewVersionCmd())
@@ -97,6 +106,9 @@ func Execute() {
 			}
 		}
 		printCommandError(err)
+		if code, ok := plugin.ExitCode(err); ok {
+			os.Exit(code)
+		}
 		os.Exit(1)
 	}
 }
