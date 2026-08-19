@@ -294,11 +294,19 @@ func (s *Service) installBinary(ctx context.Context, opts installBinaryOpts) (*I
 		return nil, err
 	}
 
-	if err := os.Chmod(tmpFile, 0o755); err != nil {
+	binaryPath, err := resolveInstallBinary(tmpFile, opts.name)
+	if err != nil {
+		return nil, err
+	}
+	if binaryPath != tmpFile {
+		defer os.Remove(binaryPath)
+	}
+
+	if err := os.Chmod(binaryPath, 0o755); err != nil {
 		return nil, fmt.Errorf("making plugin executable: %w", err)
 	}
 
-	meta, err := FetchMetadata(ctx, tmpFile)
+	meta, err := FetchMetadata(ctx, binaryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +318,7 @@ func (s *Service) installBinary(ctx context.Context, opts installBinaryOpts) (*I
 	if err := os.MkdirAll(s.paths.InstallDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating plugin directory: %w", err)
 	}
-	if err := atomicInstall(tmpFile, destPath); err != nil {
+	if err := atomicInstall(binaryPath, destPath); err != nil {
 		return nil, err
 	}
 

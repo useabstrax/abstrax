@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-08-19
+
+### Fixed
+
+- **Plugin install from registry archives** - `plugin install` extracts `abstrax-<name>` from gzip-compressed tar archives after checksum verification. Registry plugins publish `.tar.gz` files; the installer previously tried to execute the archive, which failed with `exec format error`.
+
 ## [2.3.0] - 2026-08-19
 
 ### Added
