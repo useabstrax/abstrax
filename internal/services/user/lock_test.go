@@ -14,11 +14,11 @@ import (
 
 func TestLockAndUnlockCommands(t *testing.T) {
 	dir := t.TempDir()
-	svc := newTestService(t, dir, func(_ context.Context, name string, args ...string) (executil.Result, error) {
+	svc := newTestService(t, dir, func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
 		if name == "getent" && len(args) >= 2 && args[0] == "shadow" {
-			return executil.Result{Stdout: "demo:!:19000:0:99999:7::30000:"}, nil
+			return executil.Result{Stdout: "demo:!:19000:0:99999:7::30000:"}, true, nil
 		}
-		return executil.Result{}, nil
+		return executil.Result{}, true, nil
 	})
 
 	if err := svc.Lock(context.Background(), LockOptions{Username: "demo"}); err != nil {
@@ -45,8 +45,8 @@ func TestLockAndUnlockCommands(t *testing.T) {
 
 func TestLockPasswordOnly(t *testing.T) {
 	dir := t.TempDir()
-	svc := newTestService(t, dir, func(context.Context, string, ...string) (executil.Result, error) {
-		return executil.Result{}, nil
+	svc := newTestService(t, dir, func(context.Context, string, []string) (executil.Result, bool, error) {
+		return executil.Result{}, true, nil
 	})
 	if err := svc.Lock(context.Background(), LockOptions{Username: "demo", PasswordOnly: true}); err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func TestLockPasswordOnly(t *testing.T) {
 
 func TestUnlockWithoutSavedExpiry(t *testing.T) {
 	dir := t.TempDir()
-	svc := newTestService(t, dir, func(context.Context, string, ...string) (executil.Result, error) {
-		return executil.Result{}, nil
+	svc := newTestService(t, dir, func(context.Context, string, []string) (executil.Result, bool, error) {
+		return executil.Result{}, true, nil
 	})
 	if err := svc.Unlock(context.Background(), LockOptions{Username: "demo"}); err != nil {
 		t.Fatal(err)
@@ -101,19 +101,19 @@ func TestAccountStateCombinations(t *testing.T) {
 
 func TestInfoReportsLoginState(t *testing.T) {
 	dir := t.TempDir()
-	svc := newTestService(t, dir, func(_ context.Context, name string, args ...string) (executil.Result, error) {
+	svc := newTestService(t, dir, func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
 		switch name {
 		case "id":
-			return executil.Result{Stdout: "uid=1000(demo) gid=1000(demo) groups=1000(demo)"}, nil
+			return executil.Result{Stdout: "uid=1000(demo) gid=1000(demo) groups=1000(demo)"}, true, nil
 		case "getent":
 			if args[0] == "passwd" {
-				return executil.Result{Stdout: "demo:x:1000:1000::/home/demo:/bin/bash"}, nil
+				return executil.Result{Stdout: "demo:x:1000:1000::/home/demo:/bin/bash"}, true, nil
 			}
-			return executil.Result{Stdout: "demo:!:19000:0:99999:7::1:"}, nil
+			return executil.Result{Stdout: "demo:!:19000:0:99999:7::1:"}, true, nil
 		case "passwd":
-			return executil.Result{Stdout: "demo L 2020-01-01 0 99999 7 -1"}, nil
+			return executil.Result{Stdout: "demo L 2020-01-01 0 99999 7 -1"}, true, nil
 		default:
-			return executil.Result{}, nil
+			return executil.Result{}, true, nil
 		}
 	})
 	info, err := svc.Info(context.Background(), "demo")
