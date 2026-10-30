@@ -39,10 +39,11 @@ func (s *Service) ensureClientSSHAllow(ctx context.Context) (SSHProtectResult, e
 	}
 
 	if s.backend == "firewalld" {
-		rich := fmt.Sprintf(
-			`rule family="ipv4" source address="%s" port port="%d" protocol="tcp" accept`,
-			clientIP, sshPort,
-		)
+		family, err := firewalldFamily(clientIP)
+		if err != nil {
+			return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
+		}
+		rich := firewalldRichRule(family, clientIP, strconv.Itoa(sshPort), "tcp", "accept")
 		if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
 			return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
 		}
