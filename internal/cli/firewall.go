@@ -245,6 +245,11 @@ func newFirewallDenyCmd() *cobra.Command {
 			opts.Port = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
+			if opts.From != "" {
+				if err := validate.CIDRRange(opts.From); err != nil {
+					return err
+				}
+			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
@@ -262,6 +267,7 @@ func newFirewallDenyCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp)")
+	cmd.Flags().StringVar(&opts.From, "from", "", "Deny only from this IP or CIDR")
 	return cmd
 }
 

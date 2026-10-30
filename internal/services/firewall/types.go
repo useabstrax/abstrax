@@ -6,14 +6,15 @@ type RuleKind string
 const (
 	RuleKindService RuleKind = "service"
 	RuleKindPort    RuleKind = "port"
+	RuleKindRich    RuleKind = "rich"
 	RuleKindUFW     RuleKind = "ufw"
 )
 
 // Rule describes a firewall rule.
 //
-// On UFW, ID is a stable hash of the rule and Number is its current position
-// in `ufw status numbered`. Number can change when other rules are inserted
-// or deleted. On firewalld, ID is the Abstrax list position.
+// On UFW and firewalld, ID is a stable hash of the rule and Number is its
+// current list position. Number can change when other rules are inserted or
+// deleted.
 type Rule struct {
 	ID        string   `json:"id"`
 	Number    string   `json:"number,omitempty"`
