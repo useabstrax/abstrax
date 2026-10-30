@@ -4,6 +4,16 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`mysql user list --grants`** - Includes each user's raw grants and parsed per-database privileges in one call. `--exclude-system` hides built-in accounts. Without `--grants`, the list is unchanged.
+
+### Fixed
+
+- **`mysql user info`** - Looks up every host the user exists on, including a specific IP, instead of only `localhost`, `127.0.0.1`, and `%`. `--host` limits the result to one host. JSON output is a list, one entry per host.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed
