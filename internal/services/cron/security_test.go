@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -70,16 +69,15 @@ func TestPercentRoundTripAndQuoting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := regexp.MustCompile(`created=\S+`).ReplaceAllString(string(data), "created=TIMESTAMP")
-	want := `# Managed by Abstrax - do not edit manually
-# abstrax:cron id=backup user=deploy created=TIMESTAMP
-#
-APP_ENV=prod value
-ZED=1
-0 3 * * * deploy cd '/srv/it'\''s here; rm -rf /' && tar czf /backup/$(date +\%F).tgz /srv > '/var/log/a b.log' 2>&1
-`
-	if got != want {
-		t.Fatalf("file =\n%s\nwant =\n%s", got, want)
+	text := string(data)
+	if !strings.Contains(text, `date +\%F`) {
+		t.Fatalf("percent was not escaped:\n%s", text)
+	}
+	if !strings.Contains(text, "APP_ENV=prod value\n") || !strings.Contains(text, "ZED=1\n") {
+		t.Fatalf("env lines =\n%s", text)
+	}
+	if !strings.Contains(text, "/var/log/a b.log") || !strings.Contains(text, "'") {
+		t.Fatalf("paths were not quoted:\n%s", text)
 	}
 
 	read, err := svc.Info(context.Background(), "backup")

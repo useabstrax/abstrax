@@ -1,5 +1,7 @@
 package mysql
 
+import "encoding/json"
+
 // Config holds MySQL connection settings.
 type Config struct {
 	Host     string `json:"host"`
@@ -62,11 +64,60 @@ type Database struct {
 	Name string `json:"name"`
 }
 
+// UserListOptions controls mysql user list.
+type UserListOptions struct {
+	Grants        bool
+	ExcludeSystem bool
+}
+
+// DatabaseGrant is a parsed database-level grant.
+type DatabaseGrant struct {
+	Name       string   `json:"name"`
+	Privileges []string `json:"privileges"`
+	Preset     *string  `json:"preset"`
+}
+
 // UserInfo describes a MySQL user.
+// Grants, Databases and GlobalPrivileges are set only when requested.
 type UserInfo struct {
-	Name   string   `json:"name"`
-	Host   string   `json:"host"`
-	Grants []string `json:"grants"`
+	Name             string          `json:"name"`
+	Host             string          `json:"host"`
+	Grants           []string        `json:"grants,omitempty"`
+	Databases        []DatabaseGrant `json:"databases,omitempty"`
+	GlobalPrivileges []string        `json:"global_privileges,omitempty"`
+}
+
+// MarshalJSON keeps a list without grants as name and host only.
+// When grants were loaded, empty privilege lists stay as empty arrays.
+func (u UserInfo) MarshalJSON() ([]byte, error) {
+	if u.Grants == nil && u.Databases == nil && u.GlobalPrivileges == nil {
+		return json.Marshal(struct {
+			Name string `json:"name"`
+			Host string `json:"host"`
+		}{Name: u.Name, Host: u.Host})
+	}
+	if u.Grants == nil {
+		u.Grants = []string{}
+	}
+	if u.Databases == nil {
+		u.Databases = []DatabaseGrant{}
+	}
+	if u.GlobalPrivileges == nil {
+		u.GlobalPrivileges = []string{}
+	}
+	return json.Marshal(struct {
+		Name             string          `json:"name"`
+		Host             string          `json:"host"`
+		Grants           []string        `json:"grants"`
+		Databases        []DatabaseGrant `json:"databases"`
+		GlobalPrivileges []string        `json:"global_privileges"`
+	}{
+		Name:             u.Name,
+		Host:             u.Host,
+		Grants:           u.Grants,
+		Databases:        u.Databases,
+		GlobalPrivileges: u.GlobalPrivileges,
+	})
 }
 
 // Preset privilege levels.

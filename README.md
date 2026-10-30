@@ -127,9 +127,38 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Firewall rule IDs
+
+On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:
+
+```bash
+abstrax firewall rule list
+sudo abstrax firewall rule remove a1b2c3d4
+```
+
+A numeric position still works (`firewall rule remove 3`) and prints a warning, because that number may point at a different rule than it did when you last listed them.
+
 ### Cron jobs
 
-`cron add` and `cron modify` refuse values that contain a line break. A `%` in the command is stored as `\%` so cron treats it as a literal percent. Paths passed to `--working-dir`, `--output` and `--error-output` are shell-quoted.
+`cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.
+
+Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`. Values that contain a line break are refused. A `%` in the command is stored as `\%` so cron treats it as a literal percent. Paths passed to `--working-dir`, `--output` and `--error-output` are shell-quoted.
+
+### Daemons
+
+`daemon list` and `daemon status` group Supervisor processes under one daemon. `status` is the worst process state (`FATAL` before `BACKOFF`, `EXITED`, `STOPPING`, `STARTING`, `STOPPED`, then `RUNNING`). Each running process includes `pid`, `uptime`, and `uptime_seconds`. `daemon list` shows Abstrax-managed daemons only; add `--all` for every Supervisor program (`managed: false`, no `config_path`).
+
+`daemon info <name>` prints the config Abstrax wrote, plus that live status. `daemon logs --lines N` returns N lines from the log file. When a daemon runs more than one process, `--process N` selects it (default `0`).
+
+### Daemon modify
+
+`daemon modify` changes only the flags you pass. Other settings stay as they are in the Supervisor config. It accepts the same settings as `daemon add`. `--environment` merges by key. `--clear-environment` drops every variable first, and `--unset-environment KEY` removes one. `--autorestart` must be `always`, `unexpected`, or `false`.
+
+After a modify, Abstrax runs `supervisorctl update`, which restarts the program when its config changed.
+
+### MySQL users
+
+`mysql user list --grants` returns each user's grants in one call, including parsed database privileges. `mysql user info <name>` finds the user on any host, not only `localhost`. Pass `--host` to limit it to one host.
 
 ### PHP projects
 
