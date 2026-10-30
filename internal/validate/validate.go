@@ -17,6 +17,7 @@ var (
 	serviceNameRe = regexp.MustCompile(`^[a-zA-Z0-9_@:.-]{1,64}$`)
 	packageNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.+-]{1,128}$`)
 	dbNameRe      = regexp.MustCompile(`^[a-zA-Z0-9_]{1,64}$`)
+	mysqlHostRe   = regexp.MustCompile(`^[A-Za-z0-9.%_:/-]{1,255}$`)
 	cronIDRe      = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	daemonNameRe  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	pluginNameRe  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
@@ -76,6 +77,14 @@ func DatabaseName(name string) error {
 	}
 	if !dbNameRe.MatchString(name) {
 		return fmt.Errorf("invalid database name %q: must contain only letters, digits, and underscores", name)
+	}
+	return nil
+}
+
+// MySQLHost validates a MySQL account host, including % and _ wildcards.
+func MySQLHost(host string) error {
+	if !mysqlHostRe.MatchString(host) {
+		return fmt.Errorf("invalid MySQL host %q", host)
 	}
 	return nil
 }

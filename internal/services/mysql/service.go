@@ -16,6 +16,7 @@ import (
 	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
+	"abstrax/internal/validate"
 )
 
 // Service manages MySQL operations.
@@ -24,6 +25,8 @@ type Service struct {
 	cfg              *Config
 	configPath       string
 	legacyConfigPath string
+	captureSQL       bool
+	sqlLog           []string
 	queryFn          func(ctx context.Context, sql string) (string, error)
 }
 
@@ -227,20 +230,33 @@ func (s *Service) DBAdd(ctx context.Context, opts DBAddOptions) error {
 		collation = "utf8mb4_unicode_ci"
 	}
 
+	if err := validate.DatabaseName(opts.Name); err != nil {
+		return err
+	}
+	if err := mysqlIdent("charset", charset); err != nil {
+		return err
+	}
+	if err := mysqlIdent("collation", collation); err != nil {
+		return err
+	}
+
 	ifNotExists := ""
 	if opts.IfNotExists {
 		ifNotExists = "IF NOT EXISTS "
 	}
 
-	sql := fmt.Sprintf("CREATE DATABASE %s`%s` CHARACTER SET %s COLLATE %s",
-		ifNotExists, opts.Name, charset, collation)
+	sql := fmt.Sprintf("CREATE DATABASE %s%s CHARACTER SET %s COLLATE %s",
+		ifNotExists, quoteIdent(opts.Name), charset, collation)
 
 	return s.exec(ctx, sql)
 }
 
 // DBRemove drops a database.
 func (s *Service) DBRemove(ctx context.Context, name string) error {
-	return s.exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", name))
+	if err := validate.DatabaseName(name); err != nil {
+		return err
+	}
+	return s.exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", quoteIdent(name)))
 }
 
 // DBList lists databases.
@@ -280,6 +296,17 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 	if host == "" {
 		host = "localhost"
 	}
+	if err := validate.MySQLHost(host); err != nil {
+		return err
+	}
+	if err := validate.MySQLUsername(opts.Name); err != nil {
+		return err
+	}
+	if opts.GrantDB != "" {
+		if err := validate.DatabaseName(opts.GrantDB); err != nil {
+			return err
+		}
+	}
 
 	hosts := []string{host}
 	if usesLocalAppHosts(host) {
@@ -287,8 +314,12 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 	}
 
 	for _, h := range hosts {
-		createSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
-			opts.Name, h, escapeSQLString(opts.Password))
+		account, err := sqlAccount(opts.Name, h)
+		if err != nil {
+			return err
+		}
+		createSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'",
+			account, escapeSQLString(opts.Password))
 		if err := s.exec(ctx, createSQL); err != nil {
 			return err
 		}
@@ -306,10 +337,18 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 		if privs == "" {
 			privs = PresetPrivileges[PresetApp]
 		}
+		parsed, err := ParsePrivileges(privs)
+		if err != nil {
+			return err
+		}
 
 		for _, h := range hosts {
-			grantSQL := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%s'",
-				privs, opts.GrantDB, opts.Name, h)
+			account, err := sqlAccount(opts.Name, h)
+			if err != nil {
+				return err
+			}
+			grantSQL := fmt.Sprintf("GRANT %s ON %s.* TO %s",
+				strings.Join(parsed, ", "), quoteIdent(opts.GrantDB), account)
 			if err := s.exec(ctx, grantSQL); err != nil {
 				return err
 			}
@@ -325,7 +364,11 @@ func (s *Service) UserRemove(ctx context.Context, name, host string) error {
 	if host == "" {
 		host = "localhost"
 	}
-	return s.exec(ctx, fmt.Sprintf("DROP USER IF EXISTS '%s'@'%s'", name, host))
+	account, err := sqlAccount(name, host)
+	if err != nil {
+		return err
+	}
+	return s.exec(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", account))
 }
 
 // UserList lists MySQL users. With opts.Grants, each row includes parsed grants.
@@ -411,8 +454,23 @@ func (s *Service) showGrants(ctx context.Context, name, host string) ([]string, 
 
 // Grant grants privileges on a database to a user.
 func (s *Service) Grant(ctx context.Context, user, database, host, privileges string) error {
+	if err := validate.DatabaseName(database); err != nil {
+		return err
+	}
+	if err := validate.MySQLUsername(user); err != nil {
+		return err
+	}
+	if host != "" {
+		if err := validate.MySQLHost(host); err != nil {
+			return err
+		}
+	}
 	if privileges == "" {
 		privileges = PresetPrivileges[PresetApp]
+	}
+	parsed, err := ParsePrivileges(privileges)
+	if err != nil {
+		return err
 	}
 
 	hosts, err := s.grantTargetHosts(ctx, user, host)
@@ -421,8 +479,12 @@ func (s *Service) Grant(ctx context.Context, user, database, host, privileges st
 	}
 
 	for _, h := range hosts {
-		sql := fmt.Sprintf("GRANT %s ON `%s`.* TO '%s'@'%s'",
-			privileges, database, user, h)
+		account, err := sqlAccount(user, h)
+		if err != nil {
+			return err
+		}
+		sql := fmt.Sprintf("GRANT %s ON %s.* TO %s",
+			strings.Join(parsed, ", "), quoteIdent(database), account)
 		if err := s.exec(ctx, sql); err != nil {
 			return err
 		}
@@ -432,14 +494,29 @@ func (s *Service) Grant(ctx context.Context, user, database, host, privileges st
 
 // Revoke revokes all privileges from a user on a database.
 func (s *Service) Revoke(ctx context.Context, user, database, host string) error {
+	if err := validate.DatabaseName(database); err != nil {
+		return err
+	}
+	if err := validate.MySQLUsername(user); err != nil {
+		return err
+	}
+	if host != "" {
+		if err := validate.MySQLHost(host); err != nil {
+			return err
+		}
+	}
+
 	hosts, err := s.grantTargetHosts(ctx, user, host)
 	if err != nil {
 		return err
 	}
 
 	for _, h := range hosts {
-		sql := fmt.Sprintf("REVOKE ALL PRIVILEGES ON `%s`.* FROM '%s'@'%s'",
-			database, user, h)
+		account, err := sqlAccount(user, h)
+		if err != nil {
+			return err
+		}
+		sql := fmt.Sprintf("REVOKE ALL PRIVILEGES ON %s.* FROM %s", quoteIdent(database), account)
 		if err := s.exec(ctx, sql); err != nil {
 			return err
 		}
@@ -523,18 +600,28 @@ func (s *Service) cloneUserToHost(ctx context.Context, user, fromHost, toHost st
 		}
 	}
 
+	if err := mysqlIdent("auth plugin", plugin); err != nil {
+		return err
+	}
+	account, err := sqlAccount(user, toHost)
+	if err != nil {
+		return err
+	}
 	var sql string
 	if s.isMariaDB(ctx) {
-		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED VIA %s USING '%s'",
-			user, toHost, plugin, escapeSQLString(auth.AuthString))
+		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS %s IDENTIFIED VIA %s USING '%s'",
+			account, plugin, escapeSQLString(auth.AuthString))
 	} else {
-		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED WITH %s AS '%s'",
-			user, toHost, plugin, escapeSQLString(auth.AuthString))
+		sql = fmt.Sprintf("CREATE USER IF NOT EXISTS %s IDENTIFIED WITH %s AS '%s'",
+			account, plugin, escapeSQLString(auth.AuthString))
 	}
 	return s.exec(ctx, sql)
 }
 
 func (s *Service) lookupUserAuth(ctx context.Context, user, host string) (*userAuth, error) {
+	if _, err := sqlAccount(user, host); err != nil {
+		return nil, err
+	}
 	res, err := s.query(ctx, fmt.Sprintf(
 		"SELECT plugin, authentication_string FROM mysql.user WHERE User = '%s' AND Host = '%s'",
 		escapeSQLString(user), escapeSQLString(host)))
@@ -570,6 +657,9 @@ func (s *Service) isMariaDB(ctx context.Context) bool {
 }
 
 func (s *Service) userHosts(ctx context.Context, user string) ([]string, error) {
+	if err := validate.MySQLUsername(user); err != nil {
+		return nil, err
+	}
 	res, err := s.query(ctx,
 		fmt.Sprintf("SELECT Host FROM mysql.user WHERE User = '%s' ORDER BY Host",
 			escapeSQLString(user)))
@@ -655,6 +745,10 @@ func (s *Service) runMySQLWithConfig(ctx context.Context, cfg Config, sql string
 }
 
 func (s *Service) exec(ctx context.Context, sql string) error {
+	if s.captureSQL {
+		s.sqlLog = append(s.sqlLog, sql)
+		return nil
+	}
 	return s.runMySQL(ctx, s.connectionConfig(), sql, false)
 }
 
