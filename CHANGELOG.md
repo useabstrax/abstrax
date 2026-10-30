@@ -6,16 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
-
-- **Daemon list and status JSON** - `daemon list` and `daemon status` group processes under one daemon. `status` is the worst process state. Each process includes `pid`, `uptime`, and `uptime_seconds` while it is running. `daemon list` shows Abstrax-managed daemons by default; `--all` includes other Supervisor programs with `managed: false` and no `config_path`.
-
 ### Added
 
 - **`daemon info <name>`** - Prints the settings from the Supervisor config (command, directory, user, numprocs, restart policy, and log paths) plus live status. Registered as the `daemon.info` action.
 
+### Changed
+
+- **Daemon list and status JSON** - `daemon list` and `daemon status` group processes under one daemon. `status` is the worst process state. Each process includes `pid`, `uptime`, and `uptime_seconds` while it is running. `daemon list` shows Abstrax-managed daemons by default; `--all` includes other Supervisor programs with `managed: false` and no `config_path`.
+
 ### Fixed
 
+- **UFW rule identity** - `firewall rule list` returns a stable `id` (a short hash of the rule) and keeps the current UFW position as `number`. `firewall rule remove <id>` deletes that rule by its specification, so a later removal cannot hit a rule that shifted into an old position. Numeric positions still work and print a warning. Listed rules now include protocol, direction, source, destination, comment, and IPv6. `firewall allow-ip` accepts `--protocol` and `--comment`; `firewall deny-ip` accepts `--comment`.
+- **firewalld source-limited allows** - `firewall allow <port> --from <ip>` on firewalld now adds a rich rule for that source. It no longer opens the port to every address, including for ports 80 and 443. Rich rules are listed and can be removed by id. `firewall deny <port>` adds IPv4 and IPv6 reject rules. IPv6 sources use `family="ipv6"`. Firewalld rule ids are a stable hash, with the list position kept as `number`.
+- **Cron job fields** - Working directory and output redirects are stored separately from the command, so `cron info` returns `working_dir`, `output`, `error_output`, `append_output`, and `discard_output`, and `cron modify` no longer nests `cd` or redirects. Environment values with spaces round-trip. Schedules are validated per field, and `@reboot`, `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`, `@annually`, and `@midnight` are accepted. `cron modify` can set `--append-output`, `--discard-output`, and `--no-output`.
 - **Multi-process daemons** - `start`, `stop`, and `restart` address the Supervisor group as `<name>:*`. `daemon logs --lines N` returns N lines from the log file. `--stderr` works, and `--process N` selects one process when `numprocs` is greater than 1.
 
 ## [2.3.1] - 2026-08-19

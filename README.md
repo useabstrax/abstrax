@@ -127,6 +127,23 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Firewall rule IDs
+
+On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:
+
+```bash
+abstrax firewall rule list
+sudo abstrax firewall rule remove a1b2c3d4
+```
+
+A numeric position still works (`firewall rule remove 3`) and prints a warning, because that number may point at a different rule than it did when you last listed them.
+
+### Cron jobs
+
+`cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.
+
+Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`.
+
 ### Daemons
 
 `daemon list` and `daemon status` group Supervisor processes under one daemon. `status` is the worst process state (`FATAL` before `BACKOFF`, `EXITED`, `STOPPING`, `STARTING`, `STOPPED`, then `RUNNING`). Each running process includes `pid`, `uptime`, and `uptime_seconds`. `daemon list` shows Abstrax-managed daemons only; add `--all` for every Supervisor program (`managed: false`, no `config_path`).

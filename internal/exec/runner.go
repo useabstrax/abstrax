@@ -41,7 +41,8 @@ func (r *Runner) SetCommandFunc(fn CommandFunc) {
 	r.commandFunc = fn
 }
 
-// Commands returns every command passed to Run or RunSilent.
+// Commands returns every command passed to Run or RunSilent, including
+// commands answered by a CommandFunc or skipped in dry-run.
 func (r *Runner) Commands() [][]string {
 	out := make([][]string, len(r.commands))
 	for i, cmd := range r.commands {
