@@ -5,6 +5,7 @@ package validate
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ var (
 	pluginNameRe  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	projectNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
 	domainRe      = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+	envKeyRe      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // Username validates a Linux username.
@@ -159,13 +161,32 @@ func Domain(d string) error {
 	return nil
 }
 
-// FilePath performs a basic sanity check on a file path.
+// FilePath checks that p is an absolute path on a single line.
 func FilePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("path cannot be empty")
 	}
-	if strings.Contains(p, "\x00") {
-		return fmt.Errorf("path contains null byte")
+	if err := SingleLine("path", p); err != nil {
+		return err
+	}
+	if !filepath.IsAbs(p) {
+		return fmt.Errorf("path must be absolute, got %q", p)
+	}
+	return nil
+}
+
+// SingleLine rejects values that could start a new line in a config file.
+func SingleLine(field, value string) error {
+	if strings.Contains(value, "\n") || strings.Contains(value, "\r") || strings.Contains(value, "\x00") {
+		return fmt.Errorf("%s cannot contain line breaks or null bytes", field)
+	}
+	return nil
+}
+
+// EnvKey validates an environment variable name.
+func EnvKey(key string) error {
+	if !envKeyRe.MatchString(key) {
+		return fmt.Errorf("invalid environment variable name %q", key)
 	}
 	return nil
 }

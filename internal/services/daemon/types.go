@@ -8,7 +8,7 @@ type AddOptions struct {
 	User              string
 	Processes         int
 	Autostart         bool
-	Autorestart       string // always, on-failure, false
+	Autorestart       string // always, unexpected, false
 	StartSecs         int
 	StartRetries      int
 	StopSignal        string
