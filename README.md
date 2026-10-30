@@ -142,7 +142,7 @@ A numeric position still works (`firewall rule remove 3`) and prints a warning, 
 
 `cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.
 
-Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`.
+Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`. Values that contain a line break are refused. A `%` in the command is stored as `\%` so cron treats it as a literal percent. Paths passed to `--working-dir`, `--output` and `--error-output` are shell-quoted.
 
 ### Daemons
 

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"abstrax/internal/platform"
+	"abstrax/internal/validate"
 )
 
 const (
@@ -222,6 +223,9 @@ func applyModify(job *CronJob, opts ModifyOptions) {
 }
 
 func (s *Service) writeJob(path string, job *CronJob) error {
+	if err := validateJob(job); err != nil {
+		return err
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if job.Created == "" {
 		job.Created = now
@@ -297,7 +301,7 @@ func buildCronCommand(job *CronJob) string {
 		}
 		cmd += " " + op + " " + shellQuote(job.ErrorOutput)
 	}
-	return cmd
+	return escapeCronPercent(cmd)
 }
 
 func shellQuote(s string) string {
@@ -411,14 +415,56 @@ func applyCronLine(line string, job *CronJob) {
 	if len(parts) >= 3 && strings.HasPrefix(parts[0], "@") {
 		job.Schedule = parts[0]
 		job.User = parts[1]
-		job.Command = strings.Join(parts[2:], " ")
+		job.Command = unescapeCronPercent(strings.Join(parts[2:], " "))
 		return
 	}
 	if len(parts) >= 7 {
 		job.Schedule = strings.Join(parts[:5], " ")
 		job.User = parts[5]
-		job.Command = strings.Join(parts[6:], " ")
+		job.Command = unescapeCronPercent(strings.Join(parts[6:], " "))
 	}
+}
+
+func validateJob(job *CronJob) error {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"command", job.Command},
+		{"user", job.User},
+		{"schedule", job.Schedule},
+		{"working-dir", job.WorkingDir},
+		{"output", job.Output},
+		{"error-output", job.ErrorOutput},
+	}
+	for _, field := range fields {
+		if err := validate.SingleLine(field.name, field.value); err != nil {
+			return err
+		}
+	}
+	if err := validate.Username(job.User); err != nil {
+		return err
+	}
+	for key, value := range job.Env {
+		if err := validate.SingleLine("env", key); err != nil {
+			return err
+		}
+		if err := validate.EnvKey(key); err != nil {
+			return err
+		}
+		if err := validate.SingleLine("env", value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func escapeCronPercent(s string) string {
+	return strings.ReplaceAll(s, "%", `\%`)
+}
+
+func unescapeCronPercent(s string) string {
+	return strings.ReplaceAll(s, `\%`, "%")
 }
 
 func (s *Service) setEnabled(id string, enabled bool) error {

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **Cron files** - `cron add` and `cron modify` reject line breaks, carriage returns and null bytes in every value, and reject invalid users and environment names. `%` in a command is written as `\%` and read back as `%`, so it is a literal percent instead of cron's stdin separator. Working directory and output paths are shell-quoted.
+
 ### Added
 
 - **`daemon info <name>`** - Prints the settings from the Supervisor config (command, directory, user, numprocs, restart policy, and log paths) plus live status. Registered as the `daemon.info` action.
