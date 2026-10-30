@@ -118,6 +118,101 @@ func parseSupervisorEnv(s string) map[string]string {
 	return env
 }
 
+func mergeDaemonOptions(current, opts AddOptions) (AddOptions, error) {
+	out := current
+	out.Name = current.Name
+	changed := opts.Changed
+	if changed == nil {
+		changed = map[string]bool{}
+	}
+
+	if changed["command"] {
+		if strings.TrimSpace(opts.Command) == "" {
+			return AddOptions{}, errEmpty("command")
+		}
+		out.Command = opts.Command
+	}
+	if changed["directory"] {
+		out.Directory = opts.Directory
+	}
+	if changed["user"] {
+		out.User = opts.User
+	}
+	if changed["processes"] {
+		if opts.Processes < 1 {
+			return AddOptions{}, errEmpty("processes")
+		}
+		out.Processes = opts.Processes
+	}
+	if changed["autostart"] {
+		out.Autostart = opts.Autostart
+	}
+	if changed["autorestart"] {
+		if err := validateAutorestart(opts.Autorestart); err != nil {
+			return AddOptions{}, err
+		}
+		out.Autorestart = opts.Autorestart
+	}
+	if changed["startsecs"] {
+		out.StartSecs = opts.StartSecs
+	}
+	if changed["startretries"] {
+		out.StartRetries = opts.StartRetries
+	}
+	if changed["stopsignal"] {
+		out.StopSignal = opts.StopSignal
+	}
+	if changed["stopwaitsecs"] {
+		out.StopWaitSecs = opts.StopWaitSecs
+	}
+	if changed["exitcodes"] {
+		out.ExitCodes = opts.ExitCodes
+	}
+	if changed["stdout-logfile"] {
+		out.StdoutLogFile = opts.StdoutLogFile
+	}
+	if changed["stderr-logfile"] {
+		out.StderrLogFile = opts.StderrLogFile
+	}
+	if changed["clear-environment"] {
+		out.Environment = nil
+	}
+	if changed["environment"] {
+		out.Environment = cloneEnv(out.Environment)
+		for k, v := range opts.Environment {
+			out.Environment[k] = v
+		}
+	}
+	if changed["unset-environment"] {
+		out.Environment = cloneEnv(out.Environment)
+		for _, key := range opts.UnsetEnvironment {
+			delete(out.Environment, key)
+		}
+	}
+	return out, nil
+}
+
+func cloneEnv(env map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range env {
+		out[k] = v
+	}
+	return out
+}
+
+func errEmpty(field string) error {
+	return &fieldError{field: field}
+}
+
+type fieldError struct{ field string }
+
+func (e *fieldError) Error() string {
+	if e.field == "processes" {
+		return "processes must be 1 or greater"
+	}
+	return e.field + " cannot be empty"
+}
+
 func applyConf(info *DaemonInfo, opts AddOptions) {
 	info.Name = opts.Name
 	info.Command = opts.Command

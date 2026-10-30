@@ -91,6 +91,9 @@ func newDaemonAddCmd() *cobra.Command {
 			if opts.Command == "" {
 				return fmt.Errorf("--command is required")
 			}
+			if err := validateAutorestart(opts.Autorestart); err != nil {
+				return err
+			}
 
 			opts.Environment = parseEnvPairs(envPairs)
 
@@ -172,17 +175,33 @@ func newDaemonRemoveCmd() *cobra.Command {
 func newDaemonModifyCmd() *cobra.Command {
 	opts := daemon.AddOptions{}
 	var envPairs []string
+	var unsetEnv []string
 
 	cmd := &cobra.Command{
 		Use:   "modify <name>",
 		Short: "Modify a daemon's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: `Change settings on an existing daemon.
+
+Only flags you pass are updated. After the config is written, Abstrax runs
+supervisorctl reread and update. update restarts the program when its config changed.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			opts.DryRun = globals.Flags.DryRun
+			opts.Changed = changedFlags(cmd,
+				"command", "directory", "user", "processes", "autostart", "autorestart",
+				"startsecs", "startretries", "stopsignal", "stopwaitsecs", "exitcodes",
+				"stdout-logfile", "stderr-logfile", "environment", "clear-environment",
+				"unset-environment")
+			opts.UnsetEnvironment = unsetEnv
 
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
+			}
+			if opts.Changed["autorestart"] {
+				if err := validateAutorestart(opts.Autorestart); err != nil {
+					return err
+				}
 			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
@@ -205,9 +224,29 @@ func newDaemonModifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.Directory, "directory", "", "Working directory")
 	cmd.Flags().StringVar(&opts.User, "user", "", "User to run as")
 	cmd.Flags().IntVar(&opts.Processes, "processes", 0, "Number of processes")
+	cmd.Flags().BoolVar(&opts.Autostart, "autostart", false, "Start automatically on supervisor start")
+	cmd.Flags().StringVar(&opts.Autorestart, "autorestart", "", "Autorestart mode (always/unexpected/false)")
+	cmd.Flags().IntVar(&opts.StartSecs, "startsecs", 0, "Seconds before considering process started")
+	cmd.Flags().IntVar(&opts.StartRetries, "startretries", 0, "Number of start retries")
+	cmd.Flags().StringVar(&opts.StopSignal, "stopsignal", "", "Stop signal")
+	cmd.Flags().IntVar(&opts.StopWaitSecs, "stopwaitsecs", 0, "Seconds to wait for process to stop")
+	cmd.Flags().StringVar(&opts.ExitCodes, "exitcodes", "", "Expected exit codes")
+	cmd.Flags().StringVar(&opts.StdoutLogFile, "stdout-logfile", "", "Stdout log file path")
+	cmd.Flags().StringVar(&opts.StderrLogFile, "stderr-logfile", "", "Stderr log file path")
 	cmd.Flags().StringArrayVar(&envPairs, "environment", nil, "Environment variables (KEY=VALUE)")
+	cmd.Flags().BoolVar(&opts.ClearEnvironment, "clear-environment", false, "Remove every environment variable before applying --environment")
+	cmd.Flags().StringArrayVar(&unsetEnv, "unset-environment", nil, "Remove one environment variable")
 
 	return cmd
+}
+
+func validateAutorestart(value string) error {
+	switch value {
+	case "always", "unexpected", "false":
+		return nil
+	default:
+		return fmt.Errorf("autorestart must be always, unexpected, or false, got %q", value)
+	}
 }
 
 func newDaemonStartCmd() *cobra.Command {
