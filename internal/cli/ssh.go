@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -72,11 +73,15 @@ func newSSHConfigShowCmd() *cobra.Command {
 
 func newSSHConfigSetPortCmd() *cobra.Command {
 	var allowFirewall bool
+	var closeOldPort bool
 
 	cmd := &cobra.Command{
 		Use:   "set-port <port>",
 		Short: "Change the SSH listening port",
-		Args:  cobra.ExactArgs(1),
+		Long: `Change the SSH listening port.
+
+With --allow-firewall the new port is opened before sshd is reloaded. The previous port stays open until --close-old-port, so you can test a new connection first. Without --allow-firewall the firewall is left unchanged.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validate.PortString(args[0]); err != nil {
 				return err
@@ -89,35 +94,42 @@ func newSSHConfigSetPortCmd() *cobra.Command {
 			fmt.Sscanf(args[0], "%d", &port)
 
 			p := printer()
-			p.Warn("Changing the SSH port can lock you out if the firewall is not updated.")
+			if !allowFirewall {
+				p.Warn("The firewall was not changed. Open the new port before you disconnect.")
+			}
 
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.SetPort(cmd.Context(), sshcfg.SetPortOptions{
+			fw := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			svc.UseFirewall(
+				func(ctx context.Context, port int) error {
+					_, err := fw.Allow(ctx, firewall.AllowOptions{
+						Port:     fmt.Sprintf("%d", port),
+						Protocol: "tcp",
+						Comment:  "abstrax: ssh",
+						DryRun:   globals.Flags.DryRun,
+					})
+					return err
+				},
+				func(ctx context.Context, port int) error {
+					return fw.RemovePort(ctx, fmt.Sprintf("%d", port), "tcp")
+				},
+			)
+			result, err := svc.SetPort(cmd.Context(), sshcfg.SetPortOptions{
 				Port:          port,
 				AllowFirewall: allowFirewall,
+				CloseOldPort:  closeOldPort,
 				DryRun:        globals.Flags.DryRun,
-			}); err != nil {
+			})
+			if err != nil {
 				return err
 			}
 
-			if allowFirewall {
-				fw := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
-				if _, err := fw.Allow(cmd.Context(), firewall.AllowOptions{
-					Port:     fmt.Sprintf("%d", port),
-					Protocol: "tcp",
-					Comment:  "abstrax: ssh",
-					DryRun:   globals.Flags.DryRun,
-				}); err != nil {
-					return fmt.Errorf("opening firewall port %d: %w", port, err)
-				}
-			}
-
-			return printSimpleResult(actions.SSHConfigSetPort,
-				fmt.Sprintf("SSH port set to %d.", port), nil)
+			return printSimpleResult(actions.SSHConfigSetPort, result.Message, result)
 		},
 	}
 
-	cmd.Flags().BoolVar(&allowFirewall, "allow-firewall", false, "Open new port in firewall if available")
+	cmd.Flags().BoolVar(&allowFirewall, "allow-firewall", false, "Open the new port in the firewall before reloading sshd")
+	cmd.Flags().BoolVar(&closeOldPort, "close-old-port", false, "Close the previous SSH port after the new one is accepting connections")
 	return cmd
 }
 

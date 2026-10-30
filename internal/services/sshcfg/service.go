@@ -18,7 +18,19 @@ const (
 
 // Service manages sshd configuration.
 type Service struct {
-	runner *executil.Runner
+	runner             *executil.Runner
+	managedPath        string
+	mainConfigPath     string
+	socketDropIn       string
+	openFirewallFn     func(ctx context.Context, port int) error
+	closeFirewallFn    func(ctx context.Context, port int) error
+	selinuxEnforcingFn func() bool
+	labelFn            func(ctx context.Context, port int) error
+	socketActiveFn     func(ctx context.Context) bool
+	validateFn         func(ctx context.Context) error
+	reloadFn           func(ctx context.Context) error
+	restartSocketFn    func(ctx context.Context) error
+	bannerFn           func(port int) error
 }
 
 // New creates a Service.
@@ -53,14 +65,6 @@ func (s *Service) Show(_ context.Context) (*SSHConfig, error) {
 	}
 
 	return cfg, nil
-}
-
-// SetPort changes the SSH listening port.
-func (s *Service) SetPort(ctx context.Context, opts SetPortOptions) error {
-	if err := s.writeDirective(ctx, "Port", fmt.Sprintf("%d", opts.Port)); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
 }
 
 // SetTimeout sets the ClientAliveInterval.

@@ -10,7 +10,17 @@ type ConfigEntry struct {
 type SetPortOptions struct {
 	Port          int
 	AllowFirewall bool
+	CloseOldPort  bool
 	DryRun        bool
+}
+
+// SetPortResult describes an SSH port change.
+type SetPortResult struct {
+	Port            int    `json:"port"`
+	PreviousPorts   []int  `json:"previous_ports"`
+	OldPortKept     bool   `json:"old_port_kept"`
+	FirewallChanged bool   `json:"firewall_changed"`
+	Message         string `json:"message"`
 }
 
 // SetTimeoutOptions holds options for changing SSH idle timeout.

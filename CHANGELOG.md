@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`ssh config set-port`** - With `--allow-firewall`, the new port is opened before sshd is reloaded. The previous port stays open until `--close-old-port`. The change is rolled back if the new port does not answer. SELinux port labels are applied only when SELinux is enforcing, and socket-activated sshd gets a drop-in that listens on both ports.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed
