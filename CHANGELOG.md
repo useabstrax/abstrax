@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Cron job fields** - Working directory and output redirects are stored separately from the command, so `cron info` returns `working_dir`, `output`, `error_output`, `append_output`, and `discard_output`, and `cron modify` no longer nests `cd` or redirects. Environment values with spaces round-trip. Schedules are validated per field, and `@reboot`, `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`, `@annually`, and `@midnight` are accepted. `cron modify` can set `--append-output`, `--discard-output`, and `--no-output`.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed

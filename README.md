@@ -127,6 +127,12 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Cron jobs
+
+`cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.
+
+Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`.
+
 ### PHP projects
 
 When multiple PHP versions are installed on a server, use the versioned CLI binary (`php8.5`, `php8.4`, and so on) for Artisan, Composer, cron jobs, and daemons - not the unversioned `php` command. Abstrax routes web requests to the correct PHP-FPM version per project, but CLI commands do not switch automatically. See [Projects](https://useabstrax.com/docs/commands/projects#php-on-the-command-line).
