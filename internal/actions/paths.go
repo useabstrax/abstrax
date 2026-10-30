@@ -83,6 +83,7 @@ var commandPaths = map[string][]string{
 	DaemonRestart: {"daemon", "restart"},
 	DaemonStatus:  {"daemon", "status"},
 	DaemonList:    {"daemon", "list"},
+	DaemonInfo:    {"daemon", "info"},
 	DaemonLogs:    {"daemon", "logs"},
 	DaemonInstall: {"daemon", "install"},
 
