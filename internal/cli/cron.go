@@ -114,7 +114,7 @@ func newCronAddCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.User, "user", "", "User to run the cron job as")
 	cmd.Flags().StringVar(&opts.Command, "command", "", "Command to execute")
-	cmd.Flags().StringVar(&opts.Schedule, "schedule", "", "Cron expression (5 fields)")
+	cmd.Flags().StringVar(&opts.Schedule, "schedule", "", "Cron expression (5 fields) or a macro such as @daily or @reboot")
 	cmd.Flags().StringVar(&opts.Output, "output", "", "Redirect stdout to this file")
 	cmd.Flags().StringVar(&opts.ErrorOutput, "error-output", "", "Redirect stderr to this file")
 	cmd.Flags().BoolVar(&opts.AppendOutput, "append-output", false, "Append output instead of overwriting")
@@ -180,7 +180,10 @@ func newCronModifyCmd() *cobra.Command {
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
-			if opts.Schedule != "" {
+			opts.Changed = changedFlags(cmd,
+				"user", "command", "schedule", "output", "error-output",
+				"working-dir", "env", "append-output", "discard-output", "no-output")
+			if opts.Changed["schedule"] {
 				if err := validate.CronExpression(opts.Schedule); err != nil {
 					return err
 				}
@@ -201,10 +204,13 @@ func newCronModifyCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.User, "user", "", "User to run the cron job as")
 	cmd.Flags().StringVar(&opts.Command, "command", "", "Command to execute")
-	cmd.Flags().StringVar(&opts.Schedule, "schedule", "", "Cron expression")
-	cmd.Flags().StringVar(&opts.Output, "output", "", "Redirect stdout")
-	cmd.Flags().StringVar(&opts.ErrorOutput, "error-output", "", "Redirect stderr")
-	cmd.Flags().StringVar(&opts.WorkingDir, "working-dir", "", "Working directory")
+	cmd.Flags().StringVar(&opts.Schedule, "schedule", "", "Cron expression (5 fields) or a macro such as @daily or @reboot")
+	cmd.Flags().StringVar(&opts.Output, "output", "", "Redirect stdout (empty clears it)")
+	cmd.Flags().StringVar(&opts.ErrorOutput, "error-output", "", "Redirect stderr (empty clears it)")
+	cmd.Flags().BoolVar(&opts.AppendOutput, "append-output", false, "Append stdout instead of overwriting")
+	cmd.Flags().BoolVar(&opts.DiscardOutput, "discard-output", false, "Discard stdout and stderr")
+	_ = cmd.Flags().Bool("no-output", false, "Remove stdout and stderr redirects")
+	cmd.Flags().StringVar(&opts.WorkingDir, "working-dir", "", "Working directory (empty clears it)")
 	cmd.Flags().StringArrayVar(&envPairs, "env", nil, "Environment variables (KEY=VALUE)")
 
 	return cmd
@@ -272,6 +278,21 @@ func newCronInfoCmd() *cobra.Command {
 			p.Line("  %-10s %s", "Schedule:", job.Schedule)
 			p.Line("  %-10s %s", "User:", job.User)
 			p.Line("  %-10s %s", "Command:", job.Command)
+			if job.WorkingDir != "" {
+				p.Line("  %-10s %s", "Work dir:", job.WorkingDir)
+			}
+			if job.DiscardOutput {
+				p.Line("  %-10s %s", "Output:", "discarded")
+			} else if job.Output != "" {
+				mode := "overwrite"
+				if job.AppendOutput {
+					mode = "append"
+				}
+				p.Line("  %-10s %s (%s)", "Output:", job.Output, mode)
+			}
+			if job.ErrorOutput != "" {
+				p.Line("  %-10s %s", "Errors:", job.ErrorOutput)
+			}
 			enabled := "yes"
 			if !job.Enabled {
 				enabled = "no"
@@ -341,6 +362,16 @@ func buildSchedule(everyMin, every5, every10, every15, every30, hourly, daily, w
 	default:
 		return ""
 	}
+}
+
+func changedFlags(cmd *cobra.Command, names ...string) map[string]bool {
+	changed := make(map[string]bool)
+	for _, name := range names {
+		if cmd.Flags().Changed(name) {
+			changed[name] = true
+		}
+	}
+	return changed
 }
 
 func parseEnvPairs(pairs []string) map[string]string {

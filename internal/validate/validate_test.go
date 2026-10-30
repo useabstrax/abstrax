@@ -1,6 +1,7 @@
 package validate_test
 
 import (
+	"strings"
 	"testing"
 
 	"abstrax/internal/validate"
@@ -47,14 +48,57 @@ func TestPort(t *testing.T) {
 }
 
 func TestCronExpression(t *testing.T) {
-	if err := validate.CronExpression("* * * * *"); err != nil {
-		t.Errorf("expected valid, got: %v", err)
+	valid := []string{
+		"* * * * *",
+		"0 3 * * *",
+		"*/5 * * * *",
+		"0 0 1 1 *",
+		"0 9 * * 1-5",
+		"0 0 * JAN SUN",
+		"0 0 * jan mon",
+		"30 4 1,15 * 0-7",
+		"0-59/2 0-23/1 1-31/1 JAN-DEC SUN-SAT",
+		"@reboot",
+		"@yearly",
+		"@annually",
+		"@monthly",
+		"@weekly",
+		"@daily",
+		"@midnight",
+		"@hourly",
+		"  @Daily  ",
 	}
-	if err := validate.CronExpression("0 3 * * *"); err != nil {
-		t.Errorf("expected valid, got: %v", err)
+	for _, expr := range valid {
+		if err := validate.CronExpression(expr); err != nil {
+			t.Errorf("CronExpression(%q) should be valid: %v", expr, err)
+		}
 	}
-	if err := validate.CronExpression("* *"); err == nil {
-		t.Error("expected error for 2-field expression")
+
+	invalid := []struct {
+		expr string
+		want string
+	}{
+		{"* *", "5 fields"},
+		{"99 * * * *", "minute: 99 is out of range (0-59)"},
+		{"0 25 * * *", "hour: 25 is out of range (0-23)"},
+		{"0 0 32 * *", "day: 32 is out of range (1-31)"},
+		{"0 0 * 13 *", "month: 13 is out of range (1-12)"},
+		{"0 0 * * 8", "weekday: 8 is out of range (0-7)"},
+		{"10-2 * * * *", "minute: range 10-2 is reversed"},
+		{"*/0 * * * *", `minute: step "0" must be 1 or more`},
+		{"0 0 * FOO *", `month: invalid value "FOO"`},
+		{"@weeklyish", `unknown cron macro "@weeklyish"`},
+		{"@reboot extra", `unknown cron macro "@reboot extra"`},
+	}
+	for _, tt := range invalid {
+		err := validate.CronExpression(tt.expr)
+		if err == nil {
+			t.Errorf("CronExpression(%q) should be invalid", tt.expr)
+			continue
+		}
+		if !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("CronExpression(%q) = %q, want substring %q", tt.expr, err.Error(), tt.want)
+		}
 	}
 }
 
