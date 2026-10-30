@@ -12,7 +12,8 @@ const (
 	SSHConfigDir = "/etc/ssh/sshd_config.d"
 
 	// AbstraxSSHConfig is the managed sshd include file.
-	AbstraxSSHConfig = "/etc/ssh/sshd_config.d/99-abstrax.conf"
+	// Its name sorts ahead of other drop-ins so sshd keeps these values.
+	AbstraxSSHConfig = "/etc/ssh/sshd_config.d/00-abstrax.conf"
 
 	// SupervisorConfDir is the Supervisor conf.d directory.
 	SupervisorConfDir = "/etc/supervisord.d"

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
-	"abstrax/internal/platform"
 )
 
 const (
@@ -19,6 +18,7 @@ const (
 // Service manages sshd configuration.
 type Service struct {
 	runner             *executil.Runner
+	dryRun             bool
 	managedPath        string
 	mainConfigPath     string
 	socketDropIn       string
@@ -35,7 +35,10 @@ type Service struct {
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
-	return &Service{runner: executil.New(dryRun, verbose)}
+	return &Service{
+		runner: executil.New(dryRun, verbose),
+		dryRun: dryRun,
+	}
 }
 
 // Show returns the current Abstrax-managed SSH config values.
@@ -69,42 +72,27 @@ func (s *Service) Show(_ context.Context) (*SSHConfig, error) {
 
 // SetTimeout sets the ClientAliveInterval.
 func (s *Service) SetTimeout(ctx context.Context, opts SetTimeoutOptions) error {
-	if err := s.writeDirective(ctx, "ClientAliveInterval", fmt.Sprintf("%d", opts.Seconds)); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
+	return s.applyDirective(ctx, "ClientAliveInterval", fmt.Sprintf("%d", opts.Seconds), opts.DryRun)
 }
 
 // DisableRootLogin sets PermitRootLogin to no.
 func (s *Service) DisableRootLogin(ctx context.Context, dryRun bool) error {
-	if err := s.writeDirective(ctx, "PermitRootLogin", "no"); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
+	return s.applyDirective(ctx, "PermitRootLogin", "no", dryRun)
 }
 
 // EnableRootLogin sets PermitRootLogin to yes.
 func (s *Service) EnableRootLogin(ctx context.Context, dryRun bool) error {
-	if err := s.writeDirective(ctx, "PermitRootLogin", "yes"); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
+	return s.applyDirective(ctx, "PermitRootLogin", "yes", dryRun)
 }
 
 // DisablePasswordAuth sets PasswordAuthentication to no.
 func (s *Service) DisablePasswordAuth(ctx context.Context, dryRun bool) error {
-	if err := s.writeDirective(ctx, "PasswordAuthentication", "no"); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
+	return s.applyDirective(ctx, "PasswordAuthentication", "no", dryRun)
 }
 
 // EnablePasswordAuth sets PasswordAuthentication to yes.
 func (s *Service) EnablePasswordAuth(ctx context.Context, dryRun bool) error {
-	if err := s.writeDirective(ctx, "PasswordAuthentication", "yes"); err != nil {
-		return err
-	}
-	return s.validateAndReload(ctx)
+	return s.applyDirective(ctx, "PasswordAuthentication", "yes", dryRun)
 }
 
 // Reload reloads sshd.
@@ -138,47 +126,23 @@ func (s *Service) sshAction(ctx context.Context, action string) error {
 	return fmt.Errorf("no supported init system found (need systemctl or service)")
 }
 
-// writeDirective writes or updates a directive in the managed include file.
-func (s *Service) writeDirective(_ context.Context, key, value string) error {
-	paths := platform.Resolve().Paths()
-	managed := paths.AbstraxSSHConfig
-
-	// Ensure include directory exists.
-	if _, err := os.Stat(paths.SSHConfigDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(paths.SSHConfigDir, 0755); err != nil {
-			return fmt.Errorf("creating sshd_config.d: %w", err)
-		}
-	}
-
-	// Read existing entries.
-	entries, _ := s.readManaged()
-
-	// Update or add the directive.
-	found := false
-	for i, e := range entries {
-		if strings.EqualFold(e.Key, key) {
-			entries[i].Value = value
-			found = true
-			break
-		}
-	}
-	if !found {
-		entries = append(entries, ConfigEntry{Key: key, Value: value})
-	}
-
-	return writeConfigFile(managed, entries)
-}
-
 func (s *Service) readManaged() ([]ConfigEntry, error) {
-	return readConfigFile(platform.Resolve().Paths().AbstraxSSHConfig)
+	return readConfigFile(s.managedConfigPath())
 }
 
 func (s *Service) validateAndReload(ctx context.Context) error {
-	if executil.Exists("sshd") {
+	if s.validateFn != nil {
+		if err := s.validateFn(ctx); err != nil {
+			return err
+		}
+	} else if executil.Exists("sshd") {
 		res, err := s.runner.RunSilent(ctx, "sshd", "-t")
 		if err != nil || res.ExitCode != 0 {
 			return fmt.Errorf("sshd config validation failed: %s", res.Stderr)
 		}
+	}
+	if s.reloadFn != nil {
+		return s.reloadFn(ctx)
 	}
 	return s.Reload(ctx, ReloadOptions{})
 }
