@@ -41,35 +41,6 @@ func New(dryRun, verbose bool) *Service {
 	}
 }
 
-// Show returns the current Abstrax-managed SSH config values.
-func (s *Service) Show(_ context.Context) (*SSHConfig, error) {
-	cfg := &SSHConfig{}
-
-	entries, err := s.readManaged()
-	if err != nil {
-		// Fall back to reading main config.
-		entries, err = readConfigFile(sshdConfigPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	for _, e := range entries {
-		switch strings.ToLower(e.Key) {
-		case "port":
-			cfg.Port = e.Value
-		case "permitrootlogin":
-			cfg.PermitRootLogin = e.Value
-		case "passwordauthentication":
-			cfg.PasswordAuth = e.Value
-		case "clientaliveinterval":
-			cfg.ClientAliveInterval = e.Value
-		}
-	}
-
-	return cfg, nil
-}
-
 // SetTimeout sets the ClientAliveInterval.
 func (s *Service) SetTimeout(ctx context.Context, opts SetTimeoutOptions) error {
 	return s.applyDirective(ctx, "ClientAliveInterval", fmt.Sprintf("%d", opts.Seconds), opts.DryRun)
@@ -124,10 +95,6 @@ func (s *Service) sshAction(ctx context.Context, action string) error {
 		return err
 	}
 	return fmt.Errorf("no supported init system found (need systemctl or service)")
-}
-
-func (s *Service) readManaged() ([]ConfigEntry, error) {
-	return readConfigFile(s.managedConfigPath())
 }
 
 func (s *Service) validateAndReload(ctx context.Context) error {

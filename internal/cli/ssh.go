@@ -44,7 +44,7 @@ func NewSSHCmd() *cobra.Command {
 func newSSHConfigShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
-		Short: "Show current SSH configuration managed by Abstrax",
+		Short: "Show the SSH settings sshd is using",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := sshcfg.New(false, globals.Flags.Verbose)
 			cfg, err := svc.Show(cmd.Context())
@@ -61,14 +61,24 @@ func newSSHConfigShowCmd() *cobra.Command {
 			}
 
 			p.Line("")
-			p.Line("  %-28s %s", "Port:", cfg.Port)
-			p.Line("  %-28s %s", "PermitRootLogin:", cfg.PermitRootLogin)
-			p.Line("  %-28s %s", "PasswordAuthentication:", cfg.PasswordAuth)
-			p.Line("  %-28s %s", "ClientAliveInterval:", cfg.ClientAliveInterval)
+			if cfg.Note != "" {
+				p.Line("  %s", cfg.Note)
+			}
+			p.Line("  %-28s %s", "Port:", formatSSHSetting(cfg.Port, cfg.PortSource))
+			p.Line("  %-28s %s", "PermitRootLogin:", formatSSHSetting(cfg.PermitRootLogin, cfg.PermitRootLoginSource))
+			p.Line("  %-28s %s", "PasswordAuthentication:", formatSSHSetting(cfg.PasswordAuth, cfg.PasswordAuthSource))
+			p.Line("  %-28s %s", "ClientAliveInterval:", formatSSHSetting(cfg.ClientAliveInterval, cfg.ClientAliveIntervalSource))
 			p.Line("")
 			return nil
 		},
 	}
+}
+
+func formatSSHSetting(value, source string) string {
+	if source == "" {
+		return value
+	}
+	return value + " (" + source + ")"
 }
 
 func newSSHConfigSetPortCmd() *cobra.Command {
