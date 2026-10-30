@@ -8,7 +8,7 @@ type AddOptions struct {
 	User              string
 	Processes         int
 	Autostart         bool
-	Autorestart       string // always, on-failure, false
+	Autorestart       string // always, unexpected, false
 	StartSecs         int
 	StartRetries      int
 	StopSignal        string
@@ -19,6 +19,9 @@ type AddOptions struct {
 	Environment       map[string]string
 	InstallSupervisor bool
 	DryRun            bool
+	ClearEnvironment  bool
+	UnsetEnvironment  []string
+	Changed           map[string]bool
 }
 
 // RemoveOptions holds options for removing a daemon.

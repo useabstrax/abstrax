@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	executil "abstrax/internal/exec"
@@ -39,11 +40,24 @@ func errSupervisorMissing() error {
 	return fmt.Errorf("supervisor is not installed; run `sudo abstrax daemon install`")
 }
 
+// supervisorInstalled reports whether supervisorctl is on PATH.
+// Tests replace it.
+var supervisorInstalled = executil.Exists
+
 func (s *Service) requireSupervisor() error {
-	if executil.Exists("supervisorctl") {
+	if supervisorInstalled("supervisorctl") {
 		return nil
 	}
 	return errSupervisorMissing()
+}
+
+func validateAutorestart(value string) error {
+	switch value {
+	case "always", "unexpected", "false":
+		return nil
+	default:
+		return fmt.Errorf("autorestart must be always, unexpected, or false, got %q", value)
+	}
 }
 
 // Install installs Supervisor and enables/starts its service.
@@ -96,6 +110,9 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*DaemonInfo, error)
 
 	if _, err := os.Stat(path); err == nil {
 		return nil, fmt.Errorf("daemon %q already exists; use 'daemon modify' to update it", opts.Name)
+	}
+	if err := validateAutorestart(opts.Autorestart); err != nil && opts.Autorestart != "" {
+		return nil, err
 	}
 
 	if err := os.MkdirAll(s.confDir, 0755); err != nil {
@@ -155,11 +172,19 @@ func (s *Service) Modify(ctx context.Context, opts AddOptions) (*DaemonInfo, err
 
 	path := s.confPath(opts.Name)
 
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, fmt.Errorf("daemon %q does not exist", opts.Name)
+	current, err := readConf(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("daemon %q does not exist", opts.Name)
+		}
+		return nil, err
 	}
 
-	if err := s.writeConf(path, opts); err != nil {
+	merged, err := mergeDaemonOptions(current, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.writeConf(path, merged); err != nil {
 		return nil, err
 	}
 
@@ -388,9 +413,14 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 	}
 
 	if len(opts.Environment) > 0 {
-		var envParts []string
-		for k, v := range opts.Environment {
-			envParts = append(envParts, fmt.Sprintf(`%s="%s"`, k, v))
+		keys := make([]string, 0, len(opts.Environment))
+		for k := range opts.Environment {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		envParts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			envParts = append(envParts, fmt.Sprintf(`%s="%s"`, k, opts.Environment[k]))
 		}
 		sb.WriteString(fmt.Sprintf("environment=%s\n", strings.Join(envParts, ",")))
 	}

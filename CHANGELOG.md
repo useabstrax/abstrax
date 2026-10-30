@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`daemon modify`** - Only flags that were passed are written. Omitted settings are read back from the existing Supervisor config instead of being reset. Modify accepts the same settings as `daemon add`, including restart policy and log paths. `--environment` merges by key; `--clear-environment` and `--unset-environment` remove keys. `--autorestart` must be `always`, `unexpected`, or `false`. `supervisorctl update` still runs afterwards and restarts the program when the config changed.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed
