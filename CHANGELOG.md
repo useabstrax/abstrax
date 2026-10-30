@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **MySQL SQL** - Privileges are parsed against an allowlist and the GRANT statement is built from that list. Hosts must match a safe character set and are escaped, and database names are checked on `user add --grant-db` as well as `grant`. Column-level privileges and hosts outside that character set are rejected.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed

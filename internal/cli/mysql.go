@@ -291,6 +291,18 @@ func newMySQLDBAddCmd() *cobra.Command {
 			if err := validate.DatabaseName(opts.Name); err != nil {
 				return err
 			}
+			if opts.Charset == "" {
+				opts.Charset = "utf8mb4"
+			}
+			if opts.Collation == "" {
+				opts.Collation = "utf8mb4_unicode_ci"
+			}
+			if err := mysql.ValidateIdent("charset", opts.Charset); err != nil {
+				return err
+			}
+			if err := mysql.ValidateIdent("collation", opts.Collation); err != nil {
+				return err
+			}
 
 			svc := mysql.New(opts.DryRun, globals.Flags.Verbose)
 			if err := svc.DBAdd(cmd.Context(), opts); err != nil {
@@ -384,6 +396,19 @@ func newMySQLUserAddCmd() *cobra.Command {
 			if err := validate.MySQLUsername(opts.Name); err != nil {
 				return err
 			}
+			if err := validate.MySQLHost(opts.Host); err != nil {
+				return err
+			}
+			if opts.GrantDB != "" {
+				if err := validate.DatabaseName(opts.GrantDB); err != nil {
+					return err
+				}
+			}
+			if opts.Privileges != "" {
+				if _, err := mysql.ParsePrivileges(opts.Privileges); err != nil {
+					return err
+				}
+			}
 
 			generated := false
 			if passwordFlag {
@@ -437,6 +462,12 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+			if err := validate.MySQLUsername(name); err != nil {
+				return err
+			}
+			if err := validate.MySQLHost(host); err != nil {
+				return err
+			}
 
 			ok, err := confirm.Ask(
 				fmt.Sprintf("Drop MySQL user %q?", name),
@@ -535,6 +566,11 @@ func newMySQLGrantCmd() *cobra.Command {
 			if err := validate.DatabaseName(db); err != nil {
 				return err
 			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
 
 			privs := privileges
 			if privs == "" {
@@ -547,6 +583,10 @@ func newMySQLGrantCmd() *cobra.Command {
 				} else {
 					privs = mysql.PresetPrivileges[mysql.PresetApp]
 				}
+			}
+
+			if _, err := mysql.ParsePrivileges(privs); err != nil {
+				return err
 			}
 
 			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -573,6 +613,17 @@ func newMySQLRevokeCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, db := args[0], args[1]
+			if err := validate.MySQLUsername(user); err != nil {
+				return err
+			}
+			if err := validate.DatabaseName(db); err != nil {
+				return err
+			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
 
 			ok, err := confirm.Ask(
 				fmt.Sprintf("Revoke all privileges on %q from %q?", db, user),

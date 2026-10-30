@@ -127,6 +127,10 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### MySQL
+
+`mysql grant --privileges` and `mysql user add --privileges` only accept known privilege names. Hosts and database names are checked before they are placed in SQL.
+
 ### PHP projects
 
 When multiple PHP versions are installed on a server, use the versioned CLI binary (`php8.5`, `php8.4`, and so on) for Artisan, Composer, cron jobs, and daemons - not the unversioned `php` command. Abstrax routes web requests to the correct PHP-FPM version per project, but CLI commands do not switch automatically. See [Projects](https://useabstrax.com/docs/commands/projects#php-on-the-command-line).
