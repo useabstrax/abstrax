@@ -6,18 +6,21 @@ type RuleKind string
 const (
 	RuleKindService RuleKind = "service"
 	RuleKindPort    RuleKind = "port"
+	RuleKindRich    RuleKind = "rich"
 	RuleKindUFW     RuleKind = "ufw"
 )
 
 // Rule describes a firewall rule.
 type Rule struct {
 	ID       string   `json:"id"`
+	Number   string   `json:"number,omitempty"`
 	Action   string   `json:"action"`
 	Port     string   `json:"port,omitempty"`
 	Protocol string   `json:"protocol,omitempty"`
 	From     string   `json:"from,omitempty"`
 	To       string   `json:"to,omitempty"`
 	Comment  string   `json:"comment,omitempty"`
+	IPv6     bool     `json:"ipv6,omitempty"`
 	Kind     RuleKind `json:"kind,omitempty"`
 	Target   string   `json:"target,omitempty"`
 }

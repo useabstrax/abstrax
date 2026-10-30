@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **firewalld source-limited allows** - `firewall allow <port> --from <ip>` on firewalld now adds a rich rule for that source. It no longer opens the port to every address, including for ports 80 and 443. Rich rules are listed and can be removed by id. `firewall deny <port>` adds IPv4 and IPv6 reject rules. IPv6 sources use `family="ipv6"`. Firewalld rule ids are a stable hash, with the list position kept as `number`.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed

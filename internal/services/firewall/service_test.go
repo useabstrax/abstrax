@@ -15,15 +15,18 @@ public (active)
 	if len(rules) != 7 {
 		t.Fatalf("got %d rules, want 7: %#v", len(rules), rules)
 	}
-	if rules[0].Kind != RuleKindService || rules[0].Target != "cockpit" || rules[0].ID != "1" {
+	if rules[0].Kind != RuleKindService || rules[0].Target != "cockpit" || rules[0].Number != "1" {
 		t.Fatalf("first rule = %#v", rules[0])
+	}
+	if rules[0].ID == "" || rules[0].ID == "1" {
+		t.Fatalf("expected stable id, got %#v", rules[0])
 	}
 	http := rules[2]
 	if http.Kind != RuleKindService || http.Target != "http" {
 		t.Fatalf("http rule = %#v", http)
 	}
 	port := rules[5]
-	if port.Kind != RuleKindPort || port.Target != "8080/tcp" || port.ID != "6" {
+	if port.Kind != RuleKindPort || port.Target != "8080/tcp" || port.Number != "6" || port.Port != "8080" || port.Protocol != "tcp" {
 		t.Fatalf("port rule = %#v", port)
 	}
 }

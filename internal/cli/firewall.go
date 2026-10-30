@@ -241,6 +241,11 @@ func newFirewallDenyCmd() *cobra.Command {
 			opts.Port = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
+			if opts.From != "" {
+				if err := validate.CIDRRange(opts.From); err != nil {
+					return err
+				}
+			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
@@ -258,6 +263,7 @@ func newFirewallDenyCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp)")
+	cmd.Flags().StringVar(&opts.From, "from", "", "Deny only from this IP or CIDR")
 	return cmd
 }
 
@@ -349,9 +355,9 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"ID", "PORT/IP", "PROTOCOL", "ACTION"})
+			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "FROM"})
 			for _, r := range rules {
-				t.Append([]string{r.ID, r.Port, r.Protocol, r.Action})
+				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, r.Action, r.From})
 			}
 			t.Render()
 			return nil
