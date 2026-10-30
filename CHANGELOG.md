@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **`daemon info <name>`** - Prints the settings from the Supervisor config (command, directory, user, numprocs, restart policy, and log paths) plus live status. Registered as the `daemon.info` action.
+- **`mysql user list --grants`** - Includes each user's raw grants and parsed per-database privileges in one call. `--exclude-system` hides built-in accounts. Without `--grants`, the list is unchanged.
 
 ### Changed
 
@@ -21,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Cron job fields** - Working directory and output redirects are stored separately from the command, so `cron info` returns `working_dir`, `output`, `error_output`, `append_output`, and `discard_output`, and `cron modify` no longer nests `cd` or redirects. Environment values with spaces round-trip. Schedules are validated per field, and `@reboot`, `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`, `@annually`, and `@midnight` are accepted. `cron modify` can set `--append-output`, `--discard-output`, and `--no-output`.
 - **Multi-process daemons** - `start`, `stop`, and `restart` address the Supervisor group as `<name>:*`. `daemon logs --lines N` returns N lines from the log file. `--stderr` works, and `--process N` selects one process when `numprocs` is greater than 1.
 - **`daemon modify`** - Only flags that were passed are written. Omitted settings are read back from the existing Supervisor config instead of being reset. Modify accepts the same settings as `daemon add`, including restart policy and log paths. `--environment` merges by key; `--clear-environment` and `--unset-environment` remove keys. `--autorestart` must be `always`, `unexpected`, or `false`. `supervisorctl update` still runs afterwards and restarts the program when the config changed.
+- **`mysql user info`** - Looks up every host the user exists on, including a specific IP, instead of only `localhost`, `127.0.0.1`, and `%`. `--host` limits the result to one host. JSON output is a list, one entry per host.
 
 ## [2.3.1] - 2026-08-19
 
