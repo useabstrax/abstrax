@@ -77,7 +77,11 @@ func newFirewallStatusCmd() *cobra.Command {
 				p.Line("")
 				p.Line("  Rules:")
 				for _, r := range status.Rules {
-					p.Line("    [%s] %-20s %s", r.ID, r.Port, r.Action)
+					if r.Number != "" && r.Number != r.ID {
+						p.Line("    [%s] %s  %-20s %s %s", r.Number, r.ID, formatRulePort(r), r.Action, strings.ToUpper(r.Direction))
+						continue
+					}
+					p.Line("    [%s] %-20s %s", r.ID, formatRulePort(r), r.Action)
 				}
 			}
 			p.Line("")
@@ -241,6 +245,11 @@ func newFirewallDenyCmd() *cobra.Command {
 			opts.Port = args[0]
 			opts.DryRun = globals.Flags.DryRun
 
+			if opts.From != "" {
+				if err := validate.CIDRRange(opts.From); err != nil {
+					return err
+				}
+			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
@@ -258,6 +267,7 @@ func newFirewallDenyCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp)")
+	cmd.Flags().StringVar(&opts.From, "from", "", "Deny only from this IP or CIDR")
 	return cmd
 }
 
@@ -293,6 +303,8 @@ func newFirewallAllowIPCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.To, "to", "", "Destination IP")
 	cmd.Flags().StringVar(&opts.Port, "port", "", "Specific port")
+	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp). Default is both when a port is set")
+	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
 
 	return cmd
 }
@@ -300,7 +312,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 func newFirewallDenyIPCmd() *cobra.Command {
 	opts := firewall.AllowOptions{}
 
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "deny-ip <ip-or-cidr>",
 		Short: "Deny all traffic from an IP or CIDR",
 		Args:  cobra.ExactArgs(1),
@@ -326,6 +338,9 @@ func newFirewallDenyIPCmd() *cobra.Command {
 			return printSimpleResult(actions.FirewallDenyIP, msg, protect)
 		},
 	}
+
+	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
+	return cmd
 }
 
 func newFirewallRuleListCmd() *cobra.Command {
@@ -349,9 +364,9 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"ID", "PORT/IP", "PROTOCOL", "ACTION"})
+			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "TO"})
 			for _, r := range rules {
-				t.Append([]string{r.ID, r.Port, r.Protocol, r.Action})
+				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, r.Action, strings.ToUpper(r.Direction), r.From, r.To})
 			}
 			t.Render()
 			return nil
@@ -365,7 +380,10 @@ func newFirewallRuleRemoveCmd() *cobra.Command {
 		Short: "Remove a firewall rule by list ID",
 		Long: `Remove a firewall rule by the ID shown in "abstrax firewall rule list".
 
-On UFW, IDs are UFW numbered rules.
+On UFW, id is a stable hash of the rule. number is the current position in
+"ufw status numbered" and can change when other rules are added or removed.
+A numeric id still works, with a warning.
+
 On firewalld, IDs are Abstrax-assigned entries that map to a service or port.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -427,6 +445,19 @@ func newFirewallRemovePortCmd() *cobra.Command {
 				fmt.Sprintf("Firewall port %s/%s removed.", port, proto), nil)
 		},
 	}
+}
+
+func formatRulePort(r firewall.Rule) string {
+	if r.Port == "" {
+		if r.From != "" {
+			return r.From
+		}
+		return "Anywhere"
+	}
+	if r.Protocol != "" && !strings.Contains(r.Port, "/") {
+		return r.Port + "/" + r.Protocol
+	}
+	return r.Port
 }
 
 func firewallSSHProtectMessage(base string, protect firewall.SSHProtectResult) string {

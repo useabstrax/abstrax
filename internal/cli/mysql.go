@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -494,18 +495,28 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 }
 
 func newMySQLUserListCmd() *cobra.Command {
-	return &cobra.Command{
+	var opts mysql.UserListOptions
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List MySQL users",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := mysql.New(false, globals.Flags.Verbose)
-			users, err := svc.UserList(cmd.Context())
+			users, err := svc.UserList(cmd.Context(), opts)
 			if err != nil {
 				return err
 			}
 
 			if machineOutput() {
 				emitResult(output.Success(actions.MySQLUserList, "", users))
+				return nil
+			}
+
+			if opts.Grants {
+				t := output.NewTable([]string{"USER", "HOST", "DATABASES"})
+				for _, u := range users {
+					t.Append([]string{u.Name, u.Host, formatDBGrants(u)})
+				}
+				t.Render()
 				return nil
 			}
 
@@ -517,36 +528,60 @@ func newMySQLUserListCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&opts.Grants, "grants", false, "Include each user's grants")
+	cmd.Flags().BoolVar(&opts.ExcludeSystem, "exclude-system", false, "Hide built-in accounts")
+	return cmd
 }
 
 func newMySQLUserInfoCmd() *cobra.Command {
-	return &cobra.Command{
+	var host string
+	cmd := &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show MySQL user grants",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := mysql.New(false, globals.Flags.Verbose)
-			info, err := svc.UserInfo(cmd.Context(), args[0])
+			users, err := svc.UserInfo(cmd.Context(), args[0], host)
 			if err != nil {
 				return err
 			}
 
-			p := printer()
 			if machineOutput() {
-				emitResult(output.Success(actions.MySQLUserInfo, "", info))
+				emitResult(output.Success(actions.MySQLUserInfo, "", users))
 				return nil
 			}
 
-			p.Line("")
-			p.Line("  User: %s", info.Name)
-			p.Line("  Grants:")
-			for _, g := range info.Grants {
-				p.Line("    %s", g)
+			p := printer()
+			for _, info := range users {
+				p.Line("")
+				p.Line("  User: %s", info.Name)
+				p.Line("  Host: %s", info.Host)
+				p.Line("  Grants:")
+				for _, g := range info.Grants {
+					p.Line("    %s", g)
+				}
 			}
 			p.Line("")
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&host, "host", "", "Only show this host")
+	return cmd
+}
+
+func formatDBGrants(u mysql.UserInfo) string {
+	if len(u.Databases) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(u.Databases))
+	for _, db := range u.Databases {
+		label := db.Name
+		if db.Preset != nil {
+			label += " (" + *db.Preset + ")"
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func newMySQLGrantCmd() *cobra.Command {

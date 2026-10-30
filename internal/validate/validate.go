@@ -5,6 +5,7 @@ package validate
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ var (
 	pluginNameRe  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	projectNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
 	domainRe      = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+	envKeyRe      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // Username validates a Linux username.
@@ -168,24 +170,165 @@ func Domain(d string) error {
 	return nil
 }
 
-// FilePath performs a basic sanity check on a file path.
+// FilePath checks that p is an absolute path on a single line.
 func FilePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("path cannot be empty")
 	}
-	if strings.Contains(p, "\x00") {
-		return fmt.Errorf("path contains null byte")
+	if err := SingleLine("path", p); err != nil {
+		return err
+	}
+	if !filepath.IsAbs(p) {
+		return fmt.Errorf("path must be absolute, got %q", p)
 	}
 	return nil
 }
 
-// CronExpression validates a cron schedule expression (5-field standard format).
+// SingleLine rejects values that could start a new line in a config file.
+func SingleLine(field, value string) error {
+	if strings.Contains(value, "\n") || strings.Contains(value, "\r") || strings.Contains(value, "\x00") {
+		return fmt.Errorf("%s cannot contain line breaks or null bytes", field)
+	}
+	return nil
+}
+
+// EnvKey validates an environment variable name.
+func EnvKey(key string) error {
+	if !envKeyRe.MatchString(key) {
+		return fmt.Errorf("invalid environment variable name %q", key)
+	}
+	return nil
+}
+
+var cronMacros = map[string]struct{}{
+	"@reboot":   {},
+	"@yearly":   {},
+	"@annually": {},
+	"@monthly":  {},
+	"@weekly":   {},
+	"@daily":    {},
+	"@midnight": {},
+	"@hourly":   {},
+}
+
+var cronMonthNames = map[string]int{
+	"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+	"JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+var cronWeekdayNames = map[string]int{
+	"SUN": 0, "MON": 1, "TUE": 2, "WED": 3, "THU": 4, "FRI": 5, "SAT": 6,
+}
+
+// CronExpression validates a five-field cron schedule or a standard @ macro.
 func CronExpression(expr string) error {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return fmt.Errorf("cron expression is empty")
+	}
+	if strings.HasPrefix(expr, "@") {
+		if _, ok := cronMacros[strings.ToLower(expr)]; ok {
+			return nil
+		}
+		return fmt.Errorf("unknown cron macro %q", expr)
+	}
+
 	parts := strings.Fields(expr)
 	if len(parts) != 5 {
 		return fmt.Errorf("cron expression must have 5 fields (minute hour day month weekday), got %d", len(parts))
 	}
+
+	fields := []struct {
+		name string
+		min  int
+		max  int
+	}{
+		{"minute", 0, 59},
+		{"hour", 0, 23},
+		{"day", 1, 31},
+		{"month", 1, 12},
+		{"weekday", 0, 7},
+	}
+	for i, field := range fields {
+		if err := validateCronField(field.name, parts[i], field.min, field.max); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func validateCronField(name, field string, min, max int) error {
+	if field == "" {
+		return fmt.Errorf("%s: empty value", name)
+	}
+	for _, item := range strings.Split(field, ",") {
+		if item == "" {
+			return fmt.Errorf("%s: empty list entry in %q", name, field)
+		}
+		if err := validateCronItem(name, item, min, max); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCronItem(name, item string, min, max int) error {
+	body := item
+	if i := strings.Index(item, "/"); i >= 0 {
+		body = item[:i]
+		step := item[i+1:]
+		n, err := strconv.Atoi(step)
+		if err != nil || n < 1 {
+			return fmt.Errorf("%s: step %q must be 1 or more", name, step)
+		}
+		if body == "*" {
+			return nil
+		}
+	}
+	if body == "*" {
+		return nil
+	}
+	if strings.Contains(body, "-") {
+		bounds := strings.SplitN(body, "-", 2)
+		if bounds[0] == "" || bounds[1] == "" {
+			return fmt.Errorf("%s: invalid range %q", name, body)
+		}
+		start, err := cronFieldValue(name, bounds[0], min, max)
+		if err != nil {
+			return err
+		}
+		end, err := cronFieldValue(name, bounds[1], min, max)
+		if err != nil {
+			return err
+		}
+		if start > end {
+			return fmt.Errorf("%s: range %s is reversed", name, body)
+		}
+		return nil
+	}
+	_, err := cronFieldValue(name, body, min, max)
+	return err
+}
+
+func cronFieldValue(name, raw string, min, max int) (int, error) {
+	if n, err := strconv.Atoi(raw); err == nil {
+		if n < min || n > max {
+			return 0, fmt.Errorf("%s: %d is out of range (%d-%d)", name, n, min, max)
+		}
+		return n, nil
+	}
+	upper := strings.ToUpper(raw)
+	switch name {
+	case "month":
+		if n, ok := cronMonthNames[upper]; ok {
+			return n, nil
+		}
+	case "weekday":
+		if n, ok := cronWeekdayNames[upper]; ok {
+			return n, nil
+		}
+	}
+	return 0, fmt.Errorf("%s: invalid value %q", name, raw)
 }
 
 // Shell validates a login shell path.
