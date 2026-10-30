@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Daemon list and status JSON** - `daemon list` and `daemon status` group processes under one daemon. `status` is the worst process state. Each process includes `pid`, `uptime`, and `uptime_seconds` while it is running. `daemon list` shows Abstrax-managed daemons by default; `--all` includes other Supervisor programs with `managed: false` and no `config_path`.
 - **`user lock`** - Also expires the account, so SSH key logins are refused as well as passwords. `user unlock` restores the previous expiry. `--password-only` keeps the old password-only lock. `user info` and `user list` add `expired` and `login_blocked`. `locked` still means the password is locked.
+- **`ssh config set-port`** - With `--allow-firewall`, the new port is opened before sshd is reloaded. The previous port stays open until `--close-old-port`. The change is rolled back if the new port does not answer. SELinux port labels are applied only when SELinux is enforcing, and socket-activated sshd gets a drop-in that listens on both ports.
 
 ### Fixed
 

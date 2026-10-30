@@ -168,6 +168,10 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
 
+### SSH port
+
+`ssh config set-port <port> --allow-firewall` opens the new port before reloading sshd. The old port stays open until you pass `--close-old-port`, so you can confirm a new connection first. Without `--allow-firewall` the firewall is left unchanged.
+
 ### PHP projects
 
 When multiple PHP versions are installed on a server, use the versioned CLI binary (`php8.5`, `php8.4`, and so on) for Artisan, Composer, cron jobs, and daemons - not the unversioned `php` command. Abstrax routes web requests to the correct PHP-FPM version per project, but CLI commands do not switch automatically. See [Projects](https://useabstrax.com/docs/commands/projects#php-on-the-command-line).
