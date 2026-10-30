@@ -427,15 +427,19 @@ func (s *Service) rereadUpdate(ctx context.Context) error {
 }
 
 func (s *Service) writeConf(path string, opts AddOptions) error {
+	if err := ValidateOptions(opts); err != nil {
+		return err
+	}
+
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("[program:%s]\n", opts.Name))
-	sb.WriteString(fmt.Sprintf("command=%s\n", opts.Command))
+	sb.WriteString(fmt.Sprintf("command=%s\n", escapeSupervisor(opts.Command)))
 
 	if opts.Directory != "" {
-		sb.WriteString(fmt.Sprintf("directory=%s\n", opts.Directory))
+		sb.WriteString(fmt.Sprintf("directory=%s\n", escapeSupervisor(opts.Directory)))
 	}
 	if opts.User != "" {
-		sb.WriteString(fmt.Sprintf("user=%s\n", opts.User))
+		sb.WriteString(fmt.Sprintf("user=%s\n", escapeSupervisor(opts.User)))
 	}
 
 	numprocs := opts.Processes
@@ -458,7 +462,7 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 	if autorestart == "" {
 		autorestart = "unexpected"
 	}
-	sb.WriteString(fmt.Sprintf("autorestart=%s\n", autorestart))
+	sb.WriteString(fmt.Sprintf("autorestart=%s\n", escapeSupervisor(autorestart)))
 
 	startsecs := opts.StartSecs
 	if startsecs == 0 {
@@ -476,7 +480,7 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 	if stopsignal == "" {
 		stopsignal = "TERM"
 	}
-	sb.WriteString(fmt.Sprintf("stopsignal=%s\n", stopsignal))
+	sb.WriteString(fmt.Sprintf("stopsignal=%s\n", escapeSupervisor(stopsignal)))
 
 	stopwait := opts.StopWaitSecs
 	if stopwait == 0 {
@@ -485,32 +489,27 @@ func (s *Service) writeConf(path string, opts AddOptions) error {
 	sb.WriteString(fmt.Sprintf("stopwaitsecs=%d\n", stopwait))
 
 	if opts.ExitCodes != "" {
-		sb.WriteString(fmt.Sprintf("exitcodes=%s\n", opts.ExitCodes))
+		sb.WriteString(fmt.Sprintf("exitcodes=%s\n", escapeSupervisor(opts.ExitCodes)))
 	}
 
 	if opts.StdoutLogFile != "" {
-		sb.WriteString(fmt.Sprintf("stdout_logfile=%s\n", opts.StdoutLogFile))
+		sb.WriteString(fmt.Sprintf("stdout_logfile=%s\n", escapeSupervisor(opts.StdoutLogFile)))
 	} else {
 		sb.WriteString(fmt.Sprintf("stdout_logfile=/var/log/supervisor/%s-stdout.log\n", opts.Name))
 	}
 
 	if opts.StderrLogFile != "" {
-		sb.WriteString(fmt.Sprintf("stderr_logfile=%s\n", opts.StderrLogFile))
+		sb.WriteString(fmt.Sprintf("stderr_logfile=%s\n", escapeSupervisor(opts.StderrLogFile)))
 	} else {
 		sb.WriteString(fmt.Sprintf("stderr_logfile=/var/log/supervisor/%s-stderr.log\n", opts.Name))
 	}
 
 	if len(opts.Environment) > 0 {
-		keys := make([]string, 0, len(opts.Environment))
-		for k := range opts.Environment {
-			keys = append(keys, k)
+		envLine, err := formatEnvironment(opts.Environment)
+		if err != nil {
+			return err
 		}
-		sort.Strings(keys)
-		envParts := make([]string, 0, len(keys))
-		for _, k := range keys {
-			envParts = append(envParts, fmt.Sprintf(`%s="%s"`, k, opts.Environment[k]))
-		}
-		sb.WriteString(fmt.Sprintf("environment=%s\n", strings.Join(envParts, ",")))
+		sb.WriteString(fmt.Sprintf("environment=%s\n", envLine))
 	}
 
 	return os.WriteFile(path, []byte(sb.String()), 0644)
@@ -529,9 +528,9 @@ func logPathsFromConf(path, name string) (stdout, stderr string) {
 		line = strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(line, "stdout_logfile="):
-			stdout = strings.TrimPrefix(line, "stdout_logfile=")
+			stdout = unescapeSupervisor(strings.TrimPrefix(line, "stdout_logfile="))
 		case strings.HasPrefix(line, "stderr_logfile="):
-			stderr = strings.TrimPrefix(line, "stderr_logfile=")
+			stderr = unescapeSupervisor(strings.TrimPrefix(line, "stderr_logfile="))
 		}
 	}
 	return stdout, stderr

@@ -150,6 +150,8 @@ Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are
 
 `daemon info <name>` prints the config Abstrax wrote, plus that live status. `daemon logs --lines N` returns N lines from the log file. When a daemon runs more than one process, `--process N` selects it (default `0`).
 
+`daemon add` and `daemon modify` refuse values that contain a line break. A `%` in a value is stored as `%%` so Supervisor treats it as a literal percent. Environment values are quoted; `"` and `\` are not accepted in those values.
+
 ### Daemon modify
 
 `daemon modify` changes only the flags you pass. Other settings stay as they are in the Supervisor config. It accepts the same settings as `daemon add`. `--environment` merges by key. `--clear-environment` drops every variable first, and `--unset-environment KEY` removes one. `--autorestart` must be `always`, `unexpected`, or `false`.

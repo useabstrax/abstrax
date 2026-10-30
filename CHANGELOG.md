@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Security
 
 - **Cron files** - `cron add` and `cron modify` reject line breaks, carriage returns and null bytes in every value, and reject invalid users and environment names. `%` in a command is written as `\%` and read back as `%`, so it is a literal percent instead of cron's stdin separator. Working directory and output paths are shell-quoted.
+- **Daemon configs** - `daemon add` and `daemon modify` reject line breaks, carriage returns and null bytes, and reject invalid users, paths, stop signals, exit codes and environment names. `%` is written as `%%` so Supervisor treats it as a literal percent. Environment values are double-quoted. Values containing `"` or `\` are rejected because Supervisor 4.2 parses `environment` with non-POSIX `shlex`, which does not treat `\` as an escape.
 
 ### Added
 

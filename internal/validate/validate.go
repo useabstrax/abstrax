@@ -5,6 +5,7 @@ package validate
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -160,13 +161,16 @@ func Domain(d string) error {
 	return nil
 }
 
-// FilePath performs a basic sanity check on a file path.
+// FilePath checks that p is an absolute path on a single line.
 func FilePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("path cannot be empty")
 	}
-	if strings.Contains(p, "\x00") {
-		return fmt.Errorf("path contains null byte")
+	if err := SingleLine("path", p); err != nil {
+		return err
+	}
+	if !filepath.IsAbs(p) {
+		return fmt.Errorf("path must be absolute, got %q", p)
 	}
 	return nil
 }

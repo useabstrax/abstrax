@@ -85,17 +85,19 @@ func newDaemonAddCmd() *cobra.Command {
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
-				return err
-			}
 			if opts.Command == "" {
 				return fmt.Errorf("--command is required")
 			}
 			if err := validateAutorestart(opts.Autorestart); err != nil {
 				return err
 			}
-
 			opts.Environment = parseEnvPairs(envPairs)
+			if err := daemon.ValidateOptions(opts); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
 
 			svc := daemon.New(opts.DryRun, globals.Flags.Verbose)
 			info, err := svc.Add(cmd.Context(), opts)
@@ -198,16 +200,18 @@ supervisorctl reread and update. update restarts the program when its config cha
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
+			opts.Environment = parseEnvPairs(envPairs)
 			if opts.Changed["autorestart"] {
 				if err := validateAutorestart(opts.Autorestart); err != nil {
 					return err
 				}
 			}
+			if err := daemon.ValidateOptions(opts); err != nil {
+				return err
+			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
-
-			opts.Environment = parseEnvPairs(envPairs)
 
 			svc := daemon.New(opts.DryRun, globals.Flags.Verbose)
 			info, err := svc.Modify(cmd.Context(), opts)

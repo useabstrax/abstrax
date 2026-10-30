@@ -3,9 +3,25 @@ package daemon
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+
+	"abstrax/internal/validate"
 )
+
+var exitCodesRe = regexp.MustCompile(`^\d{1,3}(,\d{1,3})*$`)
+
+var stopSignals = map[string]struct{}{
+	"TERM": {},
+	"HUP":  {},
+	"INT":  {},
+	"QUIT": {},
+	"KILL": {},
+	"USR1": {},
+	"USR2": {},
+}
 
 func readConf(path string) (AddOptions, error) {
 	data, err := os.ReadFile(path)
@@ -37,7 +53,7 @@ func readConf(path string) (AddOptions, error) {
 			continue
 		}
 		key = strings.TrimSpace(key)
-		val = strings.TrimSpace(val)
+		val = unescapeSupervisor(strings.TrimSpace(val))
 		switch key {
 		case "command":
 			opts.Command = val
@@ -211,6 +227,88 @@ func (e *fieldError) Error() string {
 		return "processes must be 1 or greater"
 	}
 	return e.field + " cannot be empty"
+}
+
+// ValidateOptions checks every value that would be written to a Supervisor config.
+func ValidateOptions(opts AddOptions) error {
+	if err := validate.DaemonName(opts.Name); err != nil {
+		return err
+	}
+	if err := validate.SingleLine("command", opts.Command); err != nil {
+		return err
+	}
+	if opts.Directory != "" {
+		if err := validate.FilePath(opts.Directory); err != nil {
+			return fmt.Errorf("directory: %w", err)
+		}
+	}
+	if opts.User != "" {
+		if err := validate.Username(opts.User); err != nil {
+			return err
+		}
+	}
+	switch opts.Autorestart {
+	case "", "true", "false", "unexpected", "always":
+	default:
+		return fmt.Errorf("autorestart must be true, false, unexpected, or always, got %q", opts.Autorestart)
+	}
+	if opts.StopSignal != "" {
+		if _, ok := stopSignals[opts.StopSignal]; !ok {
+			return fmt.Errorf("stopsignal must be one of TERM, HUP, INT, QUIT, KILL, USR1, USR2, got %q", opts.StopSignal)
+		}
+	}
+	if opts.ExitCodes != "" && !exitCodesRe.MatchString(opts.ExitCodes) {
+		return fmt.Errorf("exitcodes must be a comma-separated list of numbers, got %q", opts.ExitCodes)
+	}
+	if opts.StdoutLogFile != "" {
+		if err := validate.FilePath(opts.StdoutLogFile); err != nil {
+			return fmt.Errorf("stdout-logfile: %w", err)
+		}
+	}
+	if opts.StderrLogFile != "" {
+		if err := validate.FilePath(opts.StderrLogFile); err != nil {
+			return fmt.Errorf("stderr-logfile: %w", err)
+		}
+	}
+	for key, value := range opts.Environment {
+		if err := validate.SingleLine("environment", key); err != nil {
+			return err
+		}
+		if err := validate.EnvKey(key); err != nil {
+			return err
+		}
+		if err := validate.SingleLine("environment", value); err != nil {
+			return err
+		}
+		if strings.ContainsAny(value, "\\\"") {
+			return fmt.Errorf("environment value for %s cannot contain \" or \\", key)
+		}
+	}
+	return nil
+}
+
+func formatEnvironment(env map[string]string) (string, error) {
+	if len(env) == 0 {
+		return "", nil
+	}
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf(`%s="%s"`, key, escapeSupervisor(env[key])))
+	}
+	return strings.Join(parts, ","), nil
+}
+
+func escapeSupervisor(s string) string {
+	return strings.ReplaceAll(s, "%", "%%")
+}
+
+func unescapeSupervisor(s string) string {
+	return strings.ReplaceAll(s, "%%", "%")
 }
 
 func applyConf(info *DaemonInfo, opts AddOptions) {
