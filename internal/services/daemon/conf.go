@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -76,6 +77,9 @@ func readConf(path string) (AddOptions, error) {
 			opts.Environment = parseSupervisorEnv(val)
 		}
 	}
+	if opts.Name == "" {
+		return AddOptions{}, fmt.Errorf("supervisor config %s has no program name", path)
+	}
 	return opts, nil
 }
 
@@ -104,7 +108,9 @@ func parseSupervisorEnv(s string) map[string]string {
 		if !ok {
 			continue
 		}
-		env[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(val), `"`)
+		val = strings.TrimSpace(val)
+		val = strings.Trim(val, `"`)
+		env[strings.TrimSpace(key)] = val
 	}
 	if len(env) == 0 {
 		return nil
@@ -205,4 +211,22 @@ func (e *fieldError) Error() string {
 		return "processes must be 1 or greater"
 	}
 	return e.field + " cannot be empty"
+}
+
+func applyConf(info *DaemonInfo, opts AddOptions) {
+	info.Name = opts.Name
+	info.Command = opts.Command
+	info.Directory = opts.Directory
+	info.User = opts.User
+	info.Numprocs = opts.Processes
+	info.Autostart = opts.Autostart
+	info.Autorestart = opts.Autorestart
+	info.StartSecs = opts.StartSecs
+	info.StartRetries = opts.StartRetries
+	info.StopSignal = opts.StopSignal
+	info.StopWaitSecs = opts.StopWaitSecs
+	info.ExitCodes = opts.ExitCodes
+	info.StdoutLog = opts.StdoutLogFile
+	info.StderrLog = opts.StderrLogFile
+	info.Environment = opts.Environment
 }

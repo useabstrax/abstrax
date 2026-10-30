@@ -60,6 +60,10 @@ func validateAutorestart(value string) error {
 	}
 }
 
+func supervisorTarget(name string) string {
+	return name + ":*"
+}
+
 // Install installs Supervisor and enables/starts its service.
 func (s *Service) Install(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
 	result := &InstallResult{
@@ -146,7 +150,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if opts.Stop {
-		if _, err := s.runner.Run(ctx, "supervisorctl", "stop", opts.Name); err != nil && !opts.Force {
+		if _, err := s.runner.Run(ctx, "supervisorctl", "stop", supervisorTarget(opts.Name)); err != nil && !opts.Force {
 			return fmt.Errorf("stopping daemon %q: %w", opts.Name, err)
 		}
 	}
@@ -195,92 +199,142 @@ func (s *Service) Modify(ctx context.Context, opts AddOptions) (*DaemonInfo, err
 	return &DaemonInfo{Name: opts.Name, ConfigPath: path}, nil
 }
 
-// Start starts a daemon.
+// Start starts a daemon. name:* addresses a single process and a group.
 func (s *Service) Start(ctx context.Context, name string) error {
-	if err := s.requireSupervisor(); err != nil {
-		return err
-	}
-	_, err := s.runner.Run(ctx, "supervisorctl", "start", name)
-	return err
+	return s.control(ctx, "start", name)
 }
 
 // Stop stops a daemon.
 func (s *Service) Stop(ctx context.Context, name string) error {
-	if err := s.requireSupervisor(); err != nil {
-		return err
-	}
-	_, err := s.runner.Run(ctx, "supervisorctl", "stop", name)
-	return err
+	return s.control(ctx, "stop", name)
 }
 
 // Restart restarts a daemon.
 func (s *Service) Restart(ctx context.Context, name string) error {
+	return s.control(ctx, "restart", name)
+}
+
+func (s *Service) control(ctx context.Context, action, name string) error {
 	if err := s.requireSupervisor(); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "supervisorctl", "restart", name)
+	_, err := s.runner.Run(ctx, "supervisorctl", action, supervisorTarget(name))
 	return err
 }
 
-// Status returns the status of a daemon.
+// Status returns one daemon and each of its processes.
 func (s *Service) Status(ctx context.Context, name string) (*DaemonInfo, error) {
 	if err := s.requireSupervisor(); err != nil {
 		return nil, err
 	}
 
-	res, err := s.runner.RunSilent(ctx, "supervisorctl", "status", name)
-	if err != nil {
+	res, err := s.runner.RunSilent(ctx, "supervisorctl", "status", supervisorTarget(name))
+	if err != nil && strings.TrimSpace(res.Stdout) == "" {
 		return nil, fmt.Errorf("supervisor status %s: %w", name, err)
 	}
 
-	info := &DaemonInfo{Name: name, ConfigPath: s.confPath(name)}
-	parts := strings.Fields(res.Stdout)
-	if len(parts) >= 2 {
-		info.Status = parts[1]
+	grouped := parseStatusOutput(res.Stdout)
+	procs := grouped[name]
+	if len(procs) == 0 {
+		return nil, fmt.Errorf("daemon %q not found", name)
 	}
-	if len(parts) >= 4 {
-		info.Description = strings.Join(parts[2:], " ")
+	info := &DaemonInfo{
+		Name:       name,
+		Status:     summarize(procs),
+		Processes:  procs,
+		ConfigPath: s.confPath(name),
+		Managed:    s.isManaged(name),
+	}
+	if !info.Managed {
+		info.ConfigPath = ""
 	}
 	return info, nil
 }
 
-// List returns all supervisor-managed daemons.
-func (s *Service) List(ctx context.Context) ([]DaemonInfo, error) {
+// List returns daemons. By default only Abstrax-managed configs are included.
+func (s *Service) List(ctx context.Context, opts ListOptions) ([]DaemonInfo, error) {
 	if err := s.requireSupervisor(); err != nil {
 		return nil, err
 	}
 
 	res, err := s.runner.RunSilent(ctx, "supervisorctl", "status")
-	if err != nil && res.Stdout == "" {
+	if err != nil && strings.TrimSpace(res.Stdout) == "" {
 		return nil, fmt.Errorf("supervisor status: %w", err)
 	}
 
+	grouped := parseStatusOutput(res.Stdout)
+	managed := s.managedConfigs()
+
+	names := map[string]struct{}{}
+	if opts.All {
+		for name := range grouped {
+			names[name] = struct{}{}
+		}
+	}
+	for name := range managed {
+		names[name] = struct{}{}
+	}
+
+	ordered := make([]string, 0, len(names))
+	for name := range names {
+		ordered = append(ordered, name)
+	}
+	sort.Strings(ordered)
+
 	var daemons []DaemonInfo
-	for _, line := range strings.Split(res.Stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	for _, name := range ordered {
+		procs := grouped[name]
+		info := DaemonInfo{
+			Name:      name,
+			Status:    summarize(procs),
+			Processes: procs,
 		}
-		parts := strings.Fields(line)
-		d := DaemonInfo{ConfigPath: s.confPath(parts[0])}
-		if len(parts) >= 1 {
-			d.Name = parts[0]
+		if path, ok := managed[name]; ok {
+			info.Managed = true
+			info.ConfigPath = path
 		}
-		if len(parts) >= 2 {
-			d.Status = parts[1]
-		}
-		if len(parts) >= 3 {
-			d.Description = strings.Join(parts[2:], " ")
-		}
-		daemons = append(daemons, d)
+		daemons = append(daemons, info)
 	}
 	return daemons, nil
 }
 
-// Logs returns the log output for a daemon.
+// Info returns the configured settings and, when Supervisor is available, live status.
+func (s *Service) Info(ctx context.Context, name string) (*DaemonInfo, error) {
+	path := s.confPath(name)
+	opts, err := readConf(path)
+	if err != nil {
+		return nil, fmt.Errorf("daemon %q does not exist", name)
+	}
+	info := &DaemonInfo{
+		Managed:    true,
+		ConfigPath: path,
+	}
+	applyConf(info, opts)
+	if supervisorInstalled("supervisorctl") {
+		if live, err := s.Status(ctx, name); err == nil {
+			info.Status = live.Status
+			info.Processes = live.Processes
+		}
+	}
+	return info, nil
+}
+
+// Logs returns the last N log lines, or follows the log.
 func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 	if err := s.requireSupervisor(); err != nil {
 		return "", err
+	}
+	if opts.Process < 0 {
+		return "", fmt.Errorf("process number must be 0 or greater")
+	}
+
+	conf, confErr := readConf(s.confPath(opts.Name))
+	numprocs := 1
+	if confErr == nil && conf.Processes > 0 {
+		numprocs = conf.Processes
+	}
+	if numprocs > 1 && opts.Process >= numprocs {
+		return "", fmt.Errorf("process %d is out of range (0-%d)", opts.Process, numprocs-1)
 	}
 
 	stream := ""
@@ -290,13 +344,16 @@ func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 	case opts.Stdout && !opts.Stderr:
 		stream = "stdout"
 	}
+	process := opts.Name
+	if numprocs > 1 {
+		process = fmt.Sprintf("%s:%s_%02d", opts.Name, opts.Name, opts.Process)
+	}
 
 	if opts.Follow {
-		args := []string{"tail", "-f"}
+		args := []string{"tail", "-f", process}
 		if stream != "" {
 			args = append(args, stream)
 		}
-		args = append(args, opts.Name)
 		_, err := s.runner.Run(ctx, "supervisorctl", args...)
 		return "", err
 	}
@@ -305,16 +362,47 @@ func (s *Service) Logs(ctx context.Context, opts LogOptions) (string, error) {
 	if opts.Lines > 0 {
 		lines = opts.Lines
 	}
-	args := []string{"tail", fmt.Sprintf("-%d", lines)}
-	if stream != "" {
-		args = append(args, stream)
+	stdoutPath, stderrPath := logPathsFromConf(s.confPath(opts.Name), opts.Name)
+	path := stdoutPath
+	if stream == "stderr" {
+		path = stderrPath
 	}
-	args = append(args, opts.Name)
-	res, err := s.runner.RunSilent(ctx, "supervisorctl", args...)
+	return tailLines(path, lines)
+}
+
+func (s *Service) managedConfigs() map[string]string {
+	out := map[string]string{}
+	entries, err := os.ReadDir(s.confDir)
 	if err != nil {
-		return "", err
+		return out
 	}
-	return res.Stdout, nil
+	ext := s.confExt
+	if ext == "" {
+		ext = ".conf"
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, "abstrax-") || !strings.HasSuffix(name, ext) {
+			continue
+		}
+		id := strings.TrimSuffix(strings.TrimPrefix(name, "abstrax-"), ext)
+		if id == "" {
+			continue
+		}
+		out[id] = filepath.Join(s.confDir, name)
+	}
+	return out
+}
+
+func (s *Service) isManaged(name string) bool {
+	_, ok := s.managedConfigs()[name]
+	return ok
 }
 
 func (s *Service) confPath(name string) string {
