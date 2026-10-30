@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **UFW rule identity** - `firewall rule list` returns a stable `id` (a short hash of the rule) and keeps the current UFW position as `number`. `firewall rule remove <id>` deletes that rule by its specification, so a later removal cannot hit a rule that shifted into an old position. Numeric positions still work and print a warning. Listed rules now include protocol, direction, source, destination, comment, and IPv6. `firewall allow-ip` accepts `--protocol` and `--comment`; `firewall deny-ip` accepts `--comment`.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed

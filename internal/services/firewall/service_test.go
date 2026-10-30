@@ -36,8 +36,11 @@ func TestParseUFWRulesUnchanged(t *testing.T) {
 	if len(rules) != 2 {
 		t.Fatalf("got %d rules", len(rules))
 	}
-	if rules[0].ID != "1" || rules[0].Port != "22/tcp" {
+	if rules[0].Number != "1" || rules[0].Port != "22" || rules[0].Protocol != "tcp" {
 		t.Fatalf("rule0 = %#v", rules[0])
+	}
+	if rules[0].ID == "" || rules[0].ID == rules[0].Number {
+		t.Fatalf("expected stable id, got %#v", rules[0])
 	}
 	if rules[0].Kind != "" {
 		t.Fatalf("ufw rules should not set firewalld Kind")
