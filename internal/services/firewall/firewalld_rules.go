@@ -141,18 +141,6 @@ func findFirewalldRule(rules []Rule, id string) (rule *Rule, byNumber bool) {
 	return nil, false
 }
 
-func isDecimalID(id string) bool {
-	if id == "" {
-		return false
-	}
-	for _, c := range id {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 func firewalldFamily(addr string) (string, error) {
 	addr = strings.TrimSpace(addr)
 	ip := net.ParseIP(addr)

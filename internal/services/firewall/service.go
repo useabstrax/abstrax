@@ -285,8 +285,7 @@ func (s *Service) RuleRemove(ctx context.Context, id string) error {
 	if s.backend == "firewalld" {
 		return s.firewalldRuleRemove(ctx, id)
 	}
-	_, err := s.runner.Run(ctx, "ufw", "--force", "delete", id)
-	return err
+	return s.ufwRuleRemove(ctx, id)
 }
 
 // RemoveService removes a firewalld service permanently and reloads.
@@ -387,6 +386,12 @@ func (s *Service) allowIP(ctx context.Context, opts AllowOptions) error {
 	}
 	if opts.Port != "" {
 		args = append(args, "port", opts.Port)
+		if opts.Protocol != "" {
+			args = append(args, "proto", opts.Protocol)
+		}
+	}
+	if opts.Comment != "" {
+		args = append(args, "comment", opts.Comment)
 	}
 	_, err := s.runner.Run(ctx, "ufw", args...)
 	return err
@@ -399,6 +404,9 @@ func (s *Service) denyIP(ctx context.Context, opts AllowOptions) error {
 	args := []string{"deny", "from", opts.From}
 	if opts.To != "" {
 		args = append(args, "to", opts.To)
+	}
+	if opts.Comment != "" {
+		args = append(args, "comment", opts.Comment)
 	}
 	_, err := s.runner.Run(ctx, "ufw", args...)
 	return err
@@ -505,39 +513,4 @@ func (s *Service) firewalldDenyIP(ctx context.Context, opts AllowOptions) error 
 		return err
 	}
 	return s.addRichRules(ctx, []string{firewalldRichRule(family, opts.From, "", "", "reject")})
-}
-
-func parseUFWRules(output string) []Rule {
-	var rules []Rule
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "[") {
-			continue
-		}
-
-		closeBracket := strings.Index(line, "]")
-		if closeBracket < 0 {
-			continue
-		}
-
-		id := strings.Trim(line[1:closeBracket], " ")
-		rest := strings.TrimSpace(line[closeBracket+1:])
-
-		r := Rule{ID: id}
-		parts := strings.Fields(rest)
-		if len(parts) >= 1 {
-			r.Port = parts[0]
-		}
-		if len(parts) >= 2 {
-			r.Action = parts[1]
-		}
-		if len(parts) >= 4 && strings.EqualFold(parts[2], "IN") {
-			from := parts[3]
-			if from != "Anywhere" && !strings.HasPrefix(from, "(") {
-				r.From = from
-			}
-		}
-		rules = append(rules, r)
-	}
-	return rules
 }
