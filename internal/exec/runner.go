@@ -18,10 +18,33 @@ type Result struct {
 	Command  string
 }
 
+// CommandFunc stubs command execution in tests.
+type CommandFunc func(ctx context.Context, name string, args ...string) (Result, error)
+
 // Runner executes OS commands.
 type Runner struct {
-	dryRun  bool
-	verbose bool
+	dryRun      bool
+	verbose     bool
+	commandFunc CommandFunc
+	commands    [][]string
+}
+
+// SetCommandFunc replaces process execution. The real command is not run.
+func (r *Runner) SetCommandFunc(fn CommandFunc) {
+	r.commandFunc = fn
+}
+
+// Commands returns each command's arguments, including the program name.
+func (r *Runner) Commands() [][]string {
+	out := make([][]string, len(r.commands))
+	for i, cmd := range r.commands {
+		out[i] = append([]string(nil), cmd...)
+	}
+	return out
+}
+
+func (r *Runner) record(name string, args ...string) {
+	r.commands = append(r.commands, append([]string{name}, args...))
 }
 
 // New creates a Runner.
@@ -31,10 +54,15 @@ func New(dryRun, verbose bool) *Runner {
 
 // Run executes a command and returns its output.
 func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, error) {
+	r.record(name, args...)
 	cmdStr := name + " " + strings.Join(args, " ")
 
 	if r.verbose {
 		fmt.Printf("[exec] %s\n", cmdStr)
+	}
+
+	if r.commandFunc != nil {
+		return r.commandFunc(ctx, name, args...)
 	}
 
 	if r.dryRun {
@@ -65,6 +93,10 @@ func (r *Runner) Run(ctx context.Context, name string, args ...string) (Result, 
 
 // RunSilent executes a command without printing anything regardless of verbose.
 func (r *Runner) RunSilent(ctx context.Context, name string, args ...string) (Result, error) {
+	r.record(name, args...)
+	if r.commandFunc != nil {
+		return r.commandFunc(ctx, name, args...)
+	}
 	if r.dryRun {
 		cmdStr := name + " " + strings.Join(args, " ")
 		return Result{Command: cmdStr}, nil

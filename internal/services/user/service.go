@@ -14,9 +14,10 @@ import (
 
 // Service provides user management methods.
 type Service struct {
-	runner     *executil.Runner
-	dryRun     bool
-	sudoersDir string
+	runner        *executil.Runner
+	dryRun        bool
+	sudoersDir    string
+	lockStatePath string
 }
 
 // New creates a Service.
@@ -240,21 +241,63 @@ func (s *Service) SetShell(ctx context.Context, opts SetShellOptions) error {
 }
 
 // Lock disables a user account.
+// By default the password is locked and the account is expired, which also
+// blocks SSH key logins. PasswordOnly locks the password and leaves keys working.
 func (s *Service) Lock(ctx context.Context, opts LockOptions) error {
-	_, err := s.runner.Run(ctx, "usermod", "--lock", opts.Username)
-	if err != nil {
+	record := lockRecord{PasswordOnly: opts.PasswordOnly}
+	if !opts.PasswordOnly {
+		expire, err := s.shadowExpire(ctx, opts.Username)
+		if err != nil {
+			return err
+		}
+		if expire != "" && expire != accountLockExpireDays {
+			date, err := daysToDate(expire)
+			if err != nil {
+				return fmt.Errorf("reading expiry for %s: %w", opts.Username, err)
+			}
+			record.Expiry = date
+		} else if prev, ok, err := s.savedLock(opts.Username); err != nil {
+			return err
+		} else if ok && !prev.PasswordOnly {
+			record.Expiry = prev.Expiry
+		}
+	}
+	if err := s.saveLock(opts.Username, record); err != nil {
+		return err
+	}
+
+	args := []string{"--lock"}
+	if !opts.PasswordOnly {
+		args = append(args, "--expiredate", accountLockExpireDays)
+	}
+	args = append(args, opts.Username)
+	if _, err := s.runner.Run(ctx, "usermod", args...); err != nil {
 		return fmt.Errorf("locking user %s: %w", opts.Username, err)
 	}
 	return nil
 }
 
-// Unlock enables a user account.
+// Unlock enables a user account and restores the expiry saved at lock time.
+// An account locked by an older Abstrax release has no saved expiry, so the
+// expiry is cleared.
 func (s *Service) Unlock(ctx context.Context, opts LockOptions) error {
-	_, err := s.runner.Run(ctx, "usermod", "--unlock", opts.Username)
+	record, found, err := s.savedLock(opts.Username)
 	if err != nil {
+		return err
+	}
+	args := []string{"--unlock"}
+	if !found || !record.PasswordOnly {
+		expiry := ""
+		if found {
+			expiry = record.Expiry
+		}
+		args = append(args, "--expiredate", expiry)
+	}
+	args = append(args, opts.Username)
+	if _, err := s.runner.Run(ctx, "usermod", args...); err != nil {
 		return fmt.Errorf("unlocking user %s: %w", opts.Username, err)
 	}
-	return nil
+	return s.deleteLock(opts.Username)
 }
 
 // Info returns information about a user.
@@ -289,14 +332,7 @@ func (s *Service) Info(ctx context.Context, username string) (*UserInfo, error) 
 		}
 	}
 
-	// Check if locked (passwd -S).
-	if res, err := s.runner.RunSilent(ctx, "passwd", "-S", username); err == nil {
-		parts := strings.Fields(res.Stdout)
-		if len(parts) >= 2 && parts[1] == "L" {
-			info.Locked = true
-		}
-	}
-
+	s.applyAccountState(ctx, info)
 	return info, nil
 }
 
@@ -348,6 +384,7 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]UserInfo, error
 			continue
 		}
 
+		s.applyAccountState(ctx, &u)
 		users = append(users, u)
 	}
 

@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`user lock`** - Also expires the account, so SSH key logins are refused as well as passwords. `user unlock` restores the previous expiry. `--password-only` keeps the old password-only lock. `user info` and `user list` add `expired` and `login_blocked`. `locked` still means the password is locked.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed
