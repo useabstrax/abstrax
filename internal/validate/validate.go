@@ -21,6 +21,7 @@ var (
 	pluginNameRe  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	projectNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
 	domainRe      = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+	envKeyRe      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // Username validates a Linux username.
@@ -166,6 +167,22 @@ func FilePath(p string) error {
 	}
 	if strings.Contains(p, "\x00") {
 		return fmt.Errorf("path contains null byte")
+	}
+	return nil
+}
+
+// SingleLine rejects values that could start a new line in a config file.
+func SingleLine(field, value string) error {
+	if strings.Contains(value, "\n") || strings.Contains(value, "\r") || strings.Contains(value, "\x00") {
+		return fmt.Errorf("%s cannot contain line breaks or null bytes", field)
+	}
+	return nil
+}
+
+// EnvKey validates an environment variable name.
+func EnvKey(key string) error {
+	if !envKeyRe.MatchString(key) {
+		return fmt.Errorf("invalid environment variable name %q", key)
 	}
 	return nil
 }

@@ -59,9 +59,6 @@ func newCronAddCmd() *cobra.Command {
 			if err := validate.CronID(opts.ID); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
-				return err
-			}
 			if opts.Command == "" {
 				return fmt.Errorf("--command is required")
 			}
@@ -82,13 +79,17 @@ func newCronAddCmd() *cobra.Command {
 			if err := validate.CronExpression(opts.Schedule); err != nil {
 				return err
 			}
+			opts.Env = parseEnvPairs(envPairs)
+			if err := validateCronInputs(opts.User, opts.Command, opts.Schedule, opts.WorkingDir, opts.Output, opts.ErrorOutput, opts.Env); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
 
 			if disabled {
 				opts.Enabled = false
 			}
-
-			// Parse env pairs.
-			opts.Env = parseEnvPairs(envPairs)
 
 			svc := cron.New()
 			job, err := svc.Add(cmd.Context(), opts)
@@ -177,16 +178,18 @@ func newCronModifyCmd() *cobra.Command {
 			if err := validate.CronID(opts.ID); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
-				return err
-			}
 			if opts.Schedule != "" {
 				if err := validate.CronExpression(opts.Schedule); err != nil {
 					return err
 				}
 			}
-
 			opts.Env = parseEnvPairs(envPairs)
+			if err := validateCronInputs(opts.User, opts.Command, opts.Schedule, opts.WorkingDir, opts.Output, opts.ErrorOutput, opts.Env); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
 
 			svc := cron.New()
 			job, err := svc.Modify(cmd.Context(), opts)
@@ -341,6 +344,45 @@ func buildSchedule(everyMin, every5, every10, every15, every30, hourly, daily, w
 	default:
 		return ""
 	}
+}
+
+func validateCronInputs(user, command, schedule, workingDir, output, errorOutput string, env map[string]string) error {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"user", user},
+		{"command", command},
+		{"schedule", schedule},
+		{"working-dir", workingDir},
+		{"output", output},
+		{"error-output", errorOutput},
+	}
+	for _, field := range fields {
+		if field.value == "" {
+			continue
+		}
+		if err := validate.SingleLine(field.name, field.value); err != nil {
+			return err
+		}
+	}
+	if user != "" {
+		if err := validate.Username(user); err != nil {
+			return err
+		}
+	}
+	for key, value := range env {
+		if err := validate.SingleLine("env", key); err != nil {
+			return err
+		}
+		if err := validate.EnvKey(key); err != nil {
+			return err
+		}
+		if err := validate.SingleLine("env", value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseEnvPairs(pairs []string) map[string]string {

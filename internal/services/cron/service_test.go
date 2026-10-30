@@ -35,7 +35,7 @@ func TestModifyAppliesOutputOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "> /var/log/worker.log 2>&1") {
+	if !strings.Contains(string(data), "> '/var/log/worker.log' 2>&1") {
 		t.Fatalf("expected output redirect, got:\n%s", data)
 	}
 }

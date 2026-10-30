@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"abstrax/internal/platform"
+	"abstrax/internal/validate"
 )
 
 const (
@@ -161,14 +164,25 @@ func (s *Service) jobPath(id string) string {
 }
 
 func (s *Service) writeJob(path string, job *CronJob, opts AddOptions) error {
+	if err := validateJob(job, opts); err != nil {
+		return err
+	}
+
 	var sb strings.Builder
 	sb.WriteString(headerComment + "\n")
 	sb.WriteString(fmt.Sprintf("# abstrax:cron id=%s user=%s created=%s\n",
 		job.ID, job.User, time.Now().Format(time.RFC3339)))
 	sb.WriteString("#\n")
 
-	for k, v := range opts.Env {
-		sb.WriteString(fmt.Sprintf("%s=%s\n", k, v))
+	if len(opts.Env) > 0 {
+		keys := make([]string, 0, len(opts.Env))
+		for k := range opts.Env {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			sb.WriteString(fmt.Sprintf("%s=%s\n", k, opts.Env[k]))
+		}
 	}
 
 	output := opts.Output
@@ -178,17 +192,18 @@ func (s *Service) writeJob(path string, job *CronJob, opts AddOptions) error {
 
 	cmd := job.Command
 	if opts.WorkingDir != "" {
-		cmd = fmt.Sprintf("cd %s && %s", opts.WorkingDir, cmd)
+		cmd = fmt.Sprintf("cd %s && %s", shellQuote(opts.WorkingDir), cmd)
 	}
 	if output != "" {
+		redir := ">"
 		if opts.AppendOutput {
-			cmd = fmt.Sprintf("%s >> %s 2>&1", cmd, output)
-		} else {
-			cmd = fmt.Sprintf("%s > %s 2>&1", cmd, output)
+			redir = ">>"
 		}
+		cmd = fmt.Sprintf("%s %s %s 2>&1", cmd, redir, shellQuote(output))
 	} else if opts.ErrorOutput != "" {
-		cmd = fmt.Sprintf("%s 2>> %s", cmd, opts.ErrorOutput)
+		cmd = fmt.Sprintf("%s 2>> %s", cmd, shellQuote(opts.ErrorOutput))
 	}
+	cmd = escapeCronPercent(cmd)
 
 	prefix := ""
 	if !job.Enabled {
@@ -231,10 +246,9 @@ func (s *Service) readJob(path string) (*CronJob, error) {
 			continue
 		}
 
-		// env line: KEY=VALUE
-		if strings.Contains(line, "=") && !strings.Contains(line, " ") {
-			parts := strings.SplitN(line, "=", 2)
-			job.Env[parts[0]] = parts[1]
+		// env line: KEY=VALUE (value may contain spaces)
+		if key, value, ok := splitEnvLine(line); ok {
+			job.Env[key] = value
 			continue
 		}
 
@@ -243,7 +257,7 @@ func (s *Service) readJob(path string) (*CronJob, error) {
 		if len(parts) >= 7 {
 			job.Schedule = strings.Join(parts[:5], " ")
 			job.User = parts[5]
-			job.Command = strings.Join(parts[6:], " ")
+			job.Command = unescapeCronPercent(strings.Join(parts[6:], " "))
 		}
 	}
 
@@ -254,6 +268,62 @@ func (s *Service) readJob(path string) (*CronJob, error) {
 	}
 
 	return job, scanner.Err()
+}
+
+func validateJob(job *CronJob, opts AddOptions) error {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"command", job.Command},
+		{"user", job.User},
+		{"schedule", job.Schedule},
+		{"working-dir", opts.WorkingDir},
+		{"output", opts.Output},
+		{"error-output", opts.ErrorOutput},
+	}
+	for _, field := range fields {
+		if err := validate.SingleLine(field.name, field.value); err != nil {
+			return err
+		}
+	}
+	if err := validate.Username(job.User); err != nil {
+		return err
+	}
+	for key, value := range opts.Env {
+		if err := validate.SingleLine("env", key); err != nil {
+			return err
+		}
+		if err := validate.EnvKey(key); err != nil {
+			return err
+		}
+		if err := validate.SingleLine("env", value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func escapeCronPercent(s string) string {
+	return strings.ReplaceAll(s, "%", `\%`)
+}
+
+func unescapeCronPercent(s string) string {
+	return strings.ReplaceAll(s, `\%`, "%")
+}
+
+var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func splitEnvLine(line string) (key, value string, ok bool) {
+	key, value, ok = strings.Cut(line, "=")
+	if !ok || !envKeyPattern.MatchString(key) {
+		return "", "", false
+	}
+	return key, value, true
 }
 
 func parseMetaLine(line string, job *CronJob) {
