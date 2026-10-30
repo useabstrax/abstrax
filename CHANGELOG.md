@@ -6,9 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **Cron files** - `cron add` and `cron modify` reject line breaks, carriage returns and null bytes in every value, and reject invalid users and environment names. `%` in a command is written as `\%` and read back as `%`, so it is a literal percent instead of cron's stdin separator. Working directory and output paths are shell-quoted.
+- **Daemon configs** - `daemon add` and `daemon modify` reject line breaks, carriage returns and null bytes, and reject invalid users, paths, stop signals, exit codes and environment names. `%` is written as `%%` so Supervisor treats it as a literal percent. Environment values are double-quoted. Values containing `"` or `\` are rejected because Supervisor 4.2 parses `environment` with non-POSIX `shlex`, which does not treat `\` as an escape.
+- **MySQL SQL** - Privileges are parsed against an allowlist and the GRANT statement is built from that list. Hosts must match a safe character set and are escaped, and database names are checked on `user add --grant-db` as well as `grant`. Column-level privileges and hosts outside that character set are rejected.
+
+### Added
+
+- **`daemon info <name>`** - Prints the settings from the Supervisor config (command, directory, user, numprocs, restart policy, and log paths) plus live status. Registered as the `daemon.info` action.
+- **`mysql user list --grants`** - Includes each user's raw grants and parsed per-database privileges in one call. `--exclude-system` hides built-in accounts. Without `--grants`, the list is unchanged.
+
 ### Changed
 
+- **Daemon list and status JSON** - `daemon list` and `daemon status` group processes under one daemon. `status` is the worst process state. Each process includes `pid`, `uptime`, and `uptime_seconds` while it is running. `daemon list` shows Abstrax-managed daemons by default; `--all` includes other Supervisor programs with `managed: false` and no `config_path`.
+- **`user lock`** - Also expires the account, so SSH key logins are refused as well as passwords. `user unlock` restores the previous expiry. `--password-only` keeps the old password-only lock. `user info` and `user list` add `expired` and `login_blocked`. `locked` still means the password is locked.
 - **`ssh config set-port`** - With `--allow-firewall`, the new port is opened before sshd is reloaded. The previous port stays open until `--close-old-port`. The change is rolled back if the new port does not answer. SELinux port labels are applied only when SELinux is enforcing, and socket-activated sshd gets a drop-in that listens on both ports.
+
+### Fixed
+
+- **UFW rule identity** - `firewall rule list` returns a stable `id` (a short hash of the rule) and keeps the current UFW position as `number`. `firewall rule remove <id>` deletes that rule by its specification, so a later removal cannot hit a rule that shifted into an old position. Numeric positions still work and print a warning. Listed rules now include protocol, direction, source, destination, comment, and IPv6. `firewall allow-ip` accepts `--protocol` and `--comment`; `firewall deny-ip` accepts `--comment`.
+- **firewalld source-limited allows** - `firewall allow <port> --from <ip>` on firewalld now adds a rich rule for that source. It no longer opens the port to every address, including for ports 80 and 443. Rich rules are listed and can be removed by id. `firewall deny <port>` adds IPv4 and IPv6 reject rules. IPv6 sources use `family="ipv6"`. Firewalld rule ids are a stable hash, with the list position kept as `number`.
+- **Cron job fields** - Working directory and output redirects are stored separately from the command, so `cron info` returns `working_dir`, `output`, `error_output`, `append_output`, and `discard_output`, and `cron modify` no longer nests `cd` or redirects. Environment values with spaces round-trip. Schedules are validated per field, and `@reboot`, `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`, `@annually`, and `@midnight` are accepted. `cron modify` can set `--append-output`, `--discard-output`, and `--no-output`.
+- **Multi-process daemons** - `start`, `stop`, and `restart` address the Supervisor group as `<name>:*`. `daemon logs --lines N` returns N lines from the log file. `--stderr` works, and `--process N` selects one process when `numprocs` is greater than 1.
+- **`daemon modify`** - Only flags that were passed are written. Omitted settings are read back from the existing Supervisor config instead of being reset. Modify accepts the same settings as `daemon add`, including restart policy and log paths. `--environment` merges by key; `--clear-environment` and `--unset-environment` remove keys. `--autorestart` must be `always`, `unexpected`, or `false`. `supervisorctl update` still runs afterwards and restarts the program when the config changed.
+- **`mysql user info`** - Looks up every host the user exists on, including a specific IP, instead of only `localhost`, `127.0.0.1`, and `%`. `--host` limits the result to one host. JSON output is a list, one entry per host.
 
 ## [2.3.1] - 2026-08-19
 

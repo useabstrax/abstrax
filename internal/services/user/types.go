@@ -43,8 +43,9 @@ type SetShellOptions struct {
 
 // LockOptions holds options for lock/unlock.
 type LockOptions struct {
-	Username string
-	DryRun   bool
+	Username     string
+	PasswordOnly bool
+	DryRun       bool
 }
 
 // ListOptions holds filters for user list.
@@ -56,16 +57,18 @@ type ListOptions struct {
 
 // UserInfo holds information about a user.
 type UserInfo struct {
-	Username string   `json:"username"`
-	UID      string   `json:"uid"`
-	GID      string   `json:"gid"`
-	Comment  string   `json:"comment"`
-	Home     string   `json:"home"`
-	Shell    string   `json:"shell"`
-	Groups   []string `json:"groups"`
-	IsSudo   bool     `json:"is_sudo"`
-	IsSystem bool     `json:"is_system"`
-	Locked   bool     `json:"locked"`
+	Username     string   `json:"username"`
+	UID          string   `json:"uid"`
+	GID          string   `json:"gid"`
+	Comment      string   `json:"comment"`
+	Home         string   `json:"home"`
+	Shell        string   `json:"shell"`
+	Groups       []string `json:"groups"`
+	IsSudo       bool     `json:"is_sudo"`
+	IsSystem     bool     `json:"is_system"`
+	Locked       bool     `json:"locked"`
+	Expired      bool     `json:"expired"`
+	LoginBlocked bool     `json:"login_blocked"`
 }
 
 // AddResult is returned by Add.

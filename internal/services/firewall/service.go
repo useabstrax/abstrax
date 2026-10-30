@@ -4,6 +4,7 @@ package firewall
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -284,8 +285,7 @@ func (s *Service) RuleRemove(ctx context.Context, id string) error {
 	if s.backend == "firewalld" {
 		return s.firewalldRuleRemove(ctx, id)
 	}
-	_, err := s.runner.Run(ctx, "ufw", "--force", "delete", id)
-	return err
+	return s.ufwRuleRemove(ctx, id)
 }
 
 // RemoveService removes a firewalld service permanently and reloads.
@@ -318,15 +318,12 @@ func (s *Service) firewalldRuleRemove(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	var match *Rule
-	for i := range rules {
-		if rules[i].ID == id {
-			match = &rules[i]
-			break
-		}
-	}
+	match, byNumber := findFirewalldRule(rules, id)
 	if match == nil {
-		return fmt.Errorf("firewall rule %q not found; run `abstrax firewall rule list` to see current IDs", id)
+		return fmt.Errorf("firewall rule %q not found; run `abstrax firewall rule list` to see current ids", id)
+	}
+	if byNumber {
+		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
 	}
 	switch match.Kind {
 	case RuleKindService:
@@ -334,6 +331,8 @@ func (s *Service) firewalldRuleRemove(ctx context.Context, id string) error {
 	case RuleKindPort:
 		port, proto := splitPortProto(match.Target)
 		return s.firewalldRemovePort(ctx, port, proto)
+	case RuleKindRich:
+		return s.firewalldRemoveRichRule(ctx, match.Target)
 	default:
 		return fmt.Errorf("cannot remove firewalld rule %q (kind %q); use `abstrax firewall remove service <name>` or `abstrax firewall remove port <port[/proto]>`", id, match.Kind)
 	}
@@ -387,6 +386,12 @@ func (s *Service) allowIP(ctx context.Context, opts AllowOptions) error {
 	}
 	if opts.Port != "" {
 		args = append(args, "port", opts.Port)
+		if opts.Protocol != "" {
+			args = append(args, "proto", opts.Protocol)
+		}
+	}
+	if opts.Comment != "" {
+		args = append(args, "comment", opts.Comment)
 	}
 	_, err := s.runner.Run(ctx, "ufw", args...)
 	return err
@@ -400,6 +405,9 @@ func (s *Service) denyIP(ctx context.Context, opts AllowOptions) error {
 	if opts.To != "" {
 		args = append(args, "to", opts.To)
 	}
+	if opts.Comment != "" {
+		args = append(args, "comment", opts.Comment)
+	}
 	_, err := s.runner.Run(ctx, "ufw", args...)
 	return err
 }
@@ -410,7 +418,7 @@ func (s *Service) addRule(ctx context.Context, action string, opts AllowOptions)
 	}
 	if s.backend == "firewalld" {
 		if action != "allow" {
-			return fmt.Errorf("firewalld deny rules for ports are not implemented; use rich rules via firewall-cmd")
+			return s.firewalldDeny(ctx, opts)
 		}
 		return s.firewalldAllow(ctx, opts)
 	}
@@ -441,13 +449,18 @@ func (s *Service) addRule(ctx context.Context, action string, opts AllowOptions)
 }
 
 func (s *Service) firewalldAllow(ctx context.Context, opts AllowOptions) error {
+	if strings.TrimSpace(opts.From) != "" {
+		return s.firewalldAllowFrom(ctx, opts)
+	}
+
 	port := strings.TrimSpace(opts.Port)
 	proto := opts.Protocol
 	if proto == "" {
 		proto = "tcp"
 	}
 
-	// Map common web ports to firewalld services.
+	// Map common web ports to firewalld services. A source address must not
+	// take this path: that would open the port to every address.
 	switch port {
 	case "80", "http":
 		return s.firewalldAddService(ctx, "http")
@@ -479,99 +492,25 @@ func (s *Service) firewalldAllowPort(ctx context.Context, port, proto string) er
 }
 
 func (s *Service) firewalldAllowIP(ctx context.Context, opts AllowOptions) error {
-	port := opts.Port
-	proto := opts.Protocol
-	if proto == "" {
-		proto = "tcp"
-	}
-	rich := fmt.Sprintf(`rule family="ipv4" source address="%s" `, opts.From)
-	if port != "" {
-		rich += fmt.Sprintf(`port port="%s" protocol="%s" accept`, port, proto)
-	} else {
-		rich += "accept"
-	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
+	family, err := firewalldFamily(opts.From)
+	if err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
-	return err
+	port := strings.TrimSpace(opts.Port)
+	if port == "" {
+		return s.addRichRules(ctx, []string{firewalldRichRule(family, opts.From, "", "", "accept")})
+	}
+	proto, err := normalizeProto(opts.Protocol)
+	if err != nil {
+		return err
+	}
+	return s.addRichRules(ctx, []string{firewalldRichRule(family, opts.From, port, proto, "accept")})
 }
 
 func (s *Service) firewalldDenyIP(ctx context.Context, opts AllowOptions) error {
-	rich := fmt.Sprintf(`rule family="ipv4" source address="%s" reject`, opts.From)
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
+	family, err := firewalldFamily(opts.From)
+	if err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
-	return err
-}
-
-func parseUFWRules(output string) []Rule {
-	var rules []Rule
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "[") {
-			continue
-		}
-
-		closeBracket := strings.Index(line, "]")
-		if closeBracket < 0 {
-			continue
-		}
-
-		id := strings.Trim(line[1:closeBracket], " ")
-		rest := strings.TrimSpace(line[closeBracket+1:])
-
-		r := Rule{ID: id}
-		parts := strings.Fields(rest)
-		if len(parts) >= 1 {
-			r.Port = parts[0]
-		}
-		if len(parts) >= 2 {
-			r.Action = parts[1]
-		}
-		if len(parts) >= 4 && strings.EqualFold(parts[2], "IN") {
-			from := parts[3]
-			if from != "Anywhere" && !strings.HasPrefix(from, "(") {
-				r.From = from
-			}
-		}
-		rules = append(rules, r)
-	}
-	return rules
-}
-
-func parseFirewalldRules(output string) []Rule {
-	var rules []Rule
-	id := 1
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "services:") {
-			services := strings.Fields(strings.TrimPrefix(line, "services:"))
-			for _, svc := range services {
-				rules = append(rules, Rule{
-					ID:     strconv.Itoa(id),
-					Action: "ALLOW",
-					Port:   svc,
-					Kind:   RuleKindService,
-					Target: svc,
-				})
-				id++
-			}
-		}
-		if strings.HasPrefix(line, "ports:") {
-			ports := strings.Fields(strings.TrimPrefix(line, "ports:"))
-			for _, port := range ports {
-				rules = append(rules, Rule{
-					ID:     strconv.Itoa(id),
-					Action: "ALLOW",
-					Port:   port,
-					Kind:   RuleKindPort,
-					Target: port,
-				})
-				id++
-			}
-		}
-	}
-	return rules
+	return s.addRichRules(ctx, []string{firewalldRichRule(family, opts.From, "", "", "reject")})
 }

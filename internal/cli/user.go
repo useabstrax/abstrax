@@ -356,10 +356,15 @@ func newUserSetShellCmd() *cobra.Command {
 }
 
 func newUserLockCmd() *cobra.Command {
-	return &cobra.Command{
+	var passwordOnly bool
+	cmd := &cobra.Command{
 		Use:   "lock <name>",
 		Short: "Lock a user account",
-		Args:  cobra.ExactArgs(1),
+		Long: `Lock a user account so password and SSH key logins fail.
+
+Processes already running as that user, including daemons and cron jobs, keep running.
+--password-only locks the password and leaves key logins working.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			username := args[0]
 			if err := requireRootAndSupported(); err != nil {
@@ -367,8 +372,9 @@ func newUserLockCmd() *cobra.Command {
 			}
 			svc := user.New(globals.Flags.DryRun, globals.Flags.Verbose)
 			if err := svc.Lock(cmd.Context(), user.LockOptions{
-				Username: username,
-				DryRun:   globals.Flags.DryRun,
+				Username:     username,
+				PasswordOnly: passwordOnly,
+				DryRun:       globals.Flags.DryRun,
 			}); err != nil {
 				return err
 			}
@@ -376,12 +382,15 @@ func newUserLockCmd() *cobra.Command {
 				fmt.Sprintf("User %s locked.", username), nil)
 		},
 	}
+	cmd.Flags().BoolVar(&passwordOnly, "password-only", false, "Lock the password only; SSH keys can still log in")
+	return cmd
 }
 
 func newUserUnlockCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "unlock <name>",
 		Short: "Unlock a user account",
+		Long:  "Unlock a user account and restore the account expiry from before it was locked.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			username := args[0]
@@ -444,6 +453,16 @@ func newUserInfoCmd() *cobra.Command {
 				lockedStr = "yes"
 			}
 			p.Line("  %-12s %s", "Locked:", lockedStr)
+			expiredStr := "no"
+			if info.Expired {
+				expiredStr = "yes"
+			}
+			p.Line("  %-12s %s", "Expired:", expiredStr)
+			blockedStr := "no"
+			if info.LoginBlocked {
+				blockedStr = "yes"
+			}
+			p.Line("  %-12s %s", "Login blocked:", blockedStr)
 			p.Line("")
 
 			return nil
@@ -475,13 +494,13 @@ func newUserListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"USERNAME", "UID", "HOME", "SHELL", "SUDO"})
+			t := output.NewTable([]string{"USERNAME", "UID", "HOME", "SHELL", "SUDO", "LOCKED", "EXPIRED", "BLOCKED"})
 			for _, u := range users {
 				sudo := ""
 				if u.IsSudo {
 					sudo = "yes"
 				}
-				t.Append([]string{u.Username, u.UID, u.Home, u.Shell, sudo})
+				t.Append([]string{u.Username, u.UID, u.Home, u.Shell, sudo, yesNo(u.Locked), yesNo(u.Expired), yesNo(u.LoginBlocked)})
 			}
 			t.Render()
 			return nil
@@ -493,6 +512,13 @@ func newUserListCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Sudo, "sudo", false, "Show sudo users only")
 
 	return cmd
+}
+
+func yesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return ""
 }
 
 // printSimpleResult is a convenience helper for commands that return a simple

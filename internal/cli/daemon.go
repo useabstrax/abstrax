@@ -29,6 +29,7 @@ func NewDaemonCmd() *cobra.Command {
 	cmd.AddCommand(newDaemonRestartCmd())
 	cmd.AddCommand(newDaemonStatusCmd())
 	cmd.AddCommand(newDaemonListCmd())
+	cmd.AddCommand(newDaemonInfoCmd())
 	cmd.AddCommand(newDaemonLogsCmd())
 
 	return cmd
@@ -84,14 +85,19 @@ func newDaemonAddCmd() *cobra.Command {
 			if err := validate.DaemonName(opts.Name); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
-				return err
-			}
 			if opts.Command == "" {
 				return fmt.Errorf("--command is required")
 			}
-
+			if err := validateAutorestart(opts.Autorestart); err != nil {
+				return err
+			}
 			opts.Environment = parseEnvPairs(envPairs)
+			if err := daemon.ValidateOptions(opts); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
 
 			svc := daemon.New(opts.DryRun, globals.Flags.Verbose)
 			info, err := svc.Add(cmd.Context(), opts)
@@ -171,23 +177,41 @@ func newDaemonRemoveCmd() *cobra.Command {
 func newDaemonModifyCmd() *cobra.Command {
 	opts := daemon.AddOptions{}
 	var envPairs []string
+	var unsetEnv []string
 
 	cmd := &cobra.Command{
 		Use:   "modify <name>",
 		Short: "Modify a daemon's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: `Change settings on an existing daemon.
+
+Only flags you pass are updated. After the config is written, Abstrax runs
+supervisorctl reread and update. update restarts the program when its config changed.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Name = args[0]
 			opts.DryRun = globals.Flags.DryRun
+			opts.Changed = changedFlags(cmd,
+				"command", "directory", "user", "processes", "autostart", "autorestart",
+				"startsecs", "startretries", "stopsignal", "stopwaitsecs", "exitcodes",
+				"stdout-logfile", "stderr-logfile", "environment", "clear-environment",
+				"unset-environment")
+			opts.UnsetEnvironment = unsetEnv
 
 			if err := validate.DaemonName(opts.Name); err != nil {
+				return err
+			}
+			opts.Environment = parseEnvPairs(envPairs)
+			if opts.Changed["autorestart"] {
+				if err := validateAutorestart(opts.Autorestart); err != nil {
+					return err
+				}
+			}
+			if err := daemon.ValidateOptions(opts); err != nil {
 				return err
 			}
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
-
-			opts.Environment = parseEnvPairs(envPairs)
 
 			svc := daemon.New(opts.DryRun, globals.Flags.Verbose)
 			info, err := svc.Modify(cmd.Context(), opts)
@@ -204,9 +228,29 @@ func newDaemonModifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.Directory, "directory", "", "Working directory")
 	cmd.Flags().StringVar(&opts.User, "user", "", "User to run as")
 	cmd.Flags().IntVar(&opts.Processes, "processes", 0, "Number of processes")
+	cmd.Flags().BoolVar(&opts.Autostart, "autostart", false, "Start automatically on supervisor start")
+	cmd.Flags().StringVar(&opts.Autorestart, "autorestart", "", "Autorestart mode (always/unexpected/false)")
+	cmd.Flags().IntVar(&opts.StartSecs, "startsecs", 0, "Seconds before considering process started")
+	cmd.Flags().IntVar(&opts.StartRetries, "startretries", 0, "Number of start retries")
+	cmd.Flags().StringVar(&opts.StopSignal, "stopsignal", "", "Stop signal")
+	cmd.Flags().IntVar(&opts.StopWaitSecs, "stopwaitsecs", 0, "Seconds to wait for process to stop")
+	cmd.Flags().StringVar(&opts.ExitCodes, "exitcodes", "", "Expected exit codes")
+	cmd.Flags().StringVar(&opts.StdoutLogFile, "stdout-logfile", "", "Stdout log file path")
+	cmd.Flags().StringVar(&opts.StderrLogFile, "stderr-logfile", "", "Stderr log file path")
 	cmd.Flags().StringArrayVar(&envPairs, "environment", nil, "Environment variables (KEY=VALUE)")
+	cmd.Flags().BoolVar(&opts.ClearEnvironment, "clear-environment", false, "Remove every environment variable before applying --environment")
+	cmd.Flags().StringArrayVar(&unsetEnv, "unset-environment", nil, "Remove one environment variable")
 
 	return cmd
+}
+
+func validateAutorestart(value string) error {
+	switch value {
+	case "always", "unexpected", "false":
+		return nil
+	default:
+		return fmt.Errorf("autorestart must be always, unexpected, or false, got %q", value)
+	}
 }
 
 func newDaemonStartCmd() *cobra.Command {
@@ -291,10 +335,17 @@ func newDaemonStatusCmd() *cobra.Command {
 			p.Line("")
 			p.Line("  %-12s %s", "Name:", info.Name)
 			p.Line("  %-12s %s", "Status:", info.Status)
-			if info.Description != "" {
-				p.Line("  %-12s %s", "Info:", info.Description)
+			p.Line("  %-12s %s", "Processes:", formatProcessSummary(*info))
+			if info.ConfigPath != "" {
+				p.Line("  %-12s %s", "Config:", info.ConfigPath)
 			}
-			p.Line("  %-12s %s", "Config:", info.ConfigPath)
+			for _, proc := range info.Processes {
+				detail := proc.Description
+				if detail == "" {
+					detail = proc.Status
+				}
+				p.Line("    %s  %s", proc.Name, detail)
+			}
 			p.Line("")
 			return nil
 		},
@@ -302,12 +353,13 @@ func newDaemonStatusCmd() *cobra.Command {
 }
 
 func newDaemonListCmd() *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List managed daemons",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := daemon.New(false, globals.Flags.Verbose)
-			daemons, err := svc.List(cmd.Context())
+			daemons, err := svc.List(cmd.Context(), daemon.ListOptions{All: all})
 			if err != nil {
 				return err
 			}
@@ -318,18 +370,83 @@ func newDaemonListCmd() *cobra.Command {
 			}
 
 			if len(daemons) == 0 {
-				printer().Line("No daemons running.")
+				if all {
+					printer().Line("No daemons running.")
+				} else {
+					printer().Line("No managed daemons.")
+				}
 				return nil
 			}
 
-			t := output.NewTable([]string{"NAME", "STATUS", "INFO"})
+			t := output.NewTable([]string{"NAME", "STATUS", "PROCESSES"})
 			for _, d := range daemons {
-				t.Append([]string{d.Name, d.Status, d.Description})
+				t.Append([]string{d.Name, d.Status, formatProcessSummary(d)})
 			}
 			t.Render()
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "Include Supervisor programs Abstrax did not create")
+	return cmd
+}
+
+func newDaemonInfoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "info <name>",
+		Short: "Show a managed daemon's settings and status",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if err := validate.DaemonName(name); err != nil {
+				return err
+			}
+			svc := daemon.New(false, globals.Flags.Verbose)
+			info, err := svc.Info(cmd.Context(), name)
+			if err != nil {
+				return err
+			}
+			if machineOutput() {
+				emitResult(output.Success(actions.DaemonInfo, "", info))
+				return nil
+			}
+			p := printer()
+			p.Line("")
+			p.Line("  %-12s %s", "Name:", info.Name)
+			p.Line("  %-12s %s", "Status:", info.Status)
+			p.Line("  %-12s %s", "Command:", info.Command)
+			p.Line("  %-12s %s", "Directory:", info.Directory)
+			p.Line("  %-12s %s", "User:", info.User)
+			p.Line("  %-12s %d", "Processes:", info.Numprocs)
+			p.Line("  %-12s %s", "Running:", formatProcessSummary(*info))
+			p.Line("  %-12s %t", "Autostart:", info.Autostart)
+			p.Line("  %-12s %s", "Autorestart:", info.Autorestart)
+			p.Line("  %-12s %s", "Config:", info.ConfigPath)
+			p.Line("")
+			return nil
+		},
+	}
+}
+
+func formatProcessSummary(info daemon.DaemonInfo) string {
+	total := len(info.Processes)
+	if total == 0 {
+		return info.Status
+	}
+	running := 0
+	fatal := 0
+	for _, proc := range info.Processes {
+		switch proc.Status {
+		case "RUNNING":
+			running++
+		case "FATAL":
+			fatal++
+		}
+	}
+	summary := fmt.Sprintf("%d/%d", running, total)
+	if fatal > 0 {
+		summary += fmt.Sprintf("  (%d FATAL)", fatal)
+	}
+	return summary
 }
 
 func newDaemonLogsCmd() *cobra.Command {
@@ -364,6 +481,7 @@ func newDaemonLogsCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&opts.Lines, "lines", 50, "Number of lines to show")
+	cmd.Flags().IntVar(&opts.Process, "process", 0, "Process number when the daemon runs more than one")
 	cmd.Flags().BoolVar(&opts.Follow, "follow", false, "Follow log output")
 	cmd.Flags().BoolVar(&opts.Stderr, "stderr", false, "Show stderr log")
 	cmd.Flags().BoolVar(&opts.Stdout, "stdout", false, "Show stdout log")

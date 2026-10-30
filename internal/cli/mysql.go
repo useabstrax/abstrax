@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -291,6 +292,18 @@ func newMySQLDBAddCmd() *cobra.Command {
 			if err := validate.DatabaseName(opts.Name); err != nil {
 				return err
 			}
+			if opts.Charset == "" {
+				opts.Charset = "utf8mb4"
+			}
+			if opts.Collation == "" {
+				opts.Collation = "utf8mb4_unicode_ci"
+			}
+			if err := mysql.ValidateIdent("charset", opts.Charset); err != nil {
+				return err
+			}
+			if err := mysql.ValidateIdent("collation", opts.Collation); err != nil {
+				return err
+			}
 
 			svc := mysql.New(opts.DryRun, globals.Flags.Verbose)
 			if err := svc.DBAdd(cmd.Context(), opts); err != nil {
@@ -384,6 +397,19 @@ func newMySQLUserAddCmd() *cobra.Command {
 			if err := validate.MySQLUsername(opts.Name); err != nil {
 				return err
 			}
+			if err := validate.MySQLHost(opts.Host); err != nil {
+				return err
+			}
+			if opts.GrantDB != "" {
+				if err := validate.DatabaseName(opts.GrantDB); err != nil {
+					return err
+				}
+			}
+			if opts.Privileges != "" {
+				if _, err := mysql.ParsePrivileges(opts.Privileges); err != nil {
+					return err
+				}
+			}
 
 			generated := false
 			if passwordFlag {
@@ -437,6 +463,12 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
+			if err := validate.MySQLUsername(name); err != nil {
+				return err
+			}
+			if err := validate.MySQLHost(host); err != nil {
+				return err
+			}
 
 			ok, err := confirm.Ask(
 				fmt.Sprintf("Drop MySQL user %q?", name),
@@ -463,18 +495,28 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 }
 
 func newMySQLUserListCmd() *cobra.Command {
-	return &cobra.Command{
+	var opts mysql.UserListOptions
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List MySQL users",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := mysql.New(false, globals.Flags.Verbose)
-			users, err := svc.UserList(cmd.Context())
+			users, err := svc.UserList(cmd.Context(), opts)
 			if err != nil {
 				return err
 			}
 
 			if machineOutput() {
 				emitResult(output.Success(actions.MySQLUserList, "", users))
+				return nil
+			}
+
+			if opts.Grants {
+				t := output.NewTable([]string{"USER", "HOST", "DATABASES"})
+				for _, u := range users {
+					t.Append([]string{u.Name, u.Host, formatDBGrants(u)})
+				}
+				t.Render()
 				return nil
 			}
 
@@ -486,36 +528,60 @@ func newMySQLUserListCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&opts.Grants, "grants", false, "Include each user's grants")
+	cmd.Flags().BoolVar(&opts.ExcludeSystem, "exclude-system", false, "Hide built-in accounts")
+	return cmd
 }
 
 func newMySQLUserInfoCmd() *cobra.Command {
-	return &cobra.Command{
+	var host string
+	cmd := &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show MySQL user grants",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := mysql.New(false, globals.Flags.Verbose)
-			info, err := svc.UserInfo(cmd.Context(), args[0])
+			users, err := svc.UserInfo(cmd.Context(), args[0], host)
 			if err != nil {
 				return err
 			}
 
-			p := printer()
 			if machineOutput() {
-				emitResult(output.Success(actions.MySQLUserInfo, "", info))
+				emitResult(output.Success(actions.MySQLUserInfo, "", users))
 				return nil
 			}
 
-			p.Line("")
-			p.Line("  User: %s", info.Name)
-			p.Line("  Grants:")
-			for _, g := range info.Grants {
-				p.Line("    %s", g)
+			p := printer()
+			for _, info := range users {
+				p.Line("")
+				p.Line("  User: %s", info.Name)
+				p.Line("  Host: %s", info.Host)
+				p.Line("  Grants:")
+				for _, g := range info.Grants {
+					p.Line("    %s", g)
+				}
 			}
 			p.Line("")
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&host, "host", "", "Only show this host")
+	return cmd
+}
+
+func formatDBGrants(u mysql.UserInfo) string {
+	if len(u.Databases) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(u.Databases))
+	for _, db := range u.Databases {
+		label := db.Name
+		if db.Preset != nil {
+			label += " (" + *db.Preset + ")"
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func newMySQLGrantCmd() *cobra.Command {
@@ -535,6 +601,11 @@ func newMySQLGrantCmd() *cobra.Command {
 			if err := validate.DatabaseName(db); err != nil {
 				return err
 			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
 
 			privs := privileges
 			if privs == "" {
@@ -547,6 +618,10 @@ func newMySQLGrantCmd() *cobra.Command {
 				} else {
 					privs = mysql.PresetPrivileges[mysql.PresetApp]
 				}
+			}
+
+			if _, err := mysql.ParsePrivileges(privs); err != nil {
+				return err
 			}
 
 			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
@@ -573,6 +648,17 @@ func newMySQLRevokeCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			user, db := args[0], args[1]
+			if err := validate.MySQLUsername(user); err != nil {
+				return err
+			}
+			if err := validate.DatabaseName(db); err != nil {
+				return err
+			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
 
 			ok, err := confirm.Ask(
 				fmt.Sprintf("Revoke all privileges on %q from %q?", db, user),
