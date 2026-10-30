@@ -29,12 +29,17 @@ type SetTimeoutOptions struct {
 	DryRun  bool
 }
 
-// SSHConfig holds the current SSH configuration values managed by Abstrax.
+// SSHConfig holds the SSH settings sshd is using.
 type SSHConfig struct {
-	Port                string `json:"port"`
-	PermitRootLogin     string `json:"permit_root_login"`
-	PasswordAuth        string `json:"password_authentication"`
-	ClientAliveInterval string `json:"client_alive_interval"`
+	Port                      string `json:"port"`
+	PermitRootLogin           string `json:"permit_root_login"`
+	PasswordAuth              string `json:"password_authentication"`
+	ClientAliveInterval       string `json:"client_alive_interval"`
+	PortSource                string `json:"port_source,omitempty"`
+	PermitRootLoginSource     string `json:"permit_root_login_source,omitempty"`
+	PasswordAuthSource        string `json:"password_authentication_source,omitempty"`
+	ClientAliveIntervalSource string `json:"client_alive_interval_source,omitempty"`
+	Note                      string `json:"note,omitempty"`
 }
 
 // ReloadOptions holds options for SSH service reload/restart.

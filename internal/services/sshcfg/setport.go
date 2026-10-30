@@ -50,6 +50,12 @@ func (s *Service) SetPort(ctx context.Context, opts SetPortOptions) (*SetPortRes
 	if err != nil {
 		return nil, err
 	}
+	if !opts.DryRun {
+		if err := s.migrateLegacy(false); err != nil {
+			s.restore(snap)
+			return nil, err
+		}
+	}
 
 	both := append([]int{}, oldPorts...)
 	if !containsPort(both, opts.Port) {
@@ -137,6 +143,11 @@ func (s *Service) currentPorts() []int {
 	if ports := portsFromFile(s.managedConfigPath()); len(ports) > 0 {
 		return ports
 	}
+	if legacy := s.legacyConfigPath(); legacy != "" {
+		if ports := portsFromFile(legacy); len(ports) > 0 {
+			return ports
+		}
+	}
 	return portsFromFile(s.mainConfig())
 }
 
@@ -214,6 +225,8 @@ func (s *Service) writeSocketDropIn(ports []int) error {
 type configSnapshot struct {
 	managed   []byte
 	managedOK bool
+	legacy    []byte
+	legacyOK  bool
 	dropIn    []byte
 	dropInOK  bool
 }
@@ -227,6 +240,15 @@ func (s *Service) snapshot() (configSnapshot, error) {
 	} else if !os.IsNotExist(err) {
 		return snap, err
 	}
+	if legacy := s.legacyConfigPath(); legacy != "" {
+		data, err = os.ReadFile(legacy)
+		if err == nil {
+			snap.legacy = data
+			snap.legacyOK = true
+		} else if !os.IsNotExist(err) {
+			return snap, err
+		}
+	}
 	data, err = os.ReadFile(s.socketDropInPath())
 	if err == nil {
 		snap.dropIn = data
@@ -239,6 +261,9 @@ func (s *Service) snapshot() (configSnapshot, error) {
 
 func (s *Service) restore(snap configSnapshot) {
 	restoreFile(s.managedConfigPath(), snap.managed, snap.managedOK)
+	if legacy := s.legacyConfigPath(); legacy != "" {
+		restoreFile(legacy, snap.legacy, snap.legacyOK)
+	}
 	restoreFile(s.socketDropInPath(), snap.dropIn, snap.dropInOK)
 }
 
