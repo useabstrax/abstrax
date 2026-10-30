@@ -4,6 +4,20 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Daemon list and status JSON** - `daemon list` and `daemon status` group processes under one daemon. `status` is the worst process state. Each process includes `pid`, `uptime`, and `uptime_seconds` while it is running. `daemon list` shows Abstrax-managed daemons by default; `--all` includes other Supervisor programs with `managed: false` and no `config_path`.
+
+### Added
+
+- **`daemon info <name>`** - Prints the settings from the Supervisor config (command, directory, user, numprocs, restart policy, and log paths) plus live status. Registered as the `daemon.info` action.
+
+### Fixed
+
+- **Multi-process daemons** - `start`, `stop`, and `restart` address the Supervisor group as `<name>:*`. `daemon logs --lines N` returns N lines from the log file. `--stderr` works, and `--process N` selects one process when `numprocs` is greater than 1.
+
 ## [2.3.1] - 2026-08-19
 
 ### Fixed
