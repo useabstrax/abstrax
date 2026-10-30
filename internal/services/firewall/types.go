@@ -10,16 +10,23 @@ const (
 )
 
 // Rule describes a firewall rule.
+//
+// On UFW, ID is a stable hash of the rule and Number is its current position
+// in `ufw status numbered`. Number can change when other rules are inserted
+// or deleted. On firewalld, ID is the Abstrax list position.
 type Rule struct {
-	ID       string   `json:"id"`
-	Action   string   `json:"action"`
-	Port     string   `json:"port,omitempty"`
-	Protocol string   `json:"protocol,omitempty"`
-	From     string   `json:"from,omitempty"`
-	To       string   `json:"to,omitempty"`
-	Comment  string   `json:"comment,omitempty"`
-	Kind     RuleKind `json:"kind,omitempty"`
-	Target   string   `json:"target,omitempty"`
+	ID        string   `json:"id"`
+	Number    string   `json:"number,omitempty"`
+	Action    string   `json:"action"`
+	Direction string   `json:"direction,omitempty"`
+	Port      string   `json:"port,omitempty"`
+	Protocol  string   `json:"protocol,omitempty"`
+	From      string   `json:"from,omitempty"`
+	To        string   `json:"to,omitempty"`
+	Comment   string   `json:"comment,omitempty"`
+	IPv6      bool     `json:"ipv6,omitempty"`
+	Kind      RuleKind `json:"kind,omitempty"`
+	Target    string   `json:"target,omitempty"`
 }
 
 // AllowOptions holds options for allow/deny commands.

@@ -127,6 +127,17 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Firewall rule IDs
+
+On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:
+
+```bash
+abstrax firewall rule list
+sudo abstrax firewall rule remove a1b2c3d4
+```
+
+A numeric position still works (`firewall rule remove 3`) and prints a warning, because that number may point at a different rule than it did when you last listed them.
+
 ### PHP projects
 
 When multiple PHP versions are installed on a server, use the versioned CLI binary (`php8.5`, `php8.4`, and so on) for Artisan, Composer, cron jobs, and daemons - not the unversioned `php` command. Abstrax routes web requests to the correct PHP-FPM version per project, but CLI commands do not switch automatically. See [Projects](https://useabstrax.com/docs/commands/projects#php-on-the-command-line).
