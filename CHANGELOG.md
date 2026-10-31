@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **SSH key restrictions** - `ssh-key add --expires` writes OpenSSH `expiry-time` (UTC) and `--from` writes a `from` allow-list. `ssh-key list` and `ssh-key info` return `expires_at`, `from`, and `expired`. `--expires` is refused on OpenSSH older than 8.2. Keys added without the flags are written as before.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
