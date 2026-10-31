@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`ssh config enable-root-login --keys-only`** - Writes `PermitRootLogin prohibit-password`, so root can log in with an SSH key and not a password. Without the flag, the command still writes `yes`. `ssh config disable-root-login` still writes `no` and blocks root for every method.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
