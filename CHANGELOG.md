@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`mysql status`** - Reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. The command succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform and `version` is null.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security

@@ -28,6 +28,12 @@ type Service struct {
 	captureSQL       bool
 	sqlLog           []string
 	queryFn          func(ctx context.Context, sql string) (string, error)
+
+	// Optional hooks so status can be tested without a database or init system.
+	packageInstalledFn func(name string) bool
+	daemonBinaryFn     func() (string, error)
+	daemonVersionFn    func(ctx context.Context, binary string) (string, error)
+	serviceStatusFn    func(ctx context.Context, name string) (*svcmanager.ServiceStatus, error)
 }
 
 // New creates a Service.
@@ -653,7 +659,8 @@ func (s *Service) isMariaDB(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(res), "mariadb")
+	engine, _, ok := ParseServerVersion(res)
+	return ok && engine == string(platform.DatabaseMariaDB)
 }
 
 func (s *Service) userHosts(ctx context.Context, user string) ([]string, error) {

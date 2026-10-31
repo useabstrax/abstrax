@@ -164,6 +164,10 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `mysql grant --privileges` and `mysql user add --privileges` only accept known privilege names. Hosts and database names are checked before they are placed in SQL.
 
+### MySQL status
+
+`mysql status` reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. It succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform.
+
 ### User lock
 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
