@@ -336,7 +336,7 @@ func TestGeneratePHPPoolNameAndSocket(t *testing.T) {
 
 func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 	socket := "/run/php/php8.4-fpm-abstrax-example.sock"
-	conf := buildNginxConfig(vhostConfig{
+	conf, err := buildNginxConfig(vhostConfig{
 		Name:       "example",
 		Path:       "/home/mike/example",
 		Domains:    []string{"example.com"},
@@ -345,6 +345,9 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 		PublicDir:  "public",
 		PHPSocket:  socket,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config missing socket:\n%s", conf)
 	}
@@ -368,12 +371,15 @@ func TestBuildNginxConfigUsesProjectSocket(t *testing.T) {
 }
 
 func TestBuildNginxConfigSharedDefaultSocket(t *testing.T) {
-	conf := buildNginxConfig(vhostConfig{
+	conf, err := buildNginxConfig(vhostConfig{
 		Name:       "example",
 		Path:       "/var/www/example",
 		Runtime:    RuntimePHP,
 		PHPVersion: "8.5",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	socket := platformProvider.PHPFPMDefaultSocket("8.5")
 	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config = %s", conf)
@@ -392,12 +398,15 @@ func assertPHPRealpathRootParams(t *testing.T, conf string) {
 }
 
 func TestBuildNginxConfigCustomPort(t *testing.T) {
-	conf := buildNginxConfig(vhostConfig{
+	conf, err := buildNginxConfig(vhostConfig{
 		Name:    "example",
 		Path:    "/var/www/example",
 		Domains: []string{"example.com"},
 		Port:    8080,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(conf, "listen 8080;") {
 		t.Fatalf("config = %s", conf)
 	}

@@ -4,7 +4,17 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.4.0] - 2026-10-30
+## [Unreleased]
+
+### Added
+
+- **Per-project nginx logs** - A managed vhost logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` return those paths as `access_log_path` and `error_log_path`. `project add --shared-logs` and `project modify --shared-logs` omit the directives and keep the server-wide nginx logs. The choice is stored as `shared_logs`, so a later `project modify` that does not pass the flag leaves it unchanged. `--shared-logs=false` turns per-project logs back on. Existing vhosts are not rewritten on upgrade. They pick up per-project logs the next time `project modify` rewrites the vhost. `--shared-logs` keeps the previous server-wide behaviour. `project remove` keeps the log files. `project remove --delete-files` deletes the project files and those two log files. Passing `--keep-files` as well still keeps both.
+
+### Fixed
+
+- **`project remove --delete-files`** - Deletes the project files. The default `--keep-files` previously stayed on, so `--delete-files` alone had no effect unless `--keep-files=false` was also passed.
+
+
 
 ### Security
 

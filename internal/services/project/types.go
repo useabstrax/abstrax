@@ -28,6 +28,7 @@ type AddOptions struct {
 	UserExplicit bool
 	WebServer    WebServer
 	NoVhost      bool
+	SharedLogs   bool
 	Domains      []string
 	Port         int
 	WebRoot      string
@@ -80,6 +81,9 @@ type ModifyOptions struct {
 	RubyVersion  string
 	PublicDir    string
 	ProxyPort    int
+	// SharedLogs, when set, updates whether the project uses server-wide nginx logs.
+	// Nil leaves the stored value unchanged. False turns per-project logs back on.
+	SharedLogs   *bool
 	SSL          bool
 	RemoveSSL    bool
 	RedirectHTTP bool
@@ -101,6 +105,9 @@ type State struct {
 	ProxyPort     int              `json:"proxy_port,omitempty"`
 	SSLEnabled    bool             `json:"ssl_enabled"`
 	VhostPath     string           `json:"vhost_path"`
+	SharedLogs    bool             `json:"shared_logs,omitempty"`
+	AccessLogPath string           `json:"access_log_path,omitempty"`
+	ErrorLogPath  string           `json:"error_log_path,omitempty"`
 	Owner         string           `json:"owner"`
 	Group         string           `json:"group,omitempty"`
 	OwnershipMode OwnershipMode    `json:"ownership_mode,omitempty"`
