@@ -151,6 +151,7 @@ var commandPaths = map[string][]string{
 	ServerDisk:     {"server", "disk"},
 	ServerLoad:     {"server", "load"},
 	ServerServices: {"server", "services"},
+	ServerReboot:   {"server", "reboot"},
 
 	DoctorCheck: {"doctor"},
 	VersionShow: {"version"},

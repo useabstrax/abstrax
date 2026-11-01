@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`server reboot`** - Reboots the machine after confirmation. `--yes` skips the prompt. `--delay` waits that many seconds; `0` runs `systemctl reboot` immediately. A positive delay uses `systemd-run --on-active=<seconds>s` when `systemd-run` is available, otherwise `shutdown -r` with the delay rounded up to whole minutes. The result is printed before the reboot command runs.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
