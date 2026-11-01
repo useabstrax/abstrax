@@ -240,20 +240,24 @@ func ufwDeleteArgs(r Rule) []string {
 	return args
 }
 
-func (s *Service) ufwRuleRemove(ctx context.Context, id string) error {
-	rules, err := s.RuleList(ctx)
+func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOptions) (*SSHCheck, error) {
+	status, err := s.ufwStatus(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	match, byNumber := findUFWRule(rules, id)
+	match, byNumber := findUFWRule(status.Rules, id)
 	if match == nil {
-		return fmt.Errorf("rule not found, it may already have been removed")
+		return nil, fmt.Errorf("rule not found, it may already have been removed")
+	}
+	check, err := s.guardSSH(opts.Force, status.Active, withoutIndex(status.Rules, indexOfRule(status.Rules, match)))
+	if err != nil {
+		return nil, err
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
 		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", match.Number)
-		return err
+		return check, err
 	}
 	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(*match)...)
-	return err
+	return check, err
 }

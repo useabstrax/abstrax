@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Firewall SSH access** - `firewall deny`, `firewall rule remove`, `firewall remove service`, and `firewall remove port` are refused when the firewall is active and the change would leave no rule allowing TCP to the SSH port. An allow limited to one address still counts. `--force` applies the change anyway. `--yes` does not. When the firewall is inactive, the change is allowed and Abstrax warns that `firewall enable` will need `--allow-ssh`. Successful `--json` output includes `ssh_check`. Automatic client-IP protection on `allow`, `deny`, `allow-ip`, and `deny-ip` runs only for an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, it does nothing.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security

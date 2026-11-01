@@ -201,12 +201,12 @@ func TestUFWRuleRemoveByStableID(t *testing.T) {
 	runner := executil.New(true, false)
 	runner.SetCommandFunc(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
 		if name == "ufw" && len(args) >= 1 && args[0] == "status" {
-			return executil.Result{Stdout: status}, true, nil
+			return executil.Result{Stdout: "Status: active\n" + status}, true, nil
 		}
 		return executil.Result{}, false, nil
 	})
-	svc := &Service{runner: runner, backend: "ufw"}
-	if err := svc.RuleRemove(context.Background(), mysql.ID); err != nil {
+	svc := &Service{runner: runner, backend: "ufw", sshPort: func() (int, error) { return 22, nil }}
+	if _, err := svc.RuleRemove(context.Background(), mysql.ID, GuardOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +224,7 @@ func TestUFWRuleRemoveByStableID(t *testing.T) {
 }
 
 func TestUFWRuleRemoveByNumberWarnsAndUsesPosition(t *testing.T) {
-	status := "[ 4] 6379/tcp ALLOW IN 10.0.0.12\n"
+	status := "Status: active\n[ 1] 22/tcp ALLOW IN Anywhere\n[ 4] 6379/tcp ALLOW IN 10.0.0.12\n"
 	runner := executil.New(true, false)
 	runner.SetCommandFunc(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
 		if name == "ufw" && len(args) >= 1 && args[0] == "status" {
@@ -232,8 +232,8 @@ func TestUFWRuleRemoveByNumberWarnsAndUsesPosition(t *testing.T) {
 		}
 		return executil.Result{}, false, nil
 	})
-	svc := &Service{runner: runner, backend: "ufw"}
-	if err := svc.RuleRemove(context.Background(), "4"); err != nil {
+	svc := &Service{runner: runner, backend: "ufw", sshPort: func() (int, error) { return 22, nil }}
+	if _, err := svc.RuleRemove(context.Background(), "4", GuardOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var deleteCmd []string
@@ -256,8 +256,8 @@ func TestUFWRuleRemoveMissing(t *testing.T) {
 		}
 		return executil.Result{}, false, nil
 	})
-	svc := &Service{runner: runner, backend: "ufw"}
-	err := svc.RuleRemove(context.Background(), "deadbeef")
+	svc := &Service{runner: runner, backend: "ufw", sshPort: func() (int, error) { return 22, nil }}
+	_, err := svc.RuleRemove(context.Background(), "deadbeef", GuardOptions{})
 	if err == nil || !strings.Contains(err.Error(), "rule not found, it may already have been removed") {
 		t.Fatalf("err = %v", err)
 	}

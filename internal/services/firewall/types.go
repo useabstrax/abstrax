@@ -38,6 +38,14 @@ type AllowOptions struct {
 	To       string
 	Comment  string
 	DryRun   bool
+	// Force skips the SSH lockout check. --yes does not.
+	Force bool
+}
+
+// GuardOptions controls the SSH lockout check on remove commands.
+type GuardOptions struct {
+	// Force skips the check. --yes does not.
+	Force bool
 }
 
 // InstallOptions holds options for installing the platform firewall package.
@@ -72,4 +80,24 @@ type SSHProtectResult struct {
 	Added    bool   `json:"added,omitempty"`
 	ClientIP string `json:"client_ip,omitempty"`
 	SSHPort  int    `json:"ssh_port,omitempty"`
+}
+
+// SSHCheck is the lockout check included in --json results for remove and deny.
+// Blocked is true when the resulting rules would not allow TCP to Port.
+// The command errors instead of returning this when the firewall is active
+// and Blocked would be true.
+type SSHCheck struct {
+	Port    int  `json:"port"`
+	Blocked bool `json:"blocked"`
+}
+
+// SSHCheckResult is the JSON data for firewall remove commands.
+type SSHCheckResult struct {
+	SSHCheck *SSHCheck `json:"ssh_check,omitempty"`
+}
+
+// RuleChangeResult is the JSON data for firewall deny.
+type RuleChangeResult struct {
+	SSHProtectResult
+	SSHCheck *SSHCheck `json:"ssh_check,omitempty"`
 }
