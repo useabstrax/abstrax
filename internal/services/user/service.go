@@ -333,6 +333,7 @@ func (s *Service) Info(ctx context.Context, username string) (*UserInfo, error) 
 	}
 
 	s.applyAccountState(ctx, info)
+	s.applyLastLogin(ctx, info)
 	return info, nil
 }
 
@@ -342,6 +343,8 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]UserInfo, error
 	if err != nil {
 		return nil, fmt.Errorf("listing users: %w", err)
 	}
+
+	logins := s.loadLastLogins(ctx)
 
 	var users []UserInfo
 	for _, line := range strings.Split(res.Stdout, "\n") {
@@ -385,6 +388,10 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]UserInfo, error
 		}
 
 		s.applyAccountState(ctx, &u)
+		if rec, ok := logins[u.Username]; ok {
+			u.LastLoginAt = rec.at
+			u.LastLoginFrom = rec.from
+		}
 		users = append(users, u)
 	}
 

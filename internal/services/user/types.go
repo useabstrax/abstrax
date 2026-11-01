@@ -57,18 +57,20 @@ type ListOptions struct {
 
 // UserInfo holds information about a user.
 type UserInfo struct {
-	Username     string   `json:"username"`
-	UID          string   `json:"uid"`
-	GID          string   `json:"gid"`
-	Comment      string   `json:"comment"`
-	Home         string   `json:"home"`
-	Shell        string   `json:"shell"`
-	Groups       []string `json:"groups"`
-	IsSudo       bool     `json:"is_sudo"`
-	IsSystem     bool     `json:"is_system"`
-	Locked       bool     `json:"locked"`
-	Expired      bool     `json:"expired"`
-	LoginBlocked bool     `json:"login_blocked"`
+	Username      string   `json:"username"`
+	UID           string   `json:"uid"`
+	GID           string   `json:"gid"`
+	Comment       string   `json:"comment"`
+	Home          string   `json:"home"`
+	Shell         string   `json:"shell"`
+	Groups        []string `json:"groups"`
+	IsSudo        bool     `json:"is_sudo"`
+	IsSystem      bool     `json:"is_system"`
+	Locked        bool     `json:"locked"`
+	Expired       bool     `json:"expired"`
+	LoginBlocked  bool     `json:"login_blocked"`
+	LastLoginAt   *string  `json:"last_login_at"`
+	LastLoginFrom *string  `json:"last_login_from"`
 }
 
 // AddResult is returned by Add.

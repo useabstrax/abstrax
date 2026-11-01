@@ -463,6 +463,13 @@ func newUserInfoCmd() *cobra.Command {
 				blockedStr = "yes"
 			}
 			p.Line("  %-12s %s", "Login blocked:", blockedStr)
+			if info.LastLoginAt != nil {
+				login := *info.LastLoginAt
+				if info.LastLoginFrom != nil && *info.LastLoginFrom != "" {
+					login += " from " + *info.LastLoginFrom
+				}
+				p.Line("  %-12s %s", "Last login:", login)
+			}
 			p.Line("")
 
 			return nil
@@ -494,13 +501,17 @@ func newUserListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"USERNAME", "UID", "HOME", "SHELL", "SUDO", "LOCKED", "EXPIRED", "BLOCKED"})
+			t := output.NewTable([]string{"USERNAME", "UID", "HOME", "SHELL", "SUDO", "LOCKED", "EXPIRED", "BLOCKED", "LAST LOGIN"})
 			for _, u := range users {
 				sudo := ""
 				if u.IsSudo {
 					sudo = "yes"
 				}
-				t.Append([]string{u.Username, u.UID, u.Home, u.Shell, sudo, yesNo(u.Locked), yesNo(u.Expired), yesNo(u.LoginBlocked)})
+				lastLogin := ""
+				if u.LastLoginAt != nil {
+					lastLogin = *u.LastLoginAt
+				}
+				t.Append([]string{u.Username, u.UID, u.Home, u.Shell, sudo, yesNo(u.Locked), yesNo(u.Expired), yesNo(u.LoginBlocked), lastLogin})
 			}
 			t.Render()
 			return nil

@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`user info` and `user list`** - Include the last login time and where it came from. `last_login_at` is an RFC3339 timestamp or null. `last_login_from` is an IP address or hostname, or null. `user list` reads the login log once. A missing log leaves the fields null and the command still succeeds.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
