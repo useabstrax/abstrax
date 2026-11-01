@@ -59,6 +59,25 @@ type UserAddResult struct {
 	Generated bool   `json:"password_generated"`
 }
 
+// UserPasswordOptions holds options for mysql user password.
+type UserPasswordOptions struct {
+	Name     string
+	Host     string
+	Password string
+	DryRun   bool
+}
+
+// UserPasswordResult is returned when a MySQL user's password is changed.
+// JSON matches UserAddResult: name, host or hosts, password, and
+// password_generated (true only when Abstrax generated the password).
+type UserPasswordResult struct {
+	Name      string   `json:"name"`
+	Host      string   `json:"host,omitempty"`
+	Hosts     []string `json:"hosts,omitempty"`
+	Password  string   `json:"password,omitempty"`
+	Generated bool     `json:"password_generated"`
+}
+
 // Database describes a MySQL database.
 type Database struct {
 	Name string `json:"name"`

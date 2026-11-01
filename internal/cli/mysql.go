@@ -34,6 +34,7 @@ func NewMySQLCmd() *cobra.Command {
 
 	userCmd := &cobra.Command{Use: "user", Short: "Manage MySQL users"}
 	userCmd.AddCommand(newMySQLUserAddCmd())
+	userCmd.AddCommand(newMySQLUserPasswordCmd())
 	userCmd.AddCommand(newMySQLUserRemoveCmd())
 	userCmd.AddCommand(newMySQLUserListCmd())
 	userCmd.AddCommand(newMySQLUserInfoCmd())
@@ -278,6 +279,35 @@ func printUserAddResult(result *mysql.UserAddResult) error {
 	return nil
 }
 
+func printUserPasswordResult(result *mysql.UserPasswordResult) error {
+	summary := fmt.Sprintf("MySQL password updated for %s.", result.Name)
+	r := output.Success(actions.MySQLUserPassword, summary, result)
+
+	if machineOutput() {
+		emitResult(r)
+		return nil
+	}
+
+	p := printer()
+	if !globals.Flags.Quiet && result.Generated {
+		p.Line("")
+		p.Line("============================================================")
+		p.Line("  %s", summary)
+		p.Line("")
+		p.Line("  PASSWORD (save this now - shown only once):")
+		p.Line("")
+		p.Line("  %s", result.Password)
+		p.Line("")
+		p.Line("  Connect with: mysql -u %s -p", result.Name)
+		p.Line("============================================================")
+		p.Line("")
+	} else {
+		p.Success(summary)
+	}
+
+	return nil
+}
+
 func newMySQLDBAddCmd() *cobra.Command {
 	opts := mysql.DBAddOptions{}
 
@@ -454,6 +484,55 @@ func newMySQLUserAddCmd() *cobra.Command {
 	return cmd
 }
 
+func newMySQLUserPasswordCmd() *cobra.Command {
+	var host string
+	var passwordFlag bool
+
+	cmd := &cobra.Command{
+		Use:   "password <name>",
+		Short: "Change a MySQL user's password",
+		Long: `Set a new password for an existing MySQL or MariaDB user.
+
+With no --host, every host the user exists on is updated. --host localhost updates both localhost and 127.0.0.1. Any other --host updates only that account. Grants and the auth plugin are left unchanged.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if err := validate.MySQLUsername(name); err != nil {
+				return err
+			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
+
+			opts := mysql.UserPasswordOptions{
+				Name:   name,
+				Host:   host,
+				DryRun: globals.Flags.DryRun,
+			}
+			if passwordFlag {
+				pw, err := promptPassword(fmt.Sprintf("Password for %s: ", name))
+				if err != nil {
+					return err
+				}
+				opts.Password = pw
+			}
+
+			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			result, err := svc.UserPassword(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+			return printUserPasswordResult(result)
+		},
+	}
+
+	cmd.Flags().StringVar(&host, "host", "", "Host to update (default: every host the user exists on)")
+	cmd.Flags().BoolVar(&passwordFlag, "password", false, "Prompt for a password instead of generating one")
+	return cmd
+}
+
 func newMySQLUserRemoveCmd() *cobra.Command {
 	var host string
 
@@ -490,7 +569,7 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 				fmt.Sprintf("MySQL user %s dropped.", name), nil)
 		},
 	}
-	cmd.Flags().StringVar(&host, "host", "localhost", "User host restriction")
+	cmd.Flags().StringVar(&host, "host", "localhost", "User host (localhost also drops 127.0.0.1)")
 	return cmd
 }
 

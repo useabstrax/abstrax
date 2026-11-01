@@ -4,6 +4,16 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`mysql user password <name>`** - Changes the password for an existing MySQL or MariaDB user without altering grants or the auth plugin. A password is generated unless `--password` is passed, which prompts for one. With no `--host`, every host the user exists on is updated. `--host localhost` updates `localhost` and `127.0.0.1`. Any other `--host` updates only that account.
+
+### Fixed
+
+- **`mysql user remove`** - A local user is dropped from both `localhost` and `127.0.0.1`. Previously only `'user'@'localhost'` was removed, so the `127.0.0.1` account created by `mysql user add` was left behind.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
