@@ -441,6 +441,41 @@ func assertKills(t *testing.T, svc *Service, want [][]string) {
 	}
 }
 
+func TestLogoutAllLeavesUserManagerSession(t *testing.T) {
+	const listed = `[
+	  {"session":"3","uid":1000,"user":"deploy","seat":"","tty":"pts/1","remote":"true","remote_host":"203.0.113.5","timestamp":"2026-10-31 12:00:00"},
+	  {"session":"c1","uid":1000,"user":"deploy","seat":"","tty":"","timestamp":"2026-10-31 11:00:00"}
+	]`
+	svc := serviceWith(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
+		if name == "loginctl" && len(args) > 0 && args[0] == "list-sessions" {
+			return executil.Result{Stdout: listed}, true, nil
+		}
+		if name == "loginctl" && len(args) > 0 && args[0] == "terminate-session" {
+			return executil.Result{}, true, nil
+		}
+		return executil.Result{}, true, fmtError("unexpected " + name)
+	})
+	if _, err := svc.Logout(context.Background(), LogoutOptions{Username: "deploy", All: true}); err != nil {
+		t.Fatal(err)
+	}
+	assertTerminated(t, svc, []string{"3"})
+}
+
+func TestLogoutRefusesUserManagerSession(t *testing.T) {
+	const listed = `[{"session":"c1","uid":1000,"user":"deploy","seat":"","tty":"","timestamp":"2026-10-31 11:00:00"}]`
+	svc := serviceWith(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
+		if name == "loginctl" && len(args) > 0 && args[0] == "list-sessions" {
+			return executil.Result{Stdout: listed}, true, nil
+		}
+		return executil.Result{}, true, fmtError("unexpected " + name)
+	})
+	_, err := svc.Logout(context.Background(), LogoutOptions{Username: "deploy", SessionID: "c1"})
+	if err == nil || !strings.Contains(err.Error(), "not an interactive login session") {
+		t.Fatalf("err = %v", err)
+	}
+	assertTerminated(t, svc, nil)
+}
+
 func loginctlLogoutService(t *testing.T) *Service {
 	t.Helper()
 	return serviceWith(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {

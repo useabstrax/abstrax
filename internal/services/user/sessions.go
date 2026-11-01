@@ -70,13 +70,19 @@ func (s *Service) Logout(ctx context.Context, opts LogoutOptions) (*LogoutResult
 	if err != nil {
 		return nil, err
 	}
-	if backend == sessionBackendWho {
-		if !opts.All && len(targets) == 1 && !strings.HasPrefix(targets[0].TTY, "pts/") {
-			return nil, fmt.Errorf("session %s on %s is not an interactive SSH session", targets[0].ID, targets[0].TTY)
+	if !opts.All && len(targets) == 1 && !sessionIsLogin(backend, targets[0].TTY) {
+		label := "SSH"
+		if backend == sessionBackendLoginctl {
+			label = "login"
 		}
-		if opts.All {
-			targets = interactiveSSHSessions(targets)
+		tty := targets[0].TTY
+		if tty == "" {
+			tty = "no tty"
 		}
+		return nil, fmt.Errorf("session %s on %s is not an interactive %s session", targets[0].ID, tty, label)
+	}
+	if opts.All {
+		targets = filterLoginSessions(backend, targets)
 	}
 
 	procText := ""
@@ -142,14 +148,27 @@ func selectSessions(listed []Session, opts LogoutOptions) ([]Session, error) {
 	return nil, fmt.Errorf("session %s not found for user %s", opts.SessionID, opts.Username)
 }
 
-func interactiveSSHSessions(sessions []Session) []Session {
+func filterLoginSessions(backend string, sessions []Session) []Session {
 	out := make([]Session, 0, len(sessions))
 	for _, sess := range sessions {
-		if strings.HasPrefix(sess.TTY, "pts/") {
+		if sessionIsLogin(backend, sess.TTY) {
 			out = append(out, sess)
 		}
 	}
 	return out
+}
+
+// sessionIsLogin reports a session that is a person logged in.
+// A systemd user manager has no tty and must be left alone, because ending it
+// stops user services. Without logind, only an sshd pts session can be ended.
+func sessionIsLogin(backend, tty string) bool {
+	if strings.HasPrefix(tty, "pts/") {
+		return true
+	}
+	if backend == sessionBackendLoginctl && strings.HasPrefix(tty, "tty") && len(tty) > 3 {
+		return true
+	}
+	return false
 }
 
 // terminateCommands builds the commands that end the given login sessions.
