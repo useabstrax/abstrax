@@ -4,6 +4,16 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`user remove --if-unused`** - Refuses to remove a user, and exits non-zero, when an Abstrax daemon, an Abstrax cron job, or a running process still uses that account.
+
+### Changed
+
+- **`user remove`** - Warns when Abstrax daemons, cron jobs, or running processes still use the user. The user is still removed unless `--if-unused` is set. Daemons and cron jobs are not stopped. JSON results include `still_used_by`.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security

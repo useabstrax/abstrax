@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,6 +16,10 @@ import (
 	"abstrax/internal/services/user"
 	"abstrax/internal/validate"
 )
+
+// prepareUserRemove and newUserRemoveService are replaceable in tests.
+var prepareUserRemove = requireRootAndSupported
+var newUserRemoveService = user.New
 
 // NewUserCmd returns the user command with all subcommands.
 func NewUserCmd() *cobra.Command {
@@ -130,7 +136,12 @@ func newUserRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove a user",
-		Args:  cobra.ExactArgs(1),
+		Long: `Remove a user.
+
+Before removal, Abstrax lists Abstrax daemons, Abstrax cron jobs, and running
+processes that still use the account. They are not stopped. Removal continues
+unless --if-unused is set.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Username = args[0]
 			opts.DryRun = globals.Flags.DryRun
@@ -138,7 +149,7 @@ func newUserRemoveCmd() *cobra.Command {
 			if err := validate.Username(opts.Username); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
+			if err := prepareUserRemove(); err != nil {
 				return err
 			}
 
@@ -155,13 +166,34 @@ func newUserRemoveCmd() *cobra.Command {
 				}
 			}
 
-			svc := user.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.Remove(cmd.Context(), opts); err != nil {
+			svc := newUserRemoveService(opts.DryRun, globals.Flags.Verbose)
+			if machineOutput() {
+				svc.SetOutput(io.Discard)
+			}
+			result, err := svc.Remove(cmd.Context(), opts)
+			if err != nil {
+				var inUse *user.InUseError
+				if errors.As(err, &inUse) && machineOutput() {
+					used := inUse.UsedBy
+					if used == nil {
+						used = []user.UsedBy{}
+					}
+					r := output.Failure(actions.UserRemove, "user_in_use", inUse.Error())
+					r.Data = &user.RemoveResult{StillUsedBy: used}
+					emitResult(r)
+					return &emittedResultError{err: err}
+				}
 				return err
+			}
+			if result == nil {
+				result = &user.RemoveResult{StillUsedBy: []user.UsedBy{}}
+			}
+			if result.StillUsedBy == nil {
+				result.StillUsedBy = []user.UsedBy{}
 			}
 
 			p := printer()
-			r := output.Success(actions.UserRemove, fmt.Sprintf("User %s removed.", opts.Username), nil)
+			r := output.Success(actions.UserRemove, fmt.Sprintf("User %s removed.", opts.Username), result)
 			if machineOutput() {
 				emitResult(r)
 				return nil
@@ -176,6 +208,7 @@ func newUserRemoveCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.RemoveCron, "remove-cron", false, "Remove user's crontab")
 	cmd.Flags().BoolVar(&opts.KillProcesses, "kill-processes", false, "Kill user's processes before removal")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "Force removal")
+	cmd.Flags().BoolVar(&opts.IfUnused, "if-unused", false, "Refuse to remove the user when a daemon, cron job, or process still uses it")
 
 	return cmd
 }

@@ -168,6 +168,10 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
 
+### Removing a user
+
+`user remove` warns when an Abstrax daemon, an Abstrax cron job, or a running process still uses that account, then removes the user anyway. Daemons and cron jobs are not stopped. `user remove --if-unused` refuses and exits non-zero while anything is still using the account. `--json` includes `still_used_by`, which is an empty array when nothing is.
+
 ### SSH port
 
 `ssh config set-port <port> --allow-firewall` opens the new port before reloading sshd. The old port stays open until you pass `--close-old-port`, so you can confirm a new connection first. Without `--allow-firewall` the firewall is left unchanged.

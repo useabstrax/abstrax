@@ -4,6 +4,8 @@ package user
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -18,15 +20,56 @@ type Service struct {
 	dryRun        bool
 	sudoersDir    string
 	lockStatePath string
+	supervisorDir string
+	supervisorExt string
+	cronDir       string
+	processes     ProcessLister
+	out           io.Writer
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
+	provider := platform.Resolve()
 	return &Service{
-		runner:     executil.New(dryRun, verbose),
-		dryRun:     dryRun,
-		sudoersDir: defaultSudoersDir,
+		runner:        executil.New(dryRun, verbose),
+		dryRun:        dryRun,
+		sudoersDir:    defaultSudoersDir,
+		supervisorDir: provider.SupervisorConfigDir(),
+		supervisorExt: provider.SupervisorConfigExtension(),
+		cronDir:       provider.Paths().CronDir,
+		out:           os.Stdout,
 	}
+}
+
+// SetConfigDirs sets the Supervisor and cron directories scanned before removal.
+func (s *Service) SetConfigDirs(supervisorDir, cronDir string) {
+	s.supervisorDir = supervisorDir
+	s.cronDir = cronDir
+}
+
+// SetProcessLister replaces process discovery for removal checks.
+func (s *Service) SetProcessLister(fn ProcessLister) {
+	s.processes = fn
+}
+
+// SetOutput sets the writer used for the "still used by" warning.
+func (s *Service) SetOutput(w io.Writer) {
+	s.out = w
+}
+
+// SetCommandFunc installs a command hook on the underlying runner.
+func (s *Service) SetCommandFunc(fn executil.CommandFunc) {
+	s.runner.SetCommandFunc(fn)
+}
+
+// SetSudoersDir sets the directory used for the passwordless sudoers drop-in.
+func (s *Service) SetSudoersDir(dir string) {
+	s.sudoersDir = dir
+}
+
+// Commands returns the commands recorded by the runner.
+func (s *Service) Commands() [][]string {
+	return s.runner.Commands()
 }
 
 // Add creates a Linux user. The operation is idempotent - if the user already
@@ -150,13 +193,27 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) 
 }
 
 // Remove removes a Linux user.
-func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
+// Daemons, cron jobs, and running processes that still use the account are
+// reported and left running. Removal continues unless IfUnused is set.
+func (s *Service) Remove(ctx context.Context, opts RemoveOptions) (*RemoveResult, error) {
 	if exists, _ := s.exists(ctx, opts.Username); !exists {
-		return fmt.Errorf("user %s does not exist", opts.Username)
+		return nil, fmt.Errorf("user %s does not exist", opts.Username)
+	}
+
+	used, err := s.stillUsedBy(ctx, opts.Username)
+	if err != nil {
+		return nil, err
+	}
+	result := &RemoveResult{StillUsedBy: used}
+	if len(used) > 0 && opts.IfUnused {
+		return result, &InUseError{Username: opts.Username, UsedBy: used}
+	}
+	if len(used) > 0 {
+		s.writeUsedBy(opts.Username, used)
 	}
 
 	if opts.KillProcesses {
-		// Best effort - ignore errors.
+		// Best effort - ignore errors. The usage check above does not kill anything.
 		_, _ = s.runner.Run(ctx, "pkill", "-u", opts.Username)
 	}
 
@@ -167,7 +224,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	args = append(args, opts.Username)
 
 	if _, err := s.runner.Run(ctx, "deluser", args...); err != nil {
-		return fmt.Errorf("removing user %s: %w", opts.Username, err)
+		return nil, fmt.Errorf("removing user %s: %w", opts.Username, err)
 	}
 
 	if opts.RemoveCron {
@@ -177,7 +234,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	// Best effort: remove any Abstrax-managed passwordless sudoers drop-in.
 	_ = s.removePasswordlessSudo(opts.Username)
 
-	return nil
+	return result, nil
 }
 
 // GrantSudo adds a user to the platform sudo group (sudo or wheel) and installs

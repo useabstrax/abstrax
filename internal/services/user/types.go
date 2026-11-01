@@ -1,5 +1,7 @@
 package user
 
+import "context"
+
 // AddOptions holds options for creating a user.
 type AddOptions struct {
 	Username         string
@@ -24,7 +26,45 @@ type RemoveOptions struct {
 	RemoveCron    bool
 	KillProcesses bool
 	Force         bool
+	IfUnused      bool
 	DryRun        bool
+}
+
+// UsedBy is one daemon, cron job, or process that still runs as a user.
+type UsedBy struct {
+	Type      string `json:"type"`
+	Name      string `json:"name,omitempty"`
+	Processes int    `json:"processes,omitempty"`
+	PID       int    `json:"pid,omitempty"`
+	Args      string `json:"args,omitempty"`
+}
+
+// RemoveResult is returned by Remove.
+type RemoveResult struct {
+	StillUsedBy []UsedBy `json:"still_used_by"`
+}
+
+// Process is one running process owned by a user.
+type Process struct {
+	PID  int
+	Args string
+}
+
+// ProcessLister lists processes owned by username.
+// Tests inject this so removal checks do not depend on live processes.
+type ProcessLister func(ctx context.Context, username string) ([]Process, error)
+
+// InUseError is returned when --if-unused refuses to remove a user.
+type InUseError struct {
+	Username string
+	UsedBy   []UsedBy
+}
+
+func (e *InUseError) Error() string {
+	if e == nil {
+		return "user is still in use"
+	}
+	return formatUsedBy(e.Username, e.UsedBy)
 }
 
 // ModifyGroupsOptions holds options for group modification commands.
