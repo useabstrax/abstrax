@@ -29,6 +29,14 @@ func New(dryRun, verbose bool) *Service {
 	}
 }
 
+// SetRunner replaces the command runner. Tests use it to record commands
+// and return fixture output.
+func (s *Service) SetRunner(r *executil.Runner) {
+	if r != nil {
+		s.runner = r
+	}
+}
+
 // Add creates a Linux user. The operation is idempotent - if the user already
 // exists a success result is returned with AlreadyExisted=true.
 func (s *Service) Add(ctx context.Context, opts AddOptions) (*AddResult, error) {

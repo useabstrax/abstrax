@@ -15,6 +15,8 @@ const (
 	UserSetShell     = "user.set_shell"
 	UserLock         = "user.lock"
 	UserUnlock       = "user.unlock"
+	UserSessions     = "user.sessions"
+	UserLogout       = "user.logout"
 	UserInfo         = "user.info"
 	UserList         = "user.list"
 

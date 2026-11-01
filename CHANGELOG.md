@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`user sessions` and `user logout`** - `user sessions <name>` lists interactive login sessions (session id, TTY, source IP, login time, and idle time). `user logout <name> --session <id>` ends one session. `user logout <name> --all` ends each of that user's login sessions. Daemons and cron jobs running as the user are left running.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
