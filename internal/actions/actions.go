@@ -61,6 +61,7 @@ const (
 	CronInfo    = "cron.info"
 	CronEnable  = "cron.enable"
 	CronDisable = "cron.disable"
+	CronRun     = "cron.run"
 
 	// Daemon actions.
 	DaemonAdd     = "daemon.add"

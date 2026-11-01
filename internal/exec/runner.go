@@ -41,7 +41,19 @@ func (r *Runner) SetCommandFunc(fn CommandFunc) {
 	r.commandFunc = fn
 }
 
-// Commands returns every command passed to Run or RunSilent, including
+// Note records a command without running it.
+func (r *Runner) Note(name string, args ...string) {
+	r.record(name, args)
+}
+
+// TryCommand asks CommandFunc to handle a command.
+// ok is false when no function is set or it declines the command.
+// The command is not recorded; call Note to record it.
+func (r *Runner) TryCommand(ctx context.Context, name string, args ...string) (Result, bool, error) {
+	return r.handled(ctx, name, args)
+}
+
+// Commands returns every command passed to Run, RunSilent, or Note, including
 // commands answered by a CommandFunc or skipped in dry-run.
 func (r *Runner) Commands() [][]string {
 	out := make([][]string, len(r.commands))

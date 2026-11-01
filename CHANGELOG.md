@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`cron run <id>`** - Runs a managed cron job immediately as its user, with the job's environment and working directory. `--timeout` defaults to 300 seconds (`0` means no limit) and the command exits 124 when the process group is killed. `--use-job-output` applies the job's log redirects. A disabled job still runs and the result reports it as disabled.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security
