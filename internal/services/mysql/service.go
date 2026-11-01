@@ -28,6 +28,11 @@ type Service struct {
 	captureSQL       bool
 	sqlLog           []string
 	queryFn          func(ctx context.Context, sql string) (string, error)
+	// Test seams. Production leaves these nil.
+	restartFn   func(ctx context.Context, serviceName string) error
+	readyFn     func(ctx context.Context) error
+	serverUpFn  func(ctx context.Context) (bool, error)
+	remoteDirFn func() (string, error)
 }
 
 // New creates a Service.

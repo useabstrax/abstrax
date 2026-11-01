@@ -164,6 +164,10 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `mysql grant --privileges` and `mysql user add --privileges` only accept known privilege names. Hosts and database names are checked before they are placed in SQL.
 
+### MySQL remote access
+
+`mysql remote enable` writes a `zz-abstrax-remote.cnf` drop-in so the database listens beyond loopback (default `0.0.0.0`). Abstrax asks you to confirm, then restarts the service. If the database does not come back, the drop-in is removed and the service is restarted again. The firewall is left unchanged, so allow port 3306 yourself if remote clients should connect. `mysql remote disable` removes that file. `mysql remote status` reports the bind address the running server is using.
+
 ### User lock
 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.

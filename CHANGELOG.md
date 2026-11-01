@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`mysql remote`** - `mysql remote enable` writes an Abstrax-managed `zz-abstrax-remote.cnf` drop-in so MySQL or MariaDB listens beyond loopback, restarts the database, and waits until it accepts connections. If the service does not come back, the drop-in is removed and the service is restarted again. `mysql remote disable` removes that drop-in, with the same rollback (the file is put back if the server does not return). `mysql remote status` reports the bind address the running server is using. `--bind` chooses the address (default `0.0.0.0`). Confirmation is required unless `--yes` is set. The firewall is not opened; port 3306 must be allowed separately. On MySQL the drop-in also sets `mysqlx-bind-address`.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security

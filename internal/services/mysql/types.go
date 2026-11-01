@@ -120,6 +120,27 @@ func (u UserInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// RemoteEnableOptions holds options for mysql remote enable.
+type RemoteEnableOptions struct {
+	Bind   string
+	DryRun bool
+}
+
+// RemoteDisableOptions holds options for mysql remote disable.
+type RemoteDisableOptions struct {
+	DryRun bool
+}
+
+// RemoteStatus is the bind address the database server is using.
+// BindAddress is "unknown" when the server is not accepting connections.
+type RemoteStatus struct {
+	Enabled     bool   `json:"enabled"`
+	BindAddress string `json:"bind_address"`
+	ManagedFile string `json:"managed_file"`
+	Port        int    `json:"port"`
+	Note        string `json:"note,omitempty"`
+}
+
 // Preset privilege levels.
 const (
 	PresetReadonly = "readonly"
