@@ -6,8 +6,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/actions"
+	executil "abstrax/internal/exec"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/serverinfo"
 )
 
@@ -24,6 +26,7 @@ func NewServerCmd() *cobra.Command {
 	cmd.AddCommand(newServerDiskCmd())
 	cmd.AddCommand(newServerLoadCmd())
 	cmd.AddCommand(newServerServicesCmd())
+	cmd.AddCommand(newServerRebootRequiredCmd())
 
 	return cmd
 }
@@ -227,4 +230,54 @@ func newServerServicesCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&failed, "failed", false, "Show only failed services")
 	return cmd
+}
+
+func newServerRebootRequiredCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reboot-required",
+		Short: "Show whether a reboot is required",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			info, _, err := platform.Detect()
+			if err != nil {
+				return fmt.Errorf("platform detection failed: %w", err)
+			}
+
+			var status serverinfo.RebootStatus
+			switch info.Family {
+			case "debian":
+				status, err = serverinfo.ReadDebianReboot(serverinfo.DefaultRebootFiles())
+			case "rhel":
+				status, err = serverinfo.ReadRHELReboot(cmd.Context(), executil.New(false, globals.Flags.Verbose))
+			default:
+				return fmt.Errorf("checking reboot status is not supported on this platform")
+			}
+			if err != nil {
+				return err
+			}
+
+			summary := "No reboot required."
+			if status.Required {
+				summary = "Reboot required."
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.ServerRebootRequired, summary, status))
+				return nil
+			}
+
+			p := printer()
+			p.Line("%s", summary)
+			if status.Note != "" {
+				p.Line("%s", status.Note)
+			}
+			if len(status.Packages) > 0 {
+				p.Line("")
+				p.Line("Packages:")
+				for _, pkg := range status.Packages {
+					p.Line("  %s", pkg)
+				}
+			}
+			return nil
+		},
+	}
 }

@@ -4,6 +4,17 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`package upgrades`** - Lists pending package upgrades with the installed version, the new version, and whether each update is a security update. `--security-only` limits the list to security updates. Does not require root. Registered as `package.upgrades`.
+- **`server reboot-required`** - Reports whether a reboot is required and which packages requested it. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`, and reports a note instead of failing when that command is not installed. Does not require root. Registered as `server.reboot-required`.
+
+### Changed
+
+- **`package upgrade --security-only`** - On Debian and Ubuntu, installs only the security updates listed by `package upgrades`. If none are pending, the command succeeds without installing anything. On yum, runs `yum update -y --security`. A full `package upgrade` is unchanged.
+
 ## [2.4.0] - 2026-10-30
 
 ### Security

@@ -36,13 +36,14 @@ const (
 	SSHRestart                 = "ssh.restart"
 
 	// Package actions.
-	PackageInstall = "package.install"
-	PackageRemove  = "package.remove"
-	PackageUpdate  = "package.update"
-	PackageUpgrade = "package.upgrade"
-	PackageSearch  = "package.search"
-	PackageInfo    = "package.info"
-	PackageList    = "package.list"
+	PackageInstall  = "package.install"
+	PackageRemove   = "package.remove"
+	PackageUpdate   = "package.update"
+	PackageUpgrade  = "package.upgrade"
+	PackageUpgrades = "package.upgrades"
+	PackageSearch   = "package.search"
+	PackageInfo     = "package.info"
+	PackageList     = "package.list"
 
 	// Service (systemd) actions.
 	ServiceStart   = "service.start"
@@ -141,12 +142,13 @@ const (
 	RepoEnable = "repo.enable"
 
 	// Server info actions.
-	ServerStatus   = "server.status"
-	ServerCPU      = "server.cpu"
-	ServerMemory   = "server.memory"
-	ServerDisk     = "server.disk"
-	ServerLoad     = "server.load"
-	ServerServices = "server.services"
+	ServerStatus         = "server.status"
+	ServerCPU            = "server.cpu"
+	ServerMemory         = "server.memory"
+	ServerDisk           = "server.disk"
+	ServerLoad           = "server.load"
+	ServerServices       = "server.services"
+	ServerRebootRequired = "server.reboot-required"
 
 	// Doctor / version.
 	DoctorCheck = "doctor.check"

@@ -127,6 +127,14 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Package upgrades
+
+`package upgrades` lists pending updates. Each row shows the package name, the installed version, the new version, and whether the update is a security update. `--security-only` shows security updates only. It does not require root.
+
+`package upgrade --security-only` installs only those security updates. On Debian and Ubuntu that is the packages from the security pocket. On RHEL-family systems it runs `dnf upgrade -y --security`.
+
+`server reboot-required` reports whether a reboot is needed. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`. If that command is not installed, the result says so and does not fail.
+
 ### Firewall rule IDs
 
 On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:

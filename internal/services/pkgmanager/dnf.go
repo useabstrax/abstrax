@@ -9,13 +9,27 @@ import (
 )
 
 // DnfManager implements Manager for dnf-based systems.
+// bin is "yum" when the detected package manager is yum; otherwise commands use dnf.
 type DnfManager struct {
 	runner *executil.Runner
+	bin    string
 }
 
 // NewDnf creates a DnfManager.
 func NewDnf(dryRun, verbose bool) *DnfManager {
-	return &DnfManager{runner: executil.New(dryRun, verbose)}
+	return &DnfManager{runner: executil.New(dryRun, verbose), bin: "dnf"}
+}
+
+// NewYum creates a DnfManager that uses yum for upgrade queries and security upgrades.
+func NewYum(dryRun, verbose bool) *DnfManager {
+	return &DnfManager{runner: executil.New(dryRun, verbose), bin: "yum"}
+}
+
+func (d *DnfManager) pm() string {
+	if d.bin == "yum" {
+		return "yum"
+	}
+	return "dnf"
 }
 
 // Install installs a package with dnf.
@@ -53,12 +67,17 @@ func (d *DnfManager) Update(ctx context.Context) error {
 }
 
 // Upgrade upgrades installed packages.
+// A full upgrade always uses dnf. Security-only uses yum when that is the manager.
 func (d *DnfManager) Upgrade(ctx context.Context, securityOnly bool) error {
-	args := []string{"upgrade", "-y"}
-	if securityOnly {
-		args = []string{"upgrade", "-y", "--security"}
+	if !securityOnly {
+		_, err := d.runner.Run(ctx, "dnf", "upgrade", "-y")
+		return err
 	}
-	_, err := d.runner.Run(ctx, "dnf", args...)
+	if d.pm() == "yum" {
+		_, err := d.runner.Run(ctx, "yum", "update", "-y", "--security")
+		return err
+	}
+	_, err := d.runner.Run(ctx, "dnf", "upgrade", "-y", "--security")
 	return err
 }
 
