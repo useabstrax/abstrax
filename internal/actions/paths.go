@@ -74,6 +74,7 @@ var commandPaths = map[string][]string{
 	CronInfo:    {"cron", "info"},
 	CronEnable:  {"cron", "enable"},
 	CronDisable: {"cron", "disable"},
+	CronRun:     {"cron", "run"},
 
 	DaemonAdd:     {"daemon", "add"},
 	DaemonRemove:  {"daemon", "remove"},

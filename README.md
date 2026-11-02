@@ -146,6 +146,17 @@ A numeric position still works (`firewall rule remove 3`) and prints a warning, 
 
 Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`. Values that contain a line break are refused. A `%` in the command is stored as `\%` so cron treats it as a literal percent. Paths passed to `--working-dir`, `--output` and `--error-output` are shell-quoted.
 
+### Run a cron job now
+
+`cron run <id>` runs that job immediately as its user, with the job's environment and working directory. The environment also includes a cron-like base: `SHELL=/bin/sh`, `PATH=/usr/bin:/bin`, and `HOME`. Output is streamed and captured. It is not written to the job's log file unless you pass `--use-job-output`, which applies the same redirects cron would (append or overwrite, stdout, stderr, or discard).
+
+`--timeout` defaults to 300 seconds. `0` means no limit. If the job exceeds the limit, Abstrax kills the process group and exits 124. Otherwise the exit code is the job's exit code. A disabled job still runs, and the result says that it is disabled.
+
+```bash
+sudo abstrax cron run backup
+sudo abstrax cron run backup --timeout 60 --use-job-output
+```
+
 ### Daemons
 
 `daemon list` and `daemon status` group Supervisor processes under one daemon. `status` is the worst process state (`FATAL` before `BACKOFF`, `EXITED`, `STOPPING`, `STARTING`, `STOPPED`, then `RUNNING`). Each running process includes `pid`, `uptime`, and `uptime_seconds`. `daemon list` shows Abstrax-managed daemons only; add `--all` for every Supervisor program (`managed: false`, no `config_path`).
