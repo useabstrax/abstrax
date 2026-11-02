@@ -27,8 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 - **`mysql user remove`** - A local user is dropped from both `localhost` and `127.0.0.1`. Previously only `'user'@'localhost'` was removed, so the `127.0.0.1` account created by `mysql user add` was left behind.
 - **`user sessions` and `user logout`** - `user sessions <name>` lists interactive login sessions (session id, TTY, source IP, login time, and idle time). `user logout <name> --session <id>` ends one session. `user logout <name> --all` ends each of that user's login sessions. Daemons and cron jobs running as the user are left running.
-
 ## [2.4.0] - 2026-10-30
+- **Per-project nginx logs** - A managed vhost logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` return those paths as `access_log_path` and `error_log_path`. `project add --shared-logs` and `project modify --shared-logs` omit the directives and keep the server-wide nginx logs. The choice is stored as `shared_logs`, so a later `project modify` that does not pass the flag leaves it unchanged. `--shared-logs=false` turns per-project logs back on. Existing vhosts are not rewritten on upgrade. They pick up per-project logs the next time `project modify` rewrites the vhost. `--shared-logs` keeps the previous server-wide behaviour. `project remove` keeps the log files. `project remove --delete-files` deletes the project files and those two log files. Passing `--keep-files` as well still keeps both.
+- **`project remove --delete-files`** - Deletes the project files. The default `--keep-files` previously stayed on, so `--delete-files` alone had no effect unless `--keep-files=false` was also passed.
 
 ### Security
 

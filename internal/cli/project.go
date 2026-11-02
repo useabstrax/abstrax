@@ -160,6 +160,7 @@ func newProjectAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&nginxFlag, "nginx", true, "Use nginx (default)")
 	cmd.Flags().BoolVar(&apacheFlag, "apache", false, "Use Apache (not yet implemented)")
 	cmd.Flags().BoolVar(&opts.NoVhost, "no-vhost", false, "Do not create a virtual host")
+	cmd.Flags().BoolVar(&opts.SharedLogs, "shared-logs", false, "Use the server-wide nginx logs instead of per-project log files")
 	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names")
 	cmd.Flags().IntVar(&opts.Port, "port", 80, "HTTP port")
 	cmd.Flags().StringVar(&opts.WebRoot, "web-root", "", "Custom web root directory")
@@ -259,6 +260,12 @@ func newProjectRemoveCmd() *cobra.Command {
 				}
 			}
 
+			// --keep-files defaults to true, so --delete-files has to turn that off
+			// unless the caller set --keep-files explicitly.
+			if opts.DeleteFiles && !cmd.Flags().Changed("keep-files") {
+				opts.KeepFiles = false
+			}
+
 			if opts.RemoveSSL {
 				sslSvc := ssl.New(opts.DryRun, globals.Flags.Verbose)
 				if err := sslSvc.Remove(cmd.Context(), opts.Name); err != nil {
@@ -288,6 +295,7 @@ func newProjectRemoveCmd() *cobra.Command {
 func newProjectModifyCmd() *cobra.Command {
 	opts := project.ModifyOptions{}
 	var domainsStr string
+	var sharedLogs bool
 
 	cmd := &cobra.Command{
 		Use:   "modify <name>",
@@ -304,6 +312,9 @@ func newProjectModifyCmd() *cobra.Command {
 
 			if domainsStr != "" {
 				opts.Domains = strings.Split(domainsStr, ",")
+			}
+			if cmd.Flags().Changed("shared-logs") {
+				opts.SharedLogs = &sharedLogs
 			}
 
 			svc := project.New(opts.DryRun, globals.Flags.Verbose)
@@ -326,6 +337,7 @@ func newProjectModifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", "", "Ruby version")
 	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory")
 	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy port")
+	cmd.Flags().BoolVar(&sharedLogs, "shared-logs", false, "Use the server-wide nginx logs instead of per-project log files")
 
 	return cmd
 }
@@ -422,6 +434,12 @@ func newProjectInfoCmd() *cobra.Command {
 			if state.VhostPath != "" {
 				p.Line("  %-14s %s", "Vhost:", state.VhostPath)
 			}
+			if state.AccessLogPath != "" {
+				p.Line("  %-14s %s", "Access log:", state.AccessLogPath)
+			}
+			if state.ErrorLogPath != "" {
+				p.Line("  %-14s %s", "Error log:", state.ErrorLogPath)
+			}
 			p.Line("  %-14s %s", "Owner:", state.Owner)
 			if state.Group != "" {
 				p.Line("  %-14s %s", "Group:", state.Group)
@@ -465,6 +483,12 @@ func newProjectInspectCmd() *cobra.Command {
 			p.Line("  User:    %s", resp.Project.User)
 			p.Line("  Runtime: %s %s", resp.Project.Runtime.Type, resp.Project.Runtime.Version)
 			p.Line("  Domains: %s", strings.Join(resp.Project.Domains, ", "))
+			if resp.Project.AccessLogPath != "" {
+				p.Line("  Access log: %s", resp.Project.AccessLogPath)
+			}
+			if resp.Project.ErrorLogPath != "" {
+				p.Line("  Error log: %s", resp.Project.ErrorLogPath)
+			}
 			if len(resp.Project.Services) > 0 {
 				p.Line("  Services:")
 				for _, s := range resp.Project.Services {

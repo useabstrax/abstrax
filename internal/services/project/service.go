@@ -28,6 +28,9 @@ type Service struct {
 	nginxAvail   string
 	nginxEnabled string
 	nginxConfDir string
+	// nginxLogDir is the directory for per-project access and error logs.
+	// The default is /var/log/nginx. Tests set this to a temporary directory.
+	nginxLogDir string
 }
 
 // New creates a Service.
@@ -45,6 +48,7 @@ func New(dryRun, verbose bool) *Service {
 		nginxAvail:   provider.NginxSitesAvailable(),
 		nginxEnabled: provider.NginxSitesEnabled(),
 		nginxConfDir: provider.NginxConfigDir(),
+		nginxLogDir:  defaultNginxLogDir,
 	}
 	_ = svc.migrateLegacyProjects()
 	return svc
@@ -145,6 +149,7 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		Runtime:       opts.Runtime,
 		Owner:         id.User,
 		Group:         id.Group,
+		SharedLogs:    opts.SharedLogs,
 		OwnershipMode: id.Mode,
 		OwnerUID:      id.UID,
 		OwnerGID:      id.GID,
@@ -207,6 +212,7 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		rb.undo(ctx)
 		return nil, fmt.Errorf("saving project state: %w", err)
 	}
+	s.applyLogPaths(state)
 
 	if opts.Progress == nil {
 		for _, warning := range CheckSecurityWarnings(state.Path) {
@@ -246,6 +252,9 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 	if opts.DeleteFiles && !opts.KeepFiles {
 		if err := os.RemoveAll(state.Path); err != nil {
 			return fmt.Errorf("deleting project files: %w", err)
+		}
+		if err := s.removeProjectLogs(state.Name); err != nil {
+			return err
 		}
 	}
 
@@ -299,6 +308,9 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	if opts.ProxyPort != 0 {
 		state.ProxyPort = opts.ProxyPort
 	}
+	if opts.SharedLogs != nil {
+		state.SharedLogs = *opts.SharedLogs
+	}
 	state.UpdatedAt = time.Now()
 
 	if state.VhostPath != "" && state.WebServer == WebServerNginx {
@@ -310,6 +322,7 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	if err := s.saveState(state); err != nil {
 		return nil, err
 	}
+	s.applyLogPaths(state)
 	return state, nil
 }
 
@@ -339,7 +352,12 @@ func (s *Service) List(_ context.Context) ([]State, error) {
 
 // Info returns a single project.
 func (s *Service) Info(_ context.Context, name string) (*State, error) {
-	return s.loadState(name)
+	state, err := s.loadState(name)
+	if err != nil {
+		return nil, err
+	}
+	s.applyLogPaths(state)
+	return state, nil
 }
 
 // SaveState persists project state.
@@ -406,7 +424,10 @@ func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (strin
 		vhostPath = filepath.Join(s.nginxAvail, confName)
 	}
 
-	conf := buildNginxConfig(opts)
+	conf, err := s.renderNginxConfig(opts)
+	if err != nil {
+		return "", err
+	}
 
 	if err := os.WriteFile(vhostPath, []byte(conf), 0644); err != nil {
 		return "", fmt.Errorf("writing nginx config: %w", err)
@@ -469,7 +490,85 @@ func (s *Service) disableVhostFile(vhostPath string) error {
 	return nil
 }
 
-func buildNginxConfig(opts vhostConfig) string {
+const defaultNginxLogDir = "/var/log/nginx"
+
+func (s *Service) nginxLogDirectory() string {
+	if s != nil && s.nginxLogDir != "" {
+		return s.nginxLogDir
+	}
+	return defaultNginxLogDir
+}
+
+func (s *Service) renderNginxConfig(opts vhostConfig) (string, error) {
+	if opts.LogDir == "" {
+		opts.LogDir = s.nginxLogDirectory()
+	}
+	return buildNginxConfig(opts)
+}
+
+func (s *Service) applyLogPaths(state *State) {
+	if state == nil {
+		return
+	}
+	state.AccessLogPath = ""
+	state.ErrorLogPath = ""
+	if state.SharedLogs {
+		return
+	}
+	accessPath, errorPath, err := projectLogPaths(s.nginxLogDirectory(), state.Name)
+	if err != nil {
+		return
+	}
+	state.AccessLogPath = accessPath
+	state.ErrorLogPath = errorPath
+}
+
+func (s *Service) removeProjectLogs(name string) error {
+	accessPath, errorPath, err := projectLogPaths(s.nginxLogDirectory(), name)
+	if err != nil {
+		// The name cannot be mapped onto a path inside the log directory.
+		return nil
+	}
+	for _, path := range []string{accessPath, errorPath} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("deleting nginx log %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func projectLogPaths(logDir, name string) (string, string, error) {
+	if err := validateProjectLogName(name); err != nil {
+		return "", "", err
+	}
+	if logDir == "" {
+		logDir = defaultNginxLogDir
+	}
+	logDir = filepath.Clean(logDir)
+	accessPath := filepath.Join(logDir, name+"-access.log")
+	errorPath := filepath.Join(logDir, name+"-error.log")
+	if !pathInsideDir(logDir, accessPath) || !pathInsideDir(logDir, errorPath) {
+		return "", "", fmt.Errorf("nginx log path for project %q escapes %s", name, logDir)
+	}
+	return accessPath, errorPath, nil
+}
+
+func validateProjectLogName(name string) error {
+	if name == "" || name == "." || strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, `\`) || filepath.Base(name) != name {
+		return fmt.Errorf("invalid project name %q for nginx log path", name)
+	}
+	return nil
+}
+
+func pathInsideDir(dir, target string) bool {
+	rel, err := filepath.Rel(dir, target)
+	if err != nil || rel == "." || rel == ".." {
+		return false
+	}
+	return !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func buildNginxConfig(opts vhostConfig) (string, error) {
 	domains := strings.Join(opts.Domains, " ")
 	if domains == "" {
 		domains = "_"
@@ -494,7 +593,16 @@ func buildNginxConfig(opts vhostConfig) string {
 	sb.WriteString(fmt.Sprintf("    listen %d;\n", listenPort))
 	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
 	sb.WriteString(fmt.Sprintf("    root %s;\n", root))
-	sb.WriteString("    index index.html index.htm index.php;\n\n")
+	sb.WriteString("    index index.html index.htm index.php;\n")
+	if !opts.SharedLogs {
+		accessPath, errorPath, err := projectLogPaths(opts.LogDir, opts.Name)
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(fmt.Sprintf("    access_log %s;\n", accessPath))
+		sb.WriteString(fmt.Sprintf("    error_log %s;\n", errorPath))
+	}
+	sb.WriteString("\n")
 
 	switch opts.Runtime {
 	case RuntimePHP:
@@ -541,7 +649,7 @@ func buildNginxConfig(opts vhostConfig) string {
 	}
 
 	sb.WriteString("}\n")
-	return sb.String()
+	return sb.String(), nil
 }
 
 func loadApprovedRoots() ([]string, error) {
@@ -576,7 +684,10 @@ func (s *Service) saveState(state *State) error {
 	if err := os.MkdirAll(s.stateDir, 0750); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(state, "", "  ")
+	stored := *state
+	stored.AccessLogPath = ""
+	stored.ErrorLogPath = ""
+	data, err := json.MarshalIndent(&stored, "", "  ")
 	if err != nil {
 		return err
 	}

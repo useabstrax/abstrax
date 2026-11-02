@@ -217,6 +217,8 @@ Locking does not end sessions that are already open. `user logout <name> --all` 
 ### Root SSH login
 
 `ssh config enable-root-login` writes `PermitRootLogin yes`, which also allows password login when password authentication is on. `ssh config enable-root-login --keys-only` writes `prohibit-password`, so root can log in with an SSH key and not a password. `ssh config disable-root-login` writes `no` and blocks root for every method.
+### Project logs
+Each project nginx virtual host logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` show those paths. `project add --shared-logs` and `project modify --shared-logs` keep the server-wide nginx logs instead. That choice is remembered, so a later `project modify` does not switch it unless you pass the flag again. Existing virtual hosts stay as they are until the next `project modify`. `project remove` keeps the log files; `project remove --delete-files` deletes them.
 
 ### PHP projects
 
