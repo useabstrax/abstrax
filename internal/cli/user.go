@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -32,6 +33,8 @@ func NewUserCmd() *cobra.Command {
 	cmd.AddCommand(newUserSetShellCmd())
 	cmd.AddCommand(newUserLockCmd())
 	cmd.AddCommand(newUserUnlockCmd())
+	cmd.AddCommand(newUserSessionsCmd())
+	cmd.AddCommand(newUserLogoutCmd())
 	cmd.AddCommand(newUserInfoCmd())
 	cmd.AddCommand(newUserListCmd())
 
@@ -523,6 +526,158 @@ func newUserListCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Sudo, "sudo", false, "Show sudo users only")
 
 	return cmd
+}
+
+// askConfirm is replaced in tests. Production prompts unless --yes is set.
+var askConfirm = confirm.Ask
+
+// ensureRoot is replaced in tests. Logout requires root; sessions does not.
+var ensureRoot = requireRootAndSupported
+
+// executeUserLogout runs logout after the CLI has confirmed.
+// Tests replace it so a declined confirmation records no terminate command.
+var executeUserLogout = func(ctx context.Context, opts user.LogoutOptions) (*user.LogoutResult, error) {
+	svc := user.New(opts.DryRun, globals.Flags.Verbose)
+	return svc.Logout(ctx, opts)
+}
+
+func newUserSessionsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sessions <name>",
+		Short: "List a user's interactive login sessions",
+		Long: `List interactive login sessions for a user.
+
+Each session includes the session id, TTY, source IP, login time, and idle time. Idle is empty when it is not reported. Daemons and cron jobs are not listed.
+
+Reads loginctl list-sessions when it returns JSON, and who -u otherwise. If the user has no login sessions, the command succeeds and prints an empty list.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			username := args[0]
+			if err := validate.Username(username); err != nil {
+				return err
+			}
+
+			svc := user.New(false, globals.Flags.Verbose)
+			sessions, err := svc.Sessions(cmd.Context(), username)
+			if err != nil {
+				return err
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.UserSessions, "", sessions))
+				return nil
+			}
+			if len(sessions) == 0 {
+				printer().Line("No sessions.")
+				return nil
+			}
+
+			t := output.NewTable([]string{"SESSION", "TTY", "SOURCE", "LOGIN", "IDLE"})
+			for _, sess := range sessions {
+				t.Append([]string{sess.ID, sess.TTY, sess.SourceIP, sess.LoginTime, idleString(sess.Idle)})
+			}
+			t.Render()
+			return nil
+		},
+	}
+}
+
+func newUserLogoutCmd() *cobra.Command {
+	var sessionID string
+	var all bool
+
+	cmd := &cobra.Command{
+		Use:   "logout <name>",
+		Short: "End a user's interactive login sessions",
+		Long: `End one interactive login session, or every login session for a user.
+
+Only interactive login sessions are ended. Daemons and cron jobs running as that user keep running. This does not kill every process the user owns, and it does not run loginctl terminate-user.
+
+With logind, each selected session is ended with loginctl terminate-session. Without logind, Abstrax sends SIGHUP and then SIGKILL only to that session's sshd process (sshd: <user>@pts/N).
+
+Pass exactly one of --session or --all. The command asks for confirmation unless --yes is set.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			username := args[0]
+			if err := validate.Username(username); err != nil {
+				return err
+			}
+			if sessionID != "" {
+				if err := user.ValidateSessionID(sessionID); err != nil {
+					return err
+				}
+			}
+			if err := ensureRoot(); err != nil {
+				return err
+			}
+
+			ok, err := askConfirm(logoutPrompt(username, sessionID, all), globals.Flags.Yes)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil
+			}
+
+			result, err := executeUserLogout(cmd.Context(), user.LogoutOptions{
+				Username:  username,
+				SessionID: sessionID,
+				All:       all,
+				DryRun:    globals.Flags.DryRun,
+			})
+			if err != nil {
+				return err
+			}
+
+			summary := logoutSummary(username, result.Ended)
+			r := output.Success(actions.UserLogout, summary, result)
+			if machineOutput() {
+				emitResult(r)
+				return nil
+			}
+			if len(result.Ended) == 0 {
+				printer().Line(summary)
+				return nil
+			}
+			p := printer()
+			p.Success(summary)
+			for _, sess := range result.Ended {
+				p.Line("  %s  %s  %s", sess.ID, sess.TTY, sess.SourceIP)
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&sessionID, "session", "", "Session id to end")
+	cmd.Flags().BoolVar(&all, "all", false, "End every interactive login session for this user. Does not stop daemons or cron jobs")
+	cmd.MarkFlagsOneRequired("session", "all")
+	cmd.MarkFlagsMutuallyExclusive("session", "all")
+	return cmd
+}
+
+func logoutPrompt(username, sessionID string, all bool) string {
+	if all {
+		return fmt.Sprintf("End all interactive login sessions for %q? Daemons and cron jobs will keep running.", username)
+	}
+	return fmt.Sprintf("End login session %s for %q? Daemons and cron jobs will keep running.", sessionID, username)
+}
+
+func logoutSummary(username string, ended []user.Session) string {
+	switch len(ended) {
+	case 0:
+		return fmt.Sprintf("No login sessions to end for %s.", username)
+	case 1:
+		return fmt.Sprintf("Ended 1 login session for %s.", username)
+	default:
+		return fmt.Sprintf("Ended %d login sessions for %s.", len(ended), username)
+	}
+}
+
+func idleString(idle *string) string {
+	if idle == nil {
+		return ""
+	}
+	return *idle
 }
 
 func yesNo(v bool) string {

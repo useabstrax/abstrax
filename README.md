@@ -208,6 +208,7 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
 
 `user info` and `user list` show when the account last logged in and the IP address or hostname it came from. Both values are null when that login is unknown. `user list` reads the login log once.
+Locking does not end sessions that are already open. `user logout <name> --all` ends those interactive login sessions. It does not stop daemons or cron jobs running as that user.
 
 ### SSH port
 
