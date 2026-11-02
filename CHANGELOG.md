@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Server timezone** - `server status` includes the zone name, abbreviation, and current UTC offset. Cron schedules and timestamps use this clock.
 - **`ssh config enable-root-login --keys-only`** - Writes `PermitRootLogin prohibit-password`, so root can log in with an SSH key and not a password. Without the flag, the command still writes `yes`. `ssh config disable-root-login` still writes `no` and blocks root for every method.
+- **SSH key restrictions** - `ssh-key add --expires` writes OpenSSH `expiry-time` (UTC) and `--from` writes a `from` allow-list. `ssh-key list` and `ssh-key info` return `expires_at`, `from`, and `expired`. `--expires` is refused on OpenSSH older than 8.2. Keys added without the flags are written as before.
 
 ## [2.4.0] - 2026-10-30
 

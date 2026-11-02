@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -71,12 +72,20 @@ func newSSHKeyAddCmd() *cobra.Command {
 			p.Line("  ID:          %s", info.ID)
 			p.Line("  Name:        %s", info.Name)
 			p.Line("  Fingerprint: %s", info.Fingerprint)
+			if info.ExpiresAt != nil {
+				p.Line("  Expires:     %s", *info.ExpiresAt)
+			}
+			if len(info.From) > 0 {
+				p.Line("  From:        %s", strings.Join(info.From, ","))
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.Name, "name", "", "Key name / ID")
 	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Comment stored in the managed marker")
+	cmd.Flags().StringVar(&opts.Expires, "expires", "", "UTC expiry time (RFC3339). sshd refuses the key after this time. Requires OpenSSH 8.2 or later")
+	cmd.Flags().StringVar(&opts.From, "from", "", "Comma-separated IPs or CIDRs allowed to use this key")
 	cmd.Flags().BoolVar(&opts.FromFile, "from-file", false, "Treat <key> argument as a file path")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "Overwrite if key already exists")
 
@@ -191,6 +200,17 @@ func newSSHKeyInfoCmd() *cobra.Command {
 			p.Line("  %-14s %s", "Type:", info.Type)
 			p.Line("  %-14s %s", "Fingerprint:", info.Fingerprint)
 			p.Line("  %-14s %s", "Comment:", info.Comment)
+			expires := ""
+			if info.ExpiresAt != nil {
+				expires = *info.ExpiresAt
+			}
+			p.Line("  %-14s %s", "Expires:", expires)
+			p.Line("  %-14s %s", "From:", strings.Join(info.From, ","))
+			expired := "no"
+			if info.Expired {
+				expired = "yes"
+			}
+			p.Line("  %-14s %s", "Expired:", expired)
 			managed := "no"
 			if info.Managed {
 				managed = "yes"
