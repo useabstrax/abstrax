@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`mysql status`** - Reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. The command succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform and `version` is null.
 - **`cron run <id>`** - Runs a managed cron job immediately as its user, with the job's environment and working directory. `--timeout` defaults to 300 seconds (`0` means no limit) and the command exits 124 when the process group is killed. `--use-job-output` applies the job's log redirects. A disabled job still runs and the result reports it as disabled.
 - **`server reboot`** - Reboots the machine after confirmation. `--yes` skips the prompt. `--delay` waits that many seconds; `0` runs `systemctl reboot` immediately. A positive delay uses `systemd-run --on-active=<seconds>s` when `systemd-run` is available, otherwise `shutdown -r` with the delay rounded up to whole minutes. The result is printed before the reboot command runs.
+- **`user info` and `user list`** - Include the last login time and where it came from. `last_login_at` is an RFC3339 timestamp or null. `last_login_from` is an IP address or hostname, or null. `user list` reads the login log once. A missing log leaves the fields null and the command still succeeds.
 
 ## [2.4.0] - 2026-10-30
 
