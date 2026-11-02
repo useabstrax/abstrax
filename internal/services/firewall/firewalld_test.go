@@ -159,8 +159,8 @@ func TestFirewalldRemoveRichRuleByID(t *testing.T) {
 		}
 		return executil.Result{}, false, nil
 	})
-	svc := &Service{runner: runner, backend: "firewalld"}
-	if err := svc.RuleRemove(context.Background(), mysql.ID); err != nil {
+	svc := &Service{runner: runner, backend: "firewalld", sshPort: func() (int, error) { return 22, nil }}
+	if _, err := svc.RuleRemove(context.Background(), mysql.ID, GuardOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	joined := joinCommands(runner.Commands())

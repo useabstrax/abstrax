@@ -152,6 +152,10 @@ sudo abstrax firewall rule remove a1b2c3d4
 
 A numeric position still works (`firewall rule remove 3`) and prints a warning, because that number may point at a different rule than it did when you last listed them.
 
+Removing the last rule that allows TCP to the SSH port is refused while the firewall is active. That includes `firewall deny` of the SSH port, `firewall remove port`, and `firewall remove service ssh`. An allow limited to one address still counts as access. Pass `--force` to apply the change anyway. `--yes` does not skip the check. When the firewall is inactive, the change is allowed and Abstrax warns that `firewall enable` will need `--allow-ssh`.
+
+`firewall allow`, `deny`, `allow-ip`, and `deny-ip` allow your current client IP on the SSH port only in an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, that protection does nothing.
+
 ### Cron jobs
 
 `cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.

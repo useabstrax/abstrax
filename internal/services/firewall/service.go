@@ -18,6 +18,9 @@ import (
 type Service struct {
 	runner  *executil.Runner
 	backend string
+	// sshPort, when set, supplies the SSH port instead of reading sshd config.
+	// Tests set it so they do not touch the real sshd configuration.
+	sshPort func() (int, error)
 }
 
 // New creates a Service with automatic backend detection.
@@ -240,12 +243,34 @@ func (s *Service) Allow(ctx context.Context, opts AllowOptions) (SSHProtectResul
 }
 
 // Deny adds a deny rule.
-func (s *Service) Deny(ctx context.Context, opts AllowOptions) (SSHProtectResult, error) {
+// The SSH lockout check runs before any rule is written. --force skips it.
+func (s *Service) Deny(ctx context.Context, opts AllowOptions) (RuleChangeResult, error) {
+	var result RuleChangeResult
+	if err := s.requireBackend(); err != nil {
+		return result, err
+	}
+	if !opts.Force {
+		status, err := s.GetStatus(ctx)
+		if err != nil {
+			return result, err
+		}
+		next := insertDenyBeforeAllows(status.Rules, simulatedDenyRule(opts))
+		check, err := s.guardSSH(false, status.Active, next)
+		if err != nil {
+			return result, err
+		}
+		result.SSHCheck = check
+	}
+
 	protect, err := s.ensureClientSSHAllow(ctx)
 	if err != nil {
-		return protect, err
+		return result, err
 	}
-	return protect, s.addRule(ctx, "deny", opts)
+	result.SSHProtectResult = protect
+	if err := s.addRule(ctx, "deny", opts); err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 // AllowIP allows traffic from an IP or CIDR.
@@ -278,63 +303,98 @@ func (s *Service) RuleList(ctx context.Context) ([]Rule, error) {
 // RuleRemove removes a rule by list ID.
 // On UFW this deletes the numbered rule. On firewalld it removes the service or
 // port that Abstrax assigned to that ID in `firewall rule list`.
-func (s *Service) RuleRemove(ctx context.Context, id string) error {
+// The returned check is nil when --force skips the SSH lockout check.
+func (s *Service) RuleRemove(ctx context.Context, id string, opts GuardOptions) (*SSHCheck, error) {
 	if err := s.requireBackend(); err != nil {
-		return err
+		return nil, err
 	}
 	if s.backend == "firewalld" {
-		return s.firewalldRuleRemove(ctx, id)
+		return s.firewalldRuleRemove(ctx, id, opts)
 	}
-	return s.ufwRuleRemove(ctx, id)
+	return s.ufwRuleRemove(ctx, id, opts)
 }
 
 // RemoveService removes a firewalld service permanently and reloads.
-func (s *Service) RemoveService(ctx context.Context, service string) error {
+func (s *Service) RemoveService(ctx context.Context, service string, opts GuardOptions) (*SSHCheck, error) {
 	if err := s.requireBackend(); err != nil {
-		return err
+		return nil, err
 	}
 	if s.backend != "firewalld" {
-		return fmt.Errorf("firewall remove service is only supported with firewalld; use `abstrax firewall rule remove <id>` on UFW")
+		return nil, fmt.Errorf("firewall remove service is only supported with firewalld; use `abstrax firewall rule remove <id>` on UFW")
 	}
-	return s.firewalldRemoveService(ctx, service)
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return nil, fmt.Errorf("service name is required")
+	}
+	status, err := s.GetStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	check, err := s.guardSSH(opts.Force, status.Active, withoutService(status.Rules, service))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.firewalldRemoveService(ctx, service); err != nil {
+		return nil, err
+	}
+	return check, nil
 }
 
 // RemovePort removes a firewalld port permanently and reloads.
-func (s *Service) RemovePort(ctx context.Context, port, proto string) error {
+func (s *Service) RemovePort(ctx context.Context, port, proto string, opts GuardOptions) (*SSHCheck, error) {
 	if err := s.requireBackend(); err != nil {
-		return err
+		return nil, err
 	}
 	if s.backend != "firewalld" {
-		return fmt.Errorf("firewall remove port is only supported with firewalld; use `abstrax firewall rule remove <id>` on UFW")
+		return nil, fmt.Errorf("firewall remove port is only supported with firewalld; use `abstrax firewall rule remove <id>` on UFW")
+	}
+	port = strings.TrimSpace(port)
+	if port == "" {
+		return nil, fmt.Errorf("port is required")
 	}
 	if proto == "" {
 		proto = "tcp"
 	}
-	return s.firewalldRemovePort(ctx, port, proto)
+	status, err := s.GetStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	check, err := s.guardSSH(opts.Force, status.Active, withoutPort(status.Rules, port, proto))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.firewalldRemovePort(ctx, port, proto); err != nil {
+		return nil, err
+	}
+	return check, nil
 }
 
-func (s *Service) firewalldRuleRemove(ctx context.Context, id string) error {
-	rules, err := s.RuleList(ctx)
+func (s *Service) firewalldRuleRemove(ctx context.Context, id string, opts GuardOptions) (*SSHCheck, error) {
+	status, err := s.firewalldStatus(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	match, byNumber := findFirewalldRule(rules, id)
+	match, byNumber := findFirewalldRule(status.Rules, id)
 	if match == nil {
-		return fmt.Errorf("firewall rule %q not found; run `abstrax firewall rule list` to see current ids", id)
+		return nil, fmt.Errorf("firewall rule %q not found; run `abstrax firewall rule list` to see current ids", id)
+	}
+	check, err := s.guardSSH(opts.Force, status.Active, withoutIndex(status.Rules, indexOfRule(status.Rules, match)))
+	if err != nil {
+		return nil, err
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
 	}
 	switch match.Kind {
 	case RuleKindService:
-		return s.firewalldRemoveService(ctx, match.Target)
+		return check, s.firewalldRemoveService(ctx, match.Target)
 	case RuleKindPort:
 		port, proto := splitPortProto(match.Target)
-		return s.firewalldRemovePort(ctx, port, proto)
+		return check, s.firewalldRemovePort(ctx, port, proto)
 	case RuleKindRich:
-		return s.firewalldRemoveRichRule(ctx, match.Target)
+		return check, s.firewalldRemoveRichRule(ctx, match.Target)
 	default:
-		return fmt.Errorf("cannot remove firewalld rule %q (kind %q); use `abstrax firewall remove service <name>` or `abstrax firewall remove port <port[/proto]>`", id, match.Kind)
+		return nil, fmt.Errorf("cannot remove firewalld rule %q (kind %q); use `abstrax firewall remove service <name>` or `abstrax firewall remove port <port[/proto]>`", id, match.Kind)
 	}
 }
 

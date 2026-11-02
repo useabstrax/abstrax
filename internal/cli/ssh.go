@@ -121,7 +121,8 @@ With --allow-firewall the new port is opened before sshd is reloaded. The previo
 					return err
 				},
 				func(ctx context.Context, port int) error {
-					return fw.RemovePort(ctx, fmt.Sprintf("%d", port), "tcp")
+					_, err := fw.RemovePort(ctx, fmt.Sprintf("%d", port), "tcp", firewall.GuardOptions{})
+					return err
 				},
 			)
 			result, err := svc.SetPort(cmd.Context(), sshcfg.SetPortOptions{

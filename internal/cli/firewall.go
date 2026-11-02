@@ -14,6 +14,12 @@ import (
 	"abstrax/internal/validate"
 )
 
+// clientIPProtectHelp describes automatic SSH client protection.
+// It only runs for an interactive SSH session.
+const clientIPProtectHelp = "Before this command changes the firewall, Abstrax allows your current client IP on the SSH port when it can see an interactive SSH session (SSH_CONNECTION, SSH_CLIENT, or who). From a script, that protection does nothing."
+
+const sshLockoutHelp = "If the firewall is active and this change would leave no rule that allows TCP to the SSH port, the command is refused. An allow limited to one address still counts as access. Pass --force to do it anyway. --yes does not skip the check. When the firewall is inactive, the change is allowed and Abstrax warns that firewall enable will need --allow-ssh."
+
 // NewFirewallCmd returns the firewall command.
 func NewFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -203,6 +209,7 @@ func newFirewallAllowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "allow <port>",
 		Short: "Allow traffic on a port",
+		Long:  "Allow traffic on a port.\n\n" + clientIPProtectHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Port = args[0]
@@ -240,6 +247,7 @@ func newFirewallDenyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deny <port>",
 		Short: "Deny traffic on a port",
+		Long:  "Deny traffic on a port.\n\n" + clientIPProtectHelp + "\n\n" + sshLockoutHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Port = args[0]
@@ -255,19 +263,20 @@ func newFirewallDenyCmd() *cobra.Command {
 			}
 
 			svc := firewall.New(opts.DryRun, globals.Flags.Verbose)
-			protect, err := svc.Deny(cmd.Context(), opts)
+			result, err := svc.Deny(cmd.Context(), opts)
 			if err != nil {
 				return err
 			}
 
 			msg := firewallSSHProtectMessage(
-				fmt.Sprintf("Port %s denied.", opts.Port), protect)
-			return printSimpleResult(actions.FirewallDeny, msg, protect)
+				fmt.Sprintf("Port %s denied.", opts.Port), result.SSHProtectResult)
+			return printSimpleResult(actions.FirewallDeny, msg, result)
 		},
 	}
 
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp)")
 	cmd.Flags().StringVar(&opts.From, "from", "", "Deny only from this IP or CIDR")
+	cmd.Flags().BoolVar(&opts.Force, "force", false, "Deny the port even if it would block SSH")
 	return cmd
 }
 
@@ -277,6 +286,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "allow-ip <ip-or-cidr>",
 		Short: "Allow all traffic from an IP or CIDR",
+		Long:  "Allow all traffic from an IP or CIDR.\n\n" + clientIPProtectHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.From = args[0]
@@ -315,6 +325,7 @@ func newFirewallDenyIPCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deny-ip <ip-or-cidr>",
 		Short: "Deny all traffic from an IP or CIDR",
+		Long:  "Deny all traffic from an IP or CIDR.\n\n" + clientIPProtectHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.From = args[0]
@@ -375,7 +386,8 @@ func newFirewallRuleListCmd() *cobra.Command {
 }
 
 func newFirewallRuleRemoveCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "remove <id>",
 		Short: "Remove a firewall rule by list ID",
 		Long: `Remove a firewall rule by the ID shown in "abstrax firewall rule list".
@@ -384,7 +396,9 @@ On UFW, id is a stable hash of the rule. number is the current position in
 "ufw status numbered" and can change when other rules are added or removed.
 A numeric id still works, with a warning.
 
-On firewalld, IDs are Abstrax-assigned entries that map to a service or port.`,
+On firewalld, IDs are Abstrax-assigned entries that map to a service or port.
+
+` + sshLockoutHelp,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
@@ -393,39 +407,49 @@ On firewalld, IDs are Abstrax-assigned entries that map to a service or port.`,
 			}
 
 			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.RuleRemove(cmd.Context(), id); err != nil {
+			check, err := svc.RuleRemove(cmd.Context(), id, firewall.GuardOptions{Force: force})
+			if err != nil {
 				return err
 			}
 
 			return printSimpleResult(actions.FirewallRuleRm,
-				fmt.Sprintf("Rule %s removed.", id), nil)
+				fmt.Sprintf("Rule %s removed.", id), sshCheckData(check))
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "Remove the rule even if it would block SSH")
+	return cmd
 }
 
 func newFirewallRemoveServiceCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "service <name>",
 		Short: "Remove a firewalld service (for example http)",
+		Long:  "Remove a firewalld service (for example http).\n\n" + sshLockoutHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.RemoveService(cmd.Context(), args[0]); err != nil {
+			check, err := svc.RemoveService(cmd.Context(), args[0], firewall.GuardOptions{Force: force})
+			if err != nil {
 				return err
 			}
 			return printSimpleResult(actions.FirewallRemoveService,
-				fmt.Sprintf("Firewall service %s removed.", args[0]), nil)
+				fmt.Sprintf("Firewall service %s removed.", args[0]), sshCheckData(check))
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "Remove the service even if it would block SSH")
+	return cmd
 }
 
 func newFirewallRemovePortCmd() *cobra.Command {
-	return &cobra.Command{
+	var force bool
+	cmd := &cobra.Command{
 		Use:   "port <port[/protocol]>",
 		Short: "Remove a firewalld port (for example 8080/tcp)",
+		Long:  "Remove a firewalld port (for example 8080/tcp).\n\n" + sshLockoutHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := requireRootAndSupported(); err != nil {
@@ -438,13 +462,23 @@ func newFirewallRemovePortCmd() *cobra.Command {
 				port = port[:i]
 			}
 			svc := firewall.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.RemovePort(cmd.Context(), port, proto); err != nil {
+			check, err := svc.RemovePort(cmd.Context(), port, proto, firewall.GuardOptions{Force: force})
+			if err != nil {
 				return err
 			}
 			return printSimpleResult(actions.FirewallRemovePort,
-				fmt.Sprintf("Firewall port %s/%s removed.", port, proto), nil)
+				fmt.Sprintf("Firewall port %s/%s removed.", port, proto), sshCheckData(check))
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "Remove the port even if it would block SSH")
+	return cmd
+}
+
+func sshCheckData(check *firewall.SSHCheck) any {
+	if check == nil {
+		return nil
+	}
+	return firewall.SSHCheckResult{SSHCheck: check}
 }
 
 func formatRulePort(r firewall.Rule) string {

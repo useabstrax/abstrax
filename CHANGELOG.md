@@ -17,9 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`user info` and `user list`** - Include the last login time and where it came from. `last_login_at` is an RFC3339 timestamp or null. `last_login_from` is an IP address or hostname, or null. `user list` reads the login log once. A missing log leaves the fields null and the command still succeeds.
 - **`package upgrades`** - Lists pending package upgrades with the installed version, the new version, and whether each update is a security update. `--security-only` limits the list to security updates. Does not require root. Registered as `package.upgrades`.
 - **`server reboot-required`** - Reports whether a reboot is required and which packages requested it. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`, and reports a note instead of failing when that command is not installed. Does not require root. Registered as `server.reboot-required`.
-
 ### Changed
 - **`package upgrade --security-only`** - On Debian and Ubuntu, installs only the security updates listed by `package upgrades`. If none are pending, the command succeeds without installing anything. On yum, runs `yum update -y --security`. A full `package upgrade` is unchanged.
+### Security
+- **Firewall SSH access** - `firewall deny`, `firewall rule remove`, `firewall remove service`, and `firewall remove port` are refused when the firewall is active and the change would leave no rule allowing TCP to the SSH port. An allow limited to one address still counts. `--force` applies the change anyway. `--yes` does not. When the firewall is inactive, the change is allowed and Abstrax warns that `firewall enable` will need `--allow-ssh`. Successful `--json` output includes `ssh_check`. Automatic client-IP protection on `allow`, `deny`, `allow-ip`, and `deny-ip` runs only for an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, it does nothing.
 
 ## [2.4.0] - 2026-10-30
 
