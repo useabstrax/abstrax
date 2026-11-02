@@ -11,18 +11,27 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	executil "abstrax/internal/exec"
 )
 
 // Service collects server information.
 type Service struct {
-	runner *executil.Runner
+	runner           *executil.Runner
+	localtimePath    string
+	timezoneFilePath string
+	now              func() time.Time
 }
 
 // New creates a Service.
 func New(verbose bool) *Service {
-	return &Service{runner: executil.New(false, verbose)}
+	return &Service{
+		runner:           executil.New(false, verbose),
+		localtimePath:    "/etc/localtime",
+		timezoneFilePath: "/etc/timezone",
+		now:              time.Now,
+	}
 }
 
 // Status returns a comprehensive server status.
@@ -42,6 +51,7 @@ func (s *Service) Status(ctx context.Context) (*ServerStatus, error) {
 	status.OS = s.osInfo()
 	status.KernelVersion = s.kernelVersion(ctx)
 	status.PrivateIPs = s.privateIPs()
+	status.Timezone = s.timezone(ctx)
 
 	return status, nil
 }

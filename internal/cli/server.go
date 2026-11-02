@@ -50,6 +50,7 @@ func newServerStatusCmd() *cobra.Command {
 			p.Line("")
 			p.Line("  %-20s %s", "Hostname:", status.Hostname)
 			p.Line("  %-20s %s", "Uptime:", status.Uptime)
+			p.Line("  %-20s %s (%s, %s)", "Timezone:", status.Timezone.Name, status.Timezone.Abbreviation, status.Timezone.UTCOffset)
 			p.Line("  %-20s %.2f  %.2f  %.2f",
 				"Load average:", status.LoadAverage[0], status.LoadAverage[1], status.LoadAverage[2])
 			p.Line("")

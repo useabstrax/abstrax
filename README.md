@@ -125,6 +125,8 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 `abstrax doctor` does not require root and makes no changes - it is a safe first command. Most commands that change system state require `sudo`.
 
+`server status` includes the server timezone (name, abbreviation, and current UTC offset). Cron schedules and log timestamps use that clock. The zone comes from `timedatectl` when it is available, otherwise from `/etc/localtime` or `/etc/timezone`.
+
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
 ### Firewall rule IDs

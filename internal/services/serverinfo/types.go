@@ -2,16 +2,25 @@ package serverinfo
 
 // ServerStatus holds a comprehensive view of server health.
 type ServerStatus struct {
-	Hostname      string     `json:"hostname"`
-	Uptime        string     `json:"uptime"`
-	LoadAverage   [3]float64 `json:"load_average"`
-	CPU           CPUInfo    `json:"cpu"`
-	Memory        MemoryInfo `json:"memory"`
-	Swap          SwapInfo   `json:"swap"`
-	Disks         []DiskInfo `json:"disks"`
-	OS            OSInfo     `json:"os"`
-	KernelVersion string     `json:"kernel_version"`
-	PrivateIPs    []string   `json:"private_ips"`
+	Hostname      string       `json:"hostname"`
+	Uptime        string       `json:"uptime"`
+	LoadAverage   [3]float64   `json:"load_average"`
+	CPU           CPUInfo      `json:"cpu"`
+	Memory        MemoryInfo   `json:"memory"`
+	Swap          SwapInfo     `json:"swap"`
+	Disks         []DiskInfo   `json:"disks"`
+	OS            OSInfo       `json:"os"`
+	KernelVersion string       `json:"kernel_version"`
+	PrivateIPs    []string     `json:"private_ips"`
+	Timezone      TimezoneInfo `json:"timezone"`
+}
+
+// TimezoneInfo is the server's current timezone.
+type TimezoneInfo struct {
+	Name             string `json:"name"`
+	Abbreviation     string `json:"abbreviation"`
+	UTCOffset        string `json:"utc_offset"`
+	UTCOffsetSeconds int    `json:"utc_offset_seconds"`
 }
 
 // CPUInfo describes CPU usage.
