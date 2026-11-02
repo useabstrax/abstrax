@@ -34,6 +34,12 @@ type Service struct {
 	daemonBinaryFn     func() (string, error)
 	daemonVersionFn    func(ctx context.Context, binary string) (string, error)
 	serviceStatusFn    func(ctx context.Context, name string) (*svcmanager.ServiceStatus, error)
+
+	// Test seams. Production leaves these nil.
+	restartFn   func(ctx context.Context, serviceName string) error
+	readyFn     func(ctx context.Context) error
+	serverUpFn  func(ctx context.Context) (bool, error)
+	remoteDirFn func() (string, error)
 }
 
 // New creates a Service.

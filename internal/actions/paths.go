@@ -124,6 +124,9 @@ var commandPaths = map[string][]string{
 	MySQLUserInfo:          {"mysql", "user", "info"},
 	MySQLGrant:             {"mysql", "grant"},
 	MySQLRevoke:            {"mysql", "revoke"},
+	MySQLRemoteEnable:      {"mysql", "remote", "enable"},
+	MySQLRemoteDisable:     {"mysql", "remote", "disable"},
+	MySQLRemoteStatus:      {"mysql", "remote", "status"},
 
 	CacheInstall: {"cache", "install"},
 	CacheRemove:  {"cache", "remove"},

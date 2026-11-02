@@ -198,6 +198,8 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 `ssh-key add --expires 2026-11-07T23:59:00Z` writes `expiry-time` so sshd refuses the key after that UTC time. It needs OpenSSH 8.2 or later. `--from 140.82.112.0/20,143.55.64.0/20` limits the addresses that can use the key. `ssh-key list` and `ssh-key info` show `expires_at`, `from`, and whether the key has expired. Omit both flags and the key line is unchanged.
 ### MySQL status
 `mysql status` reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. It succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform.
+### MySQL remote access
+`mysql remote enable` writes a `zz-abstrax-remote.cnf` drop-in so the database listens beyond loopback (default `0.0.0.0`). Abstrax asks you to confirm, then restarts the service. If the database does not come back, the drop-in is removed and the service is restarted again. The firewall is left unchanged, so allow port 3306 yourself if remote clients should connect. `mysql remote disable` removes that file. `mysql remote status` reports the bind address the running server is using.
 
 ### User lock
 

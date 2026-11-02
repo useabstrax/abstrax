@@ -116,6 +116,9 @@ const (
 	MySQLUserInfo          = "mysql.user.info"
 	MySQLGrant             = "mysql.grant"
 	MySQLRevoke            = "mysql.revoke"
+	MySQLRemoteEnable      = "mysql.remote.enable"
+	MySQLRemoteDisable     = "mysql.remote.disable"
+	MySQLRemoteStatus      = "mysql.remote.status"
 
 	// Cache actions.
 	CacheInstall = "cache.install"
