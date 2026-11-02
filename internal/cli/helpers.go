@@ -8,6 +8,21 @@ import (
 	"abstrax/internal/platform"
 )
 
+// emittedResultError means the command already wrote its JSON result.
+// printCommandError skips it so the result is not written twice.
+type emittedResultError struct {
+	err error
+}
+
+func (e *emittedResultError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *emittedResultError) Unwrap() error { return e.err }
+
 // skipConfirm returns true when a destructive command should skip its prompt.
 func skipConfirm(force bool) bool {
 	return force || globals.Flags.Yes

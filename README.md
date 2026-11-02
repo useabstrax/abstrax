@@ -209,6 +209,9 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `user info` and `user list` show when the account last logged in and the IP address or hostname it came from. Both values are null when that login is unknown. `user list` reads the login log once.
 Locking does not end sessions that are already open. `user logout <name> --all` ends those interactive login sessions. It does not stop daemons or cron jobs running as that user.
+### Removing a user
+
+`user remove` warns when an Abstrax daemon, an Abstrax cron job, or a running process still uses that account, then removes the user anyway. Daemons and cron jobs are not stopped. `user remove --if-unused` refuses and exits non-zero while anything is still using the account. `--json` includes `still_used_by`, which is an empty array when nothing is.
 
 ### SSH port
 
