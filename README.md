@@ -132,11 +132,14 @@ Explore command groups with `abstrax <group> --help`, for example `abstrax user 
 ### Server reboot
 
 `server reboot` restarts the machine. It requires root and asks for confirmation unless you pass `--yes`. A positive `--delay` uses `systemd-run --on-active=<seconds>s -- systemctl reboot` when `systemd-run` is available, and otherwise rounds the wait up to whole minutes and runs `shutdown -r +N`. The command prints its result before that reboot runs, and `--dry-run` records the commands without rebooting.
+
 ```bash
 sudo abstrax server reboot --yes
 sudo abstrax server reboot --delay 90 --dry-run
 ```
+
 ### Package upgrades
+
 `package upgrades` lists pending updates. Each row shows the package name, the installed version, the new version, and whether the update is a security update. `--security-only` shows security updates only. It does not require root.
 `package upgrade --security-only` installs only those security updates. On Debian and Ubuntu that is the packages from the security pocket. On RHEL-family systems it runs `dnf upgrade -y --security`.
 `server reboot-required` reports whether a reboot is needed. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`. If that command is not installed, the result says so and does not fail.
@@ -198,9 +201,13 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 ### SSH key restrictions
 
 `ssh-key add --expires 2026-11-07T23:59:00Z` writes `expiry-time` so sshd refuses the key after that UTC time. It needs OpenSSH 8.2 or later. `--from 140.82.112.0/20,143.55.64.0/20` limits the addresses that can use the key. `ssh-key list` and `ssh-key info` show `expires_at`, `from`, and whether the key has expired. Omit both flags and the key line is unchanged.
+
 ### MySQL status
+
 `mysql status` reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. It succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform.
+
 ### MySQL remote access
+
 `mysql remote enable` writes a `zz-abstrax-remote.cnf` drop-in so the database listens beyond loopback (default `0.0.0.0`). Abstrax asks you to confirm, then restarts the service. If the database does not come back, the drop-in is removed and the service is restarted again. The firewall is left unchanged, so allow port 3306 yourself if remote clients should connect. `mysql remote disable` removes that file. `mysql remote status` reports the bind address the running server is using.
 
 ### User lock
@@ -208,7 +215,9 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
 
 `user info` and `user list` show when the account last logged in and the IP address or hostname it came from. Both values are null when that login is unknown. `user list` reads the login log once.
-Locking does not end sessions that are already open. `user logout <name> --all` ends those interactive login sessions. It does not stop daemons or cron jobs running as that user.
+
+Locking does not end sessions that are already open. `user logout <name> --all` ends those interactive login sessions. It does not stop daemons, cron jobs, or the systemd user manager running as that user.
+
 ### Removing a user
 
 `user remove` warns when an Abstrax daemon, an Abstrax cron job, or a running process still uses that account, then removes the user anyway. Daemons and cron jobs are not stopped. `user remove --if-unused` refuses and exits non-zero while anything is still using the account. `--json` includes `still_used_by`, which is an empty array when nothing is.
@@ -220,7 +229,9 @@ Locking does not end sessions that are already open. `user logout <name> --all` 
 ### Root SSH login
 
 `ssh config enable-root-login` writes `PermitRootLogin yes`, which also allows password login when password authentication is on. `ssh config enable-root-login --keys-only` writes `prohibit-password`, so root can log in with an SSH key and not a password. `ssh config disable-root-login` writes `no` and blocks root for every method.
+
 ### Project logs
+
 Each project nginx virtual host logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` show those paths. `project add --shared-logs` and `project modify --shared-logs` keep the server-wide nginx logs instead. That choice is remembered, so a later `project modify` does not switch it unless you pass the flag again. Existing virtual hosts stay as they are until the next `project modify`. `project remove` keeps the log files; `project remove --delete-files` deletes them.
 
 ### PHP projects
