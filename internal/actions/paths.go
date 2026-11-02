@@ -110,6 +110,7 @@ var commandPaths = map[string][]string{
 	MySQLConfigSet:         {"mysql", "config", "set"},
 	MySQLConfigShow:        {"mysql", "config", "show"},
 	MySQLTest:              {"mysql", "test"},
+	MySQLStatus:            {"mysql", "status"},
 	MySQLInstall:           {"mysql", "install"},
 	MySQLResetRootPassword: {"mysql", "reset-root-password"},
 	MySQLDBAdd:             {"mysql", "database", "add"},

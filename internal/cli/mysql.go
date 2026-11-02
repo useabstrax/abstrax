@@ -42,6 +42,7 @@ func NewMySQLCmd() *cobra.Command {
 	cmd.AddCommand(dbCmd)
 	cmd.AddCommand(userCmd)
 	cmd.AddCommand(newMySQLTestCmd())
+	cmd.AddCommand(newMySQLStatusCmd())
 	cmd.AddCommand(newMySQLInstallCmd())
 	cmd.AddCommand(newMySQLResetRootPasswordCmd())
 	cmd.AddCommand(newMySQLGrantCmd())
@@ -128,6 +129,68 @@ func newMySQLTestCmd() *cobra.Command {
 			return printSimpleResult(actions.MySQLTest, "MySQL connection successful.", nil)
 		},
 	}
+}
+
+func newMySQLStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show MySQL / MariaDB installation and service status",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc := mysql.New(false, globals.Flags.Verbose)
+			st, err := svc.Status(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLStatus, "", st))
+				return nil
+			}
+
+			printMySQLStatus(st)
+			return nil
+		},
+	}
+}
+
+func printMySQLStatus(st *mysql.Status) {
+	p := printer()
+	installed := "no"
+	if st.Installed {
+		installed = "yes"
+	}
+	version := "-"
+	if st.Version != nil {
+		version = *st.Version
+	}
+
+	p.Line("")
+	p.Line("  %-12s %s", "Installed:", installed)
+	p.Line("  %-12s %s", "Engine:", st.Engine)
+	p.Line("  %-12s %s", "Version:", version)
+	if st.Service != "" {
+		p.Line("  %-12s %s", "Service:", st.Service)
+	}
+	if st.Active != nil {
+		p.Line("  %-12s %s", "Active:", statusYesNo(*st.Active))
+	}
+	if st.Enabled != nil {
+		p.Line("  %-12s %s", "Enabled:", statusYesNo(*st.Enabled))
+	}
+	if st.Port != nil {
+		p.Line("  %-12s %d", "Port:", *st.Port)
+	}
+	if st.Socket != "" {
+		p.Line("  %-12s %s", "Socket:", st.Socket)
+	}
+	p.Line("")
+}
+
+func statusYesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
 }
 
 func newMySQLInstallCmd() *cobra.Command {

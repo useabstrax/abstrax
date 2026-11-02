@@ -169,6 +169,8 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 ### SSH key restrictions
 
 `ssh-key add --expires 2026-11-07T23:59:00Z` writes `expiry-time` so sshd refuses the key after that UTC time. It needs OpenSSH 8.2 or later. `--from 140.82.112.0/20,143.55.64.0/20` limits the addresses that can use the key. `ssh-key list` and `ssh-key info` show `expires_at`, `from`, and whether the key has expired. Omit both flags and the key line is unchanged.
+### MySQL status
+`mysql status` reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. It succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform.
 
 ### User lock
 

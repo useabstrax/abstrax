@@ -102,6 +102,7 @@ const (
 	MySQLConfigSet         = "mysql.config_set"
 	MySQLConfigShow        = "mysql.config_show"
 	MySQLTest              = "mysql.test"
+	MySQLStatus            = "mysql.status"
 	MySQLInstall           = "mysql.install"
 	MySQLResetRootPassword = "mysql.reset_root_password"
 	MySQLDBAdd             = "mysql.database.add"
