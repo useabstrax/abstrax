@@ -149,6 +149,7 @@ const (
 	ServerDisk     = "server.disk"
 	ServerLoad     = "server.load"
 	ServerServices = "server.services"
+	ServerReboot   = "server.reboot"
 
 	// Doctor / version.
 	DoctorCheck = "doctor.check"

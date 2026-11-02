@@ -129,6 +129,15 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
 
+### Server reboot
+
+`server reboot` restarts the machine. It requires root and asks for confirmation unless you pass `--yes`. A positive `--delay` uses `systemd-run --on-active=<seconds>s -- systemctl reboot` when `systemd-run` is available, and otherwise rounds the wait up to whole minutes and runs `shutdown -r +N`. The command prints its result before that reboot runs, and `--dry-run` records the commands without rebooting.
+
+```bash
+sudo abstrax server reboot --yes
+sudo abstrax server reboot --delay 90 --dry-run
+```
+
 ### Firewall rule IDs
 
 On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:
