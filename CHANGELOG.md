@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Security
 - **Firewall SSH access** - `firewall deny`, `firewall rule remove`, `firewall remove service`, and `firewall remove port` are refused when the firewall is active and the change would leave no rule allowing TCP to the SSH port. An allow limited to one address still counts. `--force` applies the change anyway. `--yes` does not. When the firewall is inactive, the change is allowed and Abstrax warns that `firewall enable` will need `--allow-ssh`. Successful `--json` output includes `ssh_check`. Automatic client-IP protection on `allow`, `deny`, `allow-ip`, and `deny-ip` runs only for an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, it does nothing.
 - **`mysql remote`** - `mysql remote enable` writes an Abstrax-managed `zz-abstrax-remote.cnf` drop-in so MySQL or MariaDB listens beyond loopback, restarts the database, and waits until it accepts connections. If the service does not come back, the drop-in is removed and the service is restarted again. `mysql remote disable` removes that drop-in, with the same rollback (the file is put back if the server does not return). `mysql remote status` reports the bind address the running server is using. `--bind` chooses the address (default `0.0.0.0`). Confirmation is required unless `--yes` is set. The firewall is not opened; port 3306 must be allowed separately. On MySQL the drop-in also sets `mysqlx-bind-address`.
+- **`mysql user password <name>`** - Changes the password for an existing MySQL or MariaDB user without altering grants or the auth plugin. A password is generated unless `--password` is passed, which prompts for one. With no `--host`, every host the user exists on is updated. `--host localhost` updates `localhost` and `127.0.0.1`. Any other `--host` updates only that account.
+
+### Fixed
+- **`mysql user remove`** - A local user is dropped from both `localhost` and `127.0.0.1`. Previously only `'user'@'localhost'` was removed, so the `127.0.0.1` account created by `mysql user add` was left behind.
 
 ## [2.4.0] - 2026-10-30
 

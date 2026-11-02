@@ -114,6 +114,7 @@ const (
 	MySQLUserRemove        = "mysql.user.remove"
 	MySQLUserList          = "mysql.user.list"
 	MySQLUserInfo          = "mysql.user.info"
+	MySQLUserPassword      = "mysql.user.password"
 	MySQLGrant             = "mysql.grant"
 	MySQLRevoke            = "mysql.revoke"
 	MySQLRemoteEnable      = "mysql.remote.enable"

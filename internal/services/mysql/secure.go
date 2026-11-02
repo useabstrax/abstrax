@@ -26,7 +26,10 @@ func databaseProvider() platform.Provider {
 }
 
 // escapeSQLString escapes a string for use inside single-quoted SQL literals.
+// Backslashes are escaped first so a password containing \' cannot break out
+// of the literal, and so MySQL does not treat \ as an escape.
 func escapeSQLString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
 	return strings.ReplaceAll(s, "'", "''")
 }
 

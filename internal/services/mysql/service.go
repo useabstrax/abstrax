@@ -27,6 +27,8 @@ type Service struct {
 	legacyConfigPath string
 	captureSQL       bool
 	sqlLog           []string
+	dryRun           bool
+	verbose          bool
 	queryFn          func(ctx context.Context, sql string) (string, error)
 
 	// Optional hooks so status can be tested without a database or init system.
@@ -50,6 +52,8 @@ func New(dryRun, verbose bool) *Service {
 		cfg:              &Config{Host: "127.0.0.1", Port: 3306, User: "root"},
 		configPath:       paths.MySQLConfig,
 		legacyConfigPath: paths.MySQLConfigLegacy,
+		dryRun:           dryRun,
+		verbose:          verbose,
 	}
 	_ = svc.loadConfig()
 	return svc
@@ -371,16 +375,24 @@ func (s *Service) UserAdd(ctx context.Context, opts UserAddOptions) error {
 	return nil
 }
 
-// UserRemove drops a MySQL user.
+// UserRemove drops a MySQL user on every host selected by resolveAccountHosts.
+// An empty host drops every account. localhost drops localhost and 127.0.0.1.
+// Any other host drops only that account.
 func (s *Service) UserRemove(ctx context.Context, name, host string) error {
-	if host == "" {
-		host = "localhost"
-	}
-	account, err := sqlAccount(name, host)
+	hosts, err := s.resolveAccountHosts(ctx, name, host)
 	if err != nil {
 		return err
 	}
-	return s.exec(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", account))
+	for _, h := range hosts {
+		account, err := sqlAccount(name, h)
+		if err != nil {
+			return err
+		}
+		if err := s.exec(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", account)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UserList lists MySQL users. With opts.Grants, each row includes parsed grants.
@@ -670,10 +682,26 @@ func (s *Service) isMariaDB(ctx context.Context) bool {
 }
 
 func (s *Service) userHosts(ctx context.Context, user string) ([]string, error) {
+	return s.lookupUserHosts(ctx, user, s.query)
+}
+
+// queryRead runs a read even during dry-run so host resolution can describe
+// the ALTER or DROP statements it would run. queryFn still wins in tests.
+func (s *Service) queryRead(ctx context.Context, sql string) (string, error) {
+	if s.queryFn != nil || !s.dryRun {
+		return s.query(ctx, sql)
+	}
+	saved := s.runner
+	s.runner = executil.New(false, false)
+	defer func() { s.runner = saved }()
+	return s.query(ctx, sql)
+}
+
+func (s *Service) lookupUserHosts(ctx context.Context, user string, query func(context.Context, string) (string, error)) ([]string, error) {
 	if err := validate.MySQLUsername(user); err != nil {
 		return nil, err
 	}
-	res, err := s.query(ctx,
+	res, err := query(ctx,
 		fmt.Sprintf("SELECT Host FROM mysql.user WHERE User = '%s' ORDER BY Host",
 			escapeSQLString(user)))
 	if err != nil {

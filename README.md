@@ -191,6 +191,8 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `mysql user list --grants` returns each user's grants in one call, including parsed database privileges. `mysql user info <name>` finds the user on any host, not only `localhost`. Pass `--host` to limit it to one host.
 
+`mysql user password <name>` sets a new password and leaves grants unchanged. The password is generated unless you pass `--password`. With no `--host`, every host the user exists on is updated. `--host localhost` updates both `localhost` and `127.0.0.1`. `mysql user remove` drops both of those local accounts; pass another `--host` to drop only that one.
+
 `mysql grant --privileges` and `mysql user add --privileges` only accept known privilege names. Hosts and database names are checked before they are placed in SQL.
 
 ### SSH key restrictions

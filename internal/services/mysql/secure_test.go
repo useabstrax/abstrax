@@ -17,6 +17,8 @@ func TestEscapeSQLString(t *testing.T) {
 		{"plain", "plain"},
 		{"it's", "it''s"},
 		{"a'b'c", "a''b''c"},
+		{`a\b`, `a\\b`},
+		{`p'a\s`, `p''a\\s`},
 	}
 	for _, tc := range tests {
 		if got := escapeSQLString(tc.in); got != tc.want {
