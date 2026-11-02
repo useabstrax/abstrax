@@ -61,13 +61,11 @@ func (a *AptManager) Update(ctx context.Context) error {
 }
 
 // Upgrade runs apt-get upgrade.
+// With securityOnly, it installs only the security updates reported by Upgrades.
 func (a *AptManager) Upgrade(ctx context.Context, securityOnly bool) error {
 	env := []string{"DEBIAN_FRONTEND=noninteractive"}
 	if securityOnly {
-		// Use unattended-upgrades for security-only on Debian/Ubuntu.
-		args := append(env, "unattended-upgrade", "-d")
-		_, err := a.runner.Run(ctx, "env", args...)
-		return err
+		return a.upgradeSecurity(ctx, env)
 	}
 	args := append(env, "apt-get", "upgrade", "-y")
 	_, err := a.runner.Run(ctx, "env", args...)

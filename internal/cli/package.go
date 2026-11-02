@@ -23,6 +23,7 @@ func NewPackageCmd() *cobra.Command {
 	cmd.AddCommand(newPkgRemoveCmd())
 	cmd.AddCommand(newPkgUpdateCmd())
 	cmd.AddCommand(newPkgUpgradeCmd())
+	cmd.AddCommand(newPkgUpgradesCmd())
 	cmd.AddCommand(newPkgSearchCmd())
 	cmd.AddCommand(newPkgInfoCmd())
 	cmd.AddCommand(newPkgListCmd())
@@ -151,6 +152,52 @@ func newPkgUpgradeCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&securityOnly, "security-only", false, "Apply security updates only")
+	return cmd
+}
+
+func newPkgUpgradesCmd() *cobra.Command {
+	var securityOnly bool
+
+	cmd := &cobra.Command{
+		Use:   "upgrades",
+		Short: "List pending package upgrades",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mgr, err := packageManager(false, globals.Flags.Verbose)
+			if err != nil {
+				return err
+			}
+			ups, err := mgr.Upgrades(cmd.Context(), securityOnly)
+			if err != nil {
+				return err
+			}
+			if ups == nil {
+				ups = []pkgmanager.UpgradeInfo{}
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.PackageUpgrades, "", ups))
+				return nil
+			}
+
+			if len(ups) == 0 {
+				printer().Line("No package upgrades.")
+				return nil
+			}
+
+			t := output.NewTable([]string{"NAME", "INSTALLED", "NEW", "SECURITY"})
+			for _, up := range ups {
+				security := "no"
+				if up.Security {
+					security = "yes"
+				}
+				t.Append([]string{up.Name, up.InstalledVersion, up.NewVersion, security})
+			}
+			t.Render()
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&securityOnly, "security-only", false, "List security updates only")
 	return cmd
 }
 

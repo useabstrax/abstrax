@@ -15,6 +15,7 @@ type Backend interface {
 	Remove(ctx context.Context, opts RemoveOptions) error
 	Update(ctx context.Context) error
 	Upgrade(ctx context.Context, securityOnly bool) error
+	Upgrades(ctx context.Context, securityOnly bool) ([]UpgradeInfo, error)
 	Search(ctx context.Context, query string) ([]PackageInfo, error)
 	Info(ctx context.Context, name string) (*PackageInfo, error)
 	List(ctx context.Context) ([]PackageInfo, error)
@@ -37,6 +38,9 @@ func NewFromPlatform(dryRun, verbose bool) (Backend, *platform.Info, error) {
 	info, _, err := platform.Detect()
 	if err != nil {
 		return nil, nil, err
+	}
+	if info.Family == "rhel" && info.PackageManager == "yum" {
+		return NewYum(dryRun, verbose), info, nil
 	}
 	backend, err := NewForFamily(info.Family, dryRun, verbose)
 	if err != nil {

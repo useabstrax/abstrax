@@ -129,6 +129,21 @@ func (r *Runner) RunSilent(ctx context.Context, name string, args ...string) (Re
 		return Result{Command: cmdStr}, nil
 	}
 
+	return runCommand(ctx, name, args)
+}
+
+// RunQuery executes a read-only command and returns its output.
+// Dry-run mode still runs the command so callers can parse the output before
+// deciding whether a later change should be skipped.
+func (r *Runner) RunQuery(ctx context.Context, name string, args ...string) (Result, error) {
+	r.record(name, args)
+	if res, ok, err := r.handled(ctx, name, args); ok {
+		return res, err
+	}
+	return runCommand(ctx, name, args)
+}
+
+func runCommand(ctx context.Context, name string, args []string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`cron run <id>`** - Runs a managed cron job immediately as its user, with the job's environment and working directory. `--timeout` defaults to 300 seconds (`0` means no limit) and the command exits 124 when the process group is killed. `--use-job-output` applies the job's log redirects. A disabled job still runs and the result reports it as disabled.
 - **`server reboot`** - Reboots the machine after confirmation. `--yes` skips the prompt. `--delay` waits that many seconds; `0` runs `systemctl reboot` immediately. A positive delay uses `systemd-run --on-active=<seconds>s` when `systemd-run` is available, otherwise `shutdown -r` with the delay rounded up to whole minutes. The result is printed before the reboot command runs.
 - **`user info` and `user list`** - Include the last login time and where it came from. `last_login_at` is an RFC3339 timestamp or null. `last_login_from` is an IP address or hostname, or null. `user list` reads the login log once. A missing log leaves the fields null and the command still succeeds.
+- **`package upgrades`** - Lists pending package upgrades with the installed version, the new version, and whether each update is a security update. `--security-only` limits the list to security updates. Does not require root. Registered as `package.upgrades`.
+- **`server reboot-required`** - Reports whether a reboot is required and which packages requested it. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`, and reports a note instead of failing when that command is not installed. Does not require root. Registered as `server.reboot-required`.
+
+### Changed
+- **`package upgrade --security-only`** - On Debian and Ubuntu, installs only the security updates listed by `package upgrades`. If none are pending, the command succeeds without installing anything. On yum, runs `yum update -y --security`. A full `package upgrade` is unchanged.
 
 ## [2.4.0] - 2026-10-30
 

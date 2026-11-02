@@ -132,11 +132,14 @@ Explore command groups with `abstrax <group> --help`, for example `abstrax user 
 ### Server reboot
 
 `server reboot` restarts the machine. It requires root and asks for confirmation unless you pass `--yes`. A positive `--delay` uses `systemd-run --on-active=<seconds>s -- systemctl reboot` when `systemd-run` is available, and otherwise rounds the wait up to whole minutes and runs `shutdown -r +N`. The command prints its result before that reboot runs, and `--dry-run` records the commands without rebooting.
-
 ```bash
 sudo abstrax server reboot --yes
 sudo abstrax server reboot --delay 90 --dry-run
 ```
+### Package upgrades
+`package upgrades` lists pending updates. Each row shows the package name, the installed version, the new version, and whether the update is a security update. `--security-only` shows security updates only. It does not require root.
+`package upgrade --security-only` installs only those security updates. On Debian and Ubuntu that is the packages from the security pocket. On RHEL-family systems it runs `dnf upgrade -y --security`.
+`server reboot-required` reports whether a reboot is needed. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`. If that command is not installed, the result says so and does not fail.
 
 ### Firewall rule IDs
 

@@ -33,3 +33,11 @@ type PackageInfo struct {
 	Status       string `json:"status"`
 	Architecture string `json:"architecture"`
 }
+
+// UpgradeInfo is one pending package upgrade.
+type UpgradeInfo struct {
+	Name             string `json:"name"`
+	InstalledVersion string `json:"installed_version"`
+	NewVersion       string `json:"new_version"`
+	Security         bool   `json:"security"`
+}
