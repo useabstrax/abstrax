@@ -15,6 +15,8 @@ const (
 	UserSetShell     = "user.set_shell"
 	UserLock         = "user.lock"
 	UserUnlock       = "user.unlock"
+	UserSessions     = "user.sessions"
+	UserLogout       = "user.logout"
 	UserInfo         = "user.info"
 	UserList         = "user.list"
 
@@ -36,13 +38,14 @@ const (
 	SSHRestart                 = "ssh.restart"
 
 	// Package actions.
-	PackageInstall = "package.install"
-	PackageRemove  = "package.remove"
-	PackageUpdate  = "package.update"
-	PackageUpgrade = "package.upgrade"
-	PackageSearch  = "package.search"
-	PackageInfo    = "package.info"
-	PackageList    = "package.list"
+	PackageInstall  = "package.install"
+	PackageRemove   = "package.remove"
+	PackageUpdate   = "package.update"
+	PackageUpgrade  = "package.upgrade"
+	PackageUpgrades = "package.upgrades"
+	PackageSearch   = "package.search"
+	PackageInfo     = "package.info"
+	PackageList     = "package.list"
 
 	// Service (systemd) actions.
 	ServiceStart   = "service.start"
@@ -61,6 +64,7 @@ const (
 	CronInfo    = "cron.info"
 	CronEnable  = "cron.enable"
 	CronDisable = "cron.disable"
+	CronRun     = "cron.run"
 
 	// Daemon actions.
 	DaemonAdd     = "daemon.add"
@@ -102,6 +106,7 @@ const (
 	MySQLConfigSet         = "mysql.config_set"
 	MySQLConfigShow        = "mysql.config_show"
 	MySQLTest              = "mysql.test"
+	MySQLStatus            = "mysql.status"
 	MySQLInstall           = "mysql.install"
 	MySQLResetRootPassword = "mysql.reset_root_password"
 	MySQLDBAdd             = "mysql.database.add"
@@ -111,8 +116,12 @@ const (
 	MySQLUserRemove        = "mysql.user.remove"
 	MySQLUserList          = "mysql.user.list"
 	MySQLUserInfo          = "mysql.user.info"
+	MySQLUserPassword      = "mysql.user.password"
 	MySQLGrant             = "mysql.grant"
 	MySQLRevoke            = "mysql.revoke"
+	MySQLRemoteEnable      = "mysql.remote.enable"
+	MySQLRemoteDisable     = "mysql.remote.disable"
+	MySQLRemoteStatus      = "mysql.remote.status"
 
 	// Cache actions.
 	CacheInstall = "cache.install"
@@ -141,12 +150,14 @@ const (
 	RepoEnable = "repo.enable"
 
 	// Server info actions.
-	ServerStatus   = "server.status"
-	ServerCPU      = "server.cpu"
-	ServerMemory   = "server.memory"
-	ServerDisk     = "server.disk"
-	ServerLoad     = "server.load"
-	ServerServices = "server.services"
+	ServerStatus         = "server.status"
+	ServerCPU            = "server.cpu"
+	ServerMemory         = "server.memory"
+	ServerDisk           = "server.disk"
+	ServerLoad           = "server.load"
+	ServerServices       = "server.services"
+	ServerReboot         = "server.reboot"
+	ServerRebootRequired = "server.reboot-required"
 
 	// Doctor / version.
 	DoctorCheck = "doctor.check"

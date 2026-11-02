@@ -15,6 +15,8 @@ type vhostConfig struct {
 	ProxyPort   int
 	NodePort    int
 	PHPSocket   string
+	LogDir      string
+	SharedLogs  bool
 }
 
 func vhostOptionsFromAdd(opts AddOptions, state *State, paths *ValidatedPaths) vhostConfig {
@@ -32,6 +34,7 @@ func vhostOptionsFromAdd(opts AddOptions, state *State, paths *ValidatedPaths) v
 		ProxyPort:   opts.ProxyPort,
 		NodePort:    opts.NodePort,
 		PHPSocket:   phpSocketForState(state),
+		SharedLogs:  opts.SharedLogs,
 	}
 	if paths != nil && paths.DocumentRoot != "" && opts.WebRoot == "" {
 		// Document root already resolved in validated paths.
@@ -51,5 +54,6 @@ func (s *State) vhostConfig() vhostConfig {
 		PublicDir:   s.PublicDir,
 		ProxyPort:   s.ProxyPort,
 		PHPSocket:   phpSocketForState(s),
+		SharedLogs:  s.SharedLogs,
 	}
 }

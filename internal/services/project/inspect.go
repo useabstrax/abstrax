@@ -24,14 +24,16 @@ type InspectService struct {
 
 // InspectProject is the project payload for the inspect API.
 type InspectProject struct {
-	Name     string           `json:"name"`
-	Path     string           `json:"path"`
-	User     string           `json:"user"`
-	Group    string           `json:"group,omitempty"`
-	Mode     string           `json:"ownership_mode,omitempty"`
-	Runtime  InspectRuntime   `json:"runtime"`
-	Domains  []string         `json:"domains"`
-	Services []InspectService `json:"services"`
+	Name          string           `json:"name"`
+	Path          string           `json:"path"`
+	User          string           `json:"user"`
+	Group         string           `json:"group,omitempty"`
+	Mode          string           `json:"ownership_mode,omitempty"`
+	Runtime       InspectRuntime   `json:"runtime"`
+	Domains       []string         `json:"domains"`
+	AccessLogPath string           `json:"access_log_path,omitempty"`
+	ErrorLogPath  string           `json:"error_log_path,omitempty"`
+	Services      []InspectService `json:"services"`
 }
 
 // InspectResponse is the versioned public inspect API response.
@@ -79,14 +81,16 @@ func (s *Service) Inspect(ctx context.Context, name string) (*InspectResponse, e
 	return &InspectResponse{
 		APIVersion: inspectAPIVersion,
 		Project: InspectProject{
-			Name:     state.Name,
-			Path:     state.Path,
-			User:     user,
-			Group:    group,
-			Mode:     mode,
-			Runtime:  runtime,
-			Domains:  state.Domains,
-			Services: services,
+			Name:          state.Name,
+			Path:          state.Path,
+			User:          user,
+			Group:         group,
+			Mode:          mode,
+			Runtime:       runtime,
+			Domains:       state.Domains,
+			AccessLogPath: state.AccessLogPath,
+			ErrorLogPath:  state.ErrorLogPath,
+			Services:      services,
 		},
 	}, nil
 }

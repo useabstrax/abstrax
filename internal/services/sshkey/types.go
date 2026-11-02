@@ -6,6 +6,8 @@ type AddOptions struct {
 	Key      string
 	Name     string
 	Comment  string
+	Expires  string
+	From     string
 	FromFile bool
 	Force    bool
 	DryRun   bool
@@ -28,11 +30,14 @@ type ListOptions struct {
 
 // KeyInfo describes a single authorized key.
 type KeyInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Comment     string `json:"comment"`
-	Fingerprint string `json:"fingerprint"`
-	Managed     bool   `json:"managed"`
-	Line        int    `json:"line"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Comment     string   `json:"comment"`
+	Fingerprint string   `json:"fingerprint"`
+	Managed     bool     `json:"managed"`
+	Line        int      `json:"line"`
+	ExpiresAt   *string  `json:"expires_at"`
+	From        []string `json:"from"`
+	Expired     bool     `json:"expired"`
 }

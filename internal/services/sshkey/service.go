@@ -5,11 +5,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"time"
 
 	executil "abstrax/internal/exec"
 )
@@ -18,12 +20,22 @@ const managedPrefix = "# abstrax:key"
 
 // Service provides SSH key management.
 type Service struct {
-	runner *executil.Runner
+	runner     *executil.Runner
+	lookupHome func(username string) (string, error)
+	sshVersion func() (string, error)
+	now        func() time.Time
 }
 
 // New creates a Service.
 func New(dryRun, verbose bool) *Service {
 	return &Service{runner: executil.New(dryRun, verbose)}
+}
+
+func (s *Service) currentTime() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 // Add inserts an SSH public key into a user's authorized_keys file.
@@ -33,9 +45,18 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*KeyInfo, error) {
 		return nil, fmt.Errorf("key data is empty")
 	}
 
-	authFile, err := authorizedKeysPath(opts.Username)
+	authFile, err := s.authorizedKeysPath(opts.Username)
 	if err != nil {
 		return nil, err
+	}
+
+	restrictions, err := s.keyRestrictions(opts)
+	if err != nil {
+		return nil, err
+	}
+	keyLine := keyData
+	if restrictions.prefix != "" {
+		keyLine = restrictions.prefix + " " + keyData
 	}
 
 	if err := ensureSSHDir(opts.Username, authFile); err != nil {
@@ -72,7 +93,20 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*KeyInfo, error) {
 		marker += fmt.Sprintf(` comment="%s"`, opts.Comment)
 	}
 
-	entry := marker + "\n" + keyData + "\n"
+	entry := marker + "\n" + keyLine + "\n"
+
+	info := &KeyInfo{
+		ID:          keyID,
+		Name:        name,
+		Fingerprint: fp,
+		Managed:     true,
+		ExpiresAt:   restrictions.expiresAt,
+		From:        restrictions.from,
+		Expired:     false,
+	}
+	if opts.DryRun {
+		return info, nil
+	}
 
 	f, err := os.OpenFile(authFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -84,17 +118,12 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*KeyInfo, error) {
 		return nil, fmt.Errorf("writing authorized_keys: %w", err)
 	}
 
-	return &KeyInfo{
-		ID:          keyID,
-		Name:        name,
-		Fingerprint: fp,
-		Managed:     true,
-	}, nil
+	return info, nil
 }
 
 // Remove removes a managed key by ID.
 func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
-	authFile, err := authorizedKeysPath(opts.Username)
+	authFile, err := s.authorizedKeysPath(opts.Username)
 	if err != nil {
 		return err
 	}
@@ -124,7 +153,7 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 
 // List returns the authorized keys for a user.
 func (s *Service) List(_ context.Context, opts ListOptions) ([]KeyInfo, error) {
-	authFile, err := authorizedKeysPath(opts.Username)
+	authFile, err := s.authorizedKeysPath(opts.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +167,7 @@ func (s *Service) List(_ context.Context, opts ListOptions) ([]KeyInfo, error) {
 	}
 	defer f.Close()
 
-	return parseAuthorizedKeys(f, opts.ManagedOnly), nil
+	return parseAuthorizedKeys(f, opts.ManagedOnly, s.currentTime()), nil
 }
 
 // Info returns a single key by ID or fingerprint.
@@ -155,12 +184,22 @@ func (s *Service) Info(ctx context.Context, username, keyID string) (*KeyInfo, e
 	return nil, fmt.Errorf("key %q not found for user %s", keyID, username)
 }
 
-func authorizedKeysPath(username string) (string, error) {
-	u, err := user.Lookup(username)
+func (s *Service) authorizedKeysPath(username string) (string, error) {
+	var home string
+	var err error
+	if s.lookupHome != nil {
+		home, err = s.lookupHome(username)
+	} else {
+		var u *user.User
+		u, err = user.Lookup(username)
+		if err == nil {
+			home = u.HomeDir
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("user %s not found: %w", username, err)
 	}
-	return filepath.Join(u.HomeDir, ".ssh", "authorized_keys"), nil
+	return filepath.Join(home, ".ssh", "authorized_keys"), nil
 }
 
 func ensureSSHDir(username, authFile string) error {
@@ -237,7 +276,7 @@ func shortFingerprint(fp string) string {
 	return fp
 }
 
-func parseAuthorizedKeys(f *os.File, managedOnly bool) []KeyInfo {
+func parseAuthorizedKeys(f io.Reader, managedOnly bool, now time.Time) []KeyInfo {
 	var keys []KeyInfo
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
@@ -266,6 +305,12 @@ func parseAuthorizedKeys(f *os.File, managedOnly bool) []KeyInfo {
 			continue
 		}
 
+		parsed, ok := splitAuthorizedKeyLine(trimmed)
+		if !ok {
+			pendingMarker = nil
+			continue
+		}
+
 		info := KeyInfo{Line: lineNum}
 		if pendingMarker != nil {
 			info.ID = pendingMarker.ID
@@ -279,13 +324,21 @@ func parseAuthorizedKeys(f *os.File, managedOnly bool) []KeyInfo {
 			info.ID = fmt.Sprintf("line-%d", lineNum)
 		}
 
-		info.Type = parts[0]
-		if len(parts) >= 3 {
-			info.Comment = parts[2]
+		info.Type = parsed.keyType
+		info.Comment = parsed.comment
+		info.ExpiresAt = parsed.expiresAt
+		info.From = parsed.from
+		if parsed.expiresAt != nil {
+			if exp, err := time.Parse(time.RFC3339, *parsed.expiresAt); err == nil {
+				info.Expired = !exp.After(now)
+			}
 		}
 
-		// Get fingerprint if ssh-keygen available.
-		if fp, err := fingerprint(trimmed); err == nil {
+		material := parsed.keyType + " " + parsed.blob
+		if parsed.comment != "" {
+			material += " " + parsed.comment
+		}
+		if fp, err := fingerprint(material); err == nil {
 			info.Fingerprint = fp
 		}
 

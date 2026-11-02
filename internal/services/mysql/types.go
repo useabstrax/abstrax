@@ -59,6 +59,25 @@ type UserAddResult struct {
 	Generated bool   `json:"password_generated"`
 }
 
+// UserPasswordOptions holds options for mysql user password.
+type UserPasswordOptions struct {
+	Name     string
+	Host     string
+	Password string
+	DryRun   bool
+}
+
+// UserPasswordResult is returned when a MySQL user's password is changed.
+// JSON matches UserAddResult: name, host or hosts, password, and
+// password_generated (true only when Abstrax generated the password).
+type UserPasswordResult struct {
+	Name      string   `json:"name"`
+	Host      string   `json:"host,omitempty"`
+	Hosts     []string `json:"hosts,omitempty"`
+	Password  string   `json:"password,omitempty"`
+	Generated bool     `json:"password_generated"`
+}
+
 // Database describes a MySQL database.
 type Database struct {
 	Name string `json:"name"`
@@ -118,6 +137,27 @@ func (u UserInfo) MarshalJSON() ([]byte, error) {
 		Databases:        u.Databases,
 		GlobalPrivileges: u.GlobalPrivileges,
 	})
+}
+
+// RemoteEnableOptions holds options for mysql remote enable.
+type RemoteEnableOptions struct {
+	Bind   string
+	DryRun bool
+}
+
+// RemoteDisableOptions holds options for mysql remote disable.
+type RemoteDisableOptions struct {
+	DryRun bool
+}
+
+// RemoteStatus is the bind address the database server is using.
+// BindAddress is "unknown" when the server is not accepting connections.
+type RemoteStatus struct {
+	Enabled     bool   `json:"enabled"`
+	BindAddress string `json:"bind_address"`
+	ManagedFile string `json:"managed_file"`
+	Port        int    `json:"port"`
+	Note        string `json:"note,omitempty"`
 }
 
 // Preset privilege levels.

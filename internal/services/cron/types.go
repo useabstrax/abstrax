@@ -1,5 +1,10 @@
 package cron
 
+import (
+	"io"
+	"time"
+)
+
 // AddOptions holds options for adding a cron job.
 type AddOptions struct {
 	ID            string
@@ -52,4 +57,35 @@ type CronJob struct {
 	DiscardOutput bool              `json:"discard_output"`
 	Created       string            `json:"created,omitempty"`
 	Updated       string            `json:"updated,omitempty"`
+}
+
+// RunOptions holds options for running a managed cron job immediately.
+// Timeout is how long the job may run. Zero means no limit.
+type RunOptions struct {
+	ID           string
+	Timeout      time.Duration
+	UseJobOutput bool
+	DryRun       bool
+	// Live receives combined stdout and stderr as it is produced.
+	Live io.Writer
+	// OnLine receives each output line without its trailing newline.
+	OnLine func(string)
+}
+
+// RunResult is the outcome of an immediate cron run.
+type RunResult struct {
+	ID              string `json:"id"`
+	User            string `json:"user"`
+	Command         string `json:"command"`
+	Disabled        bool   `json:"disabled"`
+	StartedAt       string `json:"started_at"`
+	FinishedAt      string `json:"finished_at"`
+	DurationMS      int64  `json:"duration_ms"`
+	ExitCode        *int   `json:"exit_code,omitempty"`
+	TimedOut        bool   `json:"timed_out"`
+	Output          string `json:"output"`
+	OutputTruncated bool   `json:"output_truncated"`
+	DryRun          bool   `json:"dry_run,omitempty"`
+	// Argv is the command that was or would be executed. It is omitted from JSON.
+	Argv []string `json:"-"`
 }

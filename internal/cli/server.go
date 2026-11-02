@@ -6,8 +6,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"abstrax/internal/actions"
+	"abstrax/internal/confirm"
+	executil "abstrax/internal/exec"
 	"abstrax/internal/globals"
 	"abstrax/internal/output"
+	"abstrax/internal/platform"
 	"abstrax/internal/services/serverinfo"
 )
 
@@ -15,7 +18,7 @@ import (
 func NewServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
-		Short: "Show server status and resource usage",
+		Short: "Show server status and reboot the machine",
 	}
 
 	cmd.AddCommand(newServerStatusCmd())
@@ -24,6 +27,8 @@ func NewServerCmd() *cobra.Command {
 	cmd.AddCommand(newServerDiskCmd())
 	cmd.AddCommand(newServerLoadCmd())
 	cmd.AddCommand(newServerServicesCmd())
+	cmd.AddCommand(newServerRebootCmd())
+	cmd.AddCommand(newServerRebootRequiredCmd())
 
 	return cmd
 }
@@ -50,6 +55,7 @@ func newServerStatusCmd() *cobra.Command {
 			p.Line("")
 			p.Line("  %-20s %s", "Hostname:", status.Hostname)
 			p.Line("  %-20s %s", "Uptime:", status.Uptime)
+			p.Line("  %-20s %s (%s, %s)", "Timezone:", status.Timezone.Name, status.Timezone.Abbreviation, status.Timezone.UTCOffset)
 			p.Line("  %-20s %.2f  %.2f  %.2f",
 				"Load average:", status.LoadAverage[0], status.LoadAverage[1], status.LoadAverage[2])
 			p.Line("")
@@ -227,4 +233,105 @@ func newServerServicesCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&failed, "failed", false, "Show only failed services")
 	return cmd
+}
+
+func newServerRebootCmd() *cobra.Command {
+	var delay int
+
+	cmd := &cobra.Command{
+		Use:   "reboot",
+		Short: "Reboot the server",
+		Long: `Reboot the server. This requires root and asks for confirmation unless --yes is set.
+
+With no delay, or with --delay 0, Abstrax runs "systemctl reboot".
+A positive --delay uses "systemd-run --on-active=<seconds>s -- systemctl reboot"
+when systemd-run is available. Otherwise the delay is rounded up to whole
+minutes and Abstrax runs "shutdown -r +N".
+
+The result is printed before the reboot command runs. --dry-run records the
+journal and reboot commands and does not reboot.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			if delay < 0 {
+				return fmt.Errorf("delay must be zero or greater")
+			}
+
+			prompt := "Reboot the server?"
+			if delay > 0 {
+				prompt = fmt.Sprintf("Reboot the server in %d seconds?", delay)
+			}
+			ok, err := confirm.Ask(prompt, globals.Flags.Yes)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil
+			}
+
+			svc := serverinfo.NewReboot(globals.Flags.DryRun, globals.Flags.Verbose)
+			summary := "Server reboot requested."
+			if delay > 0 {
+				summary = fmt.Sprintf("Server reboot scheduled in %d seconds.", delay)
+			}
+			_, err = svc.Reboot(cmd.Context(), serverinfo.RebootOptions{DelaySeconds: delay}, func(res *serverinfo.RebootResult) error {
+				return printSimpleResult(actions.ServerReboot, summary, res)
+			})
+			return err
+		},
+	}
+
+	cmd.Flags().IntVar(&delay, "delay", 0, "Seconds to wait before rebooting (0 reboots immediately)")
+	return cmd
+}
+
+func newServerRebootRequiredCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reboot-required",
+		Short: "Show whether a reboot is required",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			info, _, err := platform.Detect()
+			if err != nil {
+				return fmt.Errorf("platform detection failed: %w", err)
+			}
+
+			var status serverinfo.RebootStatus
+			switch info.Family {
+			case "debian":
+				status, err = serverinfo.ReadDebianReboot(serverinfo.DefaultRebootFiles())
+			case "rhel":
+				status, err = serverinfo.ReadRHELReboot(cmd.Context(), executil.New(false, globals.Flags.Verbose))
+			default:
+				return fmt.Errorf("checking reboot status is not supported on this platform")
+			}
+			if err != nil {
+				return err
+			}
+
+			summary := "No reboot required."
+			if status.Required {
+				summary = "Reboot required."
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.ServerRebootRequired, summary, status))
+				return nil
+			}
+
+			p := printer()
+			p.Line("%s", summary)
+			if status.Note != "" {
+				p.Line("%s", status.Note)
+			}
+			if len(status.Packages) > 0 {
+				p.Line("")
+				p.Line("Packages:")
+				for _, pkg := range status.Packages {
+					p.Line("  %s", pkg)
+				}
+			}
+			return nil
+		},
+	}
 }

@@ -92,6 +92,9 @@ func Execute() {
 	root := NewRootCmd()
 	_, err := root.ExecuteC()
 	if err != nil {
+		if code, ok := statusCode(err); ok {
+			os.Exit(code)
+		}
 		if isUnknownCommand(err) {
 			exitCode, handled, dispatchErr := tryPluginDispatch(context.Background(), os.Args[1:])
 			if handled {

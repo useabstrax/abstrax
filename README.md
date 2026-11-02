@@ -125,7 +125,24 @@ sudo abstrax user add deploy --grant-sudo --dry-run
 
 `abstrax doctor` does not require root and makes no changes - it is a safe first command. Most commands that change system state require `sudo`.
 
+`server status` includes the server timezone (name, abbreviation, and current UTC offset). Cron schedules and log timestamps use that clock. The zone comes from `timedatectl` when it is available, otherwise from `/etc/localtime` or `/etc/timezone`.
+
 Explore command groups with `abstrax <group> --help`, for example `abstrax user --help` or `abstrax firewall --help`.
+
+### Server reboot
+
+`server reboot` restarts the machine. It requires root and asks for confirmation unless you pass `--yes`. A positive `--delay` uses `systemd-run --on-active=<seconds>s -- systemctl reboot` when `systemd-run` is available, and otherwise rounds the wait up to whole minutes and runs `shutdown -r +N`. The command prints its result before that reboot runs, and `--dry-run` records the commands without rebooting.
+
+```bash
+sudo abstrax server reboot --yes
+sudo abstrax server reboot --delay 90 --dry-run
+```
+
+### Package upgrades
+
+`package upgrades` lists pending updates. Each row shows the package name, the installed version, the new version, and whether the update is a security update. `--security-only` shows security updates only. It does not require root.
+`package upgrade --security-only` installs only those security updates. On Debian and Ubuntu that is the packages from the security pocket. On RHEL-family systems it runs `dnf upgrade -y --security`.
+`server reboot-required` reports whether a reboot is needed. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`. If that command is not installed, the result says so and does not fail.
 
 ### Firewall rule IDs
 
@@ -138,11 +155,26 @@ sudo abstrax firewall rule remove a1b2c3d4
 
 A numeric position still works (`firewall rule remove 3`) and prints a warning, because that number may point at a different rule than it did when you last listed them.
 
+Removing the last rule that allows TCP to the SSH port is refused while the firewall is active. That includes `firewall deny` of the SSH port, `firewall remove port`, and `firewall remove service ssh`. An allow limited to one address still counts as access. Pass `--force` to apply the change anyway. `--yes` does not skip the check. When the firewall is inactive, the change is allowed and Abstrax warns that `firewall enable` will need `--allow-ssh`.
+
+`firewall allow`, `deny`, `allow-ip`, and `deny-ip` allow your current client IP on the SSH port only in an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, that protection does nothing.
+
 ### Cron jobs
 
 `cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.
 
 Schedules are checked field by field. Names (`JAN`, `MON`), steps, and lists are accepted, as are `@reboot`, `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly`. Values that contain a line break are refused. A `%` in the command is stored as `\%` so cron treats it as a literal percent. Paths passed to `--working-dir`, `--output` and `--error-output` are shell-quoted.
+
+### Run a cron job now
+
+`cron run <id>` runs that job immediately as its user, with the job's environment and working directory. The environment also includes a cron-like base: `SHELL=/bin/sh`, `PATH=/usr/bin:/bin`, and `HOME`. Output is streamed and captured. It is not written to the job's log file unless you pass `--use-job-output`, which applies the same redirects cron would (append or overwrite, stdout, stderr, or discard).
+
+`--timeout` defaults to 300 seconds. `0` means no limit. If the job exceeds the limit, Abstrax kills the process group and exits 124. Otherwise the exit code is the job's exit code. A disabled job still runs, and the result says that it is disabled.
+
+```bash
+sudo abstrax cron run backup
+sudo abstrax cron run backup --timeout 60 --use-job-output
+```
 
 ### Daemons
 
@@ -162,15 +194,45 @@ After a modify, Abstrax runs `supervisorctl update`, which restarts the program 
 
 `mysql user list --grants` returns each user's grants in one call, including parsed database privileges. `mysql user info <name>` finds the user on any host, not only `localhost`. Pass `--host` to limit it to one host.
 
+`mysql user password <name>` sets a new password and leaves grants unchanged. The password is generated unless you pass `--password`. With no `--host`, every host the user exists on is updated. `--host localhost` updates both `localhost` and `127.0.0.1`. `mysql user remove` drops both of those local accounts; pass another `--host` to drop only that one.
+
 `mysql grant --privileges` and `mysql user add --privileges` only accept known privilege names. Hosts and database names are checked before they are placed in SQL.
+
+### SSH key restrictions
+
+`ssh-key add --expires 2026-11-07T23:59:00Z` writes `expiry-time` so sshd refuses the key after that UTC time. It needs OpenSSH 8.2 or later. `--from 140.82.112.0/20,143.55.64.0/20` limits the addresses that can use the key. `ssh-key list` and `ssh-key info` show `expires_at`, `from`, and whether the key has expired. Omit both flags and the key line is unchanged.
+
+### MySQL status
+
+`mysql status` reports whether a MySQL-compatible server is installed, which engine (`mysql` or `mariadb`) and version are present, and whether the service is active and enabled. It succeeds when MySQL is missing or stopped. When nothing is installed, `engine` is the server Abstrax would install on this platform.
+
+### MySQL remote access
+
+`mysql remote enable` writes a `zz-abstrax-remote.cnf` drop-in so the database listens beyond loopback (default `0.0.0.0`). Abstrax asks you to confirm, then restarts the service. If the database does not come back, the drop-in is removed and the service is restarted again. The firewall is left unchanged, so allow port 3306 yourself if remote clients should connect. `mysql remote disable` removes that file. `mysql remote status` reports the bind address the running server is using.
 
 ### User lock
 
 `user lock` blocks password and SSH key logins by locking the password and expiring the account. Daemons and cron jobs already running as that user keep running. `user lock --password-only` locks the password and leaves key logins working. `user unlock` restores the expiry from before the lock.
 
+`user info` and `user list` show when the account last logged in and the IP address or hostname it came from. Both values are null when that login is unknown. `user list` reads the login log once.
+
+Locking does not end sessions that are already open. `user logout <name> --all` ends those interactive login sessions. It does not stop daemons, cron jobs, or the systemd user manager running as that user.
+
+### Removing a user
+
+`user remove` warns when an Abstrax daemon, an Abstrax cron job, or a running process still uses that account, then removes the user anyway. Daemons and cron jobs are not stopped. `user remove --if-unused` refuses and exits non-zero while anything is still using the account. `--json` includes `still_used_by`, which is an empty array when nothing is.
+
 ### SSH port
 
 `ssh config set-port <port> --allow-firewall` opens the new port before reloading sshd. The old port stays open until you pass `--close-old-port`, so you can confirm a new connection first. Without `--allow-firewall` the firewall is left unchanged.
+
+### Root SSH login
+
+`ssh config enable-root-login` writes `PermitRootLogin yes`, which also allows password login when password authentication is on. `ssh config enable-root-login --keys-only` writes `prohibit-password`, so root can log in with an SSH key and not a password. `ssh config disable-root-login` writes `no` and blocks root for every method.
+
+### Project logs
+
+Each project nginx virtual host logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` show those paths. `project add --shared-logs` and `project modify --shared-logs` keep the server-wide nginx logs instead. That choice is remembered, so a later `project modify` does not switch it unless you pass the flag again. Existing virtual hosts stay as they are until the next `project modify`. `project remove` keeps the log files; `project remove --delete-files` deletes them.
 
 ### PHP projects
 

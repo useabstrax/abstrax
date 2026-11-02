@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -25,6 +27,7 @@ func NewCronCmd() *cobra.Command {
 	cmd.AddCommand(newCronModifyCmd())
 	cmd.AddCommand(newCronListCmd())
 	cmd.AddCommand(newCronInfoCmd())
+	cmd.AddCommand(newCronRunCmd())
 	cmd.AddCommand(newCronEnableCmd())
 	cmd.AddCommand(newCronDisableCmd())
 
@@ -337,6 +340,99 @@ func newCronDisableCmd() *cobra.Command {
 			return printSimpleResult(actions.CronDisable,
 				fmt.Sprintf("Cron job %s disabled.", args[0]), nil)
 		},
+	}
+}
+
+func newCronRunCmd() *cobra.Command {
+	var (
+		timeout      int
+		useJobOutput bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "run <id>",
+		Short: "Run a cron job immediately",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id := args[0]
+			if err := validate.CronID(id); err != nil {
+				return err
+			}
+			if timeout < 0 {
+				return fmt.Errorf("--timeout must be zero or greater")
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+
+			opts := cron.RunOptions{
+				ID:           id,
+				Timeout:      time.Duration(timeout) * time.Second,
+				UseJobOutput: useJobOutput,
+				DryRun:       globals.Flags.DryRun,
+			}
+			if globals.Flags.JSONStream {
+				opts.OnLine = func(line string) {
+					output.PrintProgress(actions.CronRun, "output", line)
+				}
+			} else if !globals.Flags.JSON {
+				opts.Live = os.Stdout
+			}
+
+			res, err := cron.New().Run(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+
+			summary := cronRunSummary(res)
+			if machineOutput() {
+				emitResult(output.Success(actions.CronRun, summary, res))
+			} else {
+				p := printer()
+				if res.DryRun {
+					p.DryRun("would run: %s", strings.Join(res.Argv, " "))
+				} else if res.Output != "" || res.OutputTruncated {
+					fmt.Println()
+				}
+				if res.ExitCode == nil || (*res.ExitCode == 0 && !res.TimedOut) {
+					p.Success("%s", summary)
+				} else {
+					p.Line("%s", summary)
+				}
+			}
+			if !res.DryRun && res.ExitCode != nil && *res.ExitCode != 0 {
+				return &statusError{code: *res.ExitCode}
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&timeout, "timeout", 300, "Seconds to allow the job to run (0 means no limit)")
+	cmd.Flags().BoolVar(&useJobOutput, "use-job-output", false, "Apply the job's output redirects instead of capturing output")
+	return cmd
+}
+
+func cronRunSummary(res *cron.RunResult) string {
+	if res.DryRun {
+		if res.Disabled {
+			return fmt.Sprintf("Would run cron job %s (disabled).", res.ID)
+		}
+		return fmt.Sprintf("Would run cron job %s.", res.ID)
+	}
+	code := 0
+	if res.ExitCode != nil {
+		code = *res.ExitCode
+	}
+	elapsed := (time.Duration(res.DurationMS) * time.Millisecond).String()
+	switch {
+	case res.TimedOut && res.Disabled:
+		return fmt.Sprintf("Job %s is disabled. Timed out after %s with exit code %d.", res.ID, elapsed, code)
+	case res.TimedOut:
+		return fmt.Sprintf("Job %s timed out after %s with exit code %d.", res.ID, elapsed, code)
+	case res.Disabled:
+		return fmt.Sprintf("Job %s is disabled. Finished in %s with exit code %d.", res.ID, elapsed, code)
+	default:
+		return fmt.Sprintf("Job %s finished in %s with exit code %d.", res.ID, elapsed, code)
 	}
 }
 

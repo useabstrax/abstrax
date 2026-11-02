@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -57,6 +58,11 @@ func isBuiltinCommand(name string) bool {
 }
 
 func printCommandError(err error) {
+	var emitted *emittedResultError
+	if errors.As(err, &emitted) {
+		fmt.Fprintln(os.Stderr)
+		return
+	}
 	switch {
 	case globals.Flags.JSON && globals.Flags.JSONStream:
 		// Mutual exclusion failure: keep the message human-readable.

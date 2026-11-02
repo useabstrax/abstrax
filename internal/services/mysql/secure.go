@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +26,10 @@ func databaseProvider() platform.Provider {
 }
 
 // escapeSQLString escapes a string for use inside single-quoted SQL literals.
+// Backslashes are escaped first so a password containing \' cannot break out
+// of the literal, and so MySQL does not treat \ as an escape.
 func escapeSQLString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
 	return strings.ReplaceAll(s, "'", "''")
 }
 
@@ -198,16 +202,33 @@ func mysqlDataDirExists() bool {
 	return err == nil && info.IsDir()
 }
 
+// mysqlAlreadyConfiguredError means the server accepted a connection and rejected
+// passwordless root login. waitForReady uses it during install. Remote enable
+// treats it as "the server is accepting connections".
+type mysqlAlreadyConfiguredError struct {
+	msg string
+}
+
+func (e *mysqlAlreadyConfiguredError) Error() string { return e.msg }
+
+func isMySQLAlreadyConfigured(err error) bool {
+	var target *mysqlAlreadyConfiguredError
+	return errors.As(err, &target)
+}
+
 func errMySQLAlreadyConfigured() error {
 	dataDir := databaseProvider().DatabaseDataDir()
 	if dataDir == "" {
 		dataDir = defaultMySQLDataDir
 	}
 	pkg := databaseProvider().DatabasePackage("")
+	var msg string
 	if mysqlDataDirExists() {
-		return fmt.Errorf("%s is already configured: database files in %s were kept by `package remove` (only the package was removed, not the data). Use `mysql reset-root-password`, or run `package remove %s --purge` and remove %s for a fresh install", databaseProvider().DatabaseDisplayName(), dataDir, pkg, dataDir)
+		msg = fmt.Sprintf("%s is already configured: database files in %s were kept by `package remove` (only the package was removed, not the data). Use `mysql reset-root-password`, or run `package remove %s --purge` and remove %s for a fresh install", databaseProvider().DatabaseDisplayName(), dataDir, pkg, dataDir)
+	} else {
+		msg = fmt.Sprintf("%s is already configured; use `mysql reset-root-password` if you have lost the root password", databaseProvider().DatabaseDisplayName())
 	}
-	return fmt.Errorf("%s is already configured; use `mysql reset-root-password` if you have lost the root password", databaseProvider().DatabaseDisplayName())
+	return &mysqlAlreadyConfiguredError{msg: msg}
 }
 
 func (s *Service) probeRootConnection(ctx context.Context) (rootConnectStatus, string) {

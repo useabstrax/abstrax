@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	executil "abstrax/internal/exec"
 	"abstrax/internal/platform"
 	"abstrax/internal/validate"
 )
@@ -41,11 +42,15 @@ type jobDefinition struct {
 // Service manages cron jobs.
 type Service struct {
 	cronDir string
+	runner  *executil.Runner
 }
 
 // New creates a Service.
 func New() *Service {
-	return &Service{cronDir: platform.Resolve().Paths().CronDir}
+	return &Service{
+		cronDir: platform.Resolve().Paths().CronDir,
+		runner:  executil.New(false, false),
+	}
 }
 
 // Add creates a new managed cron job.
@@ -275,33 +280,47 @@ func (s *Service) writeJob(path string, job *CronJob) error {
 }
 
 func buildCronCommand(job *CronJob) string {
+	return escapeCronPercent(commandScript(job, true))
+}
+
+// commandScript is the shell script cron would run. Redirects are included
+// only when the caller asks for the job's output settings.
+func commandScript(job *CronJob, redirects bool) string {
 	cmd := job.Command
 	if job.WorkingDir != "" {
 		cmd = "cd " + shellQuote(job.WorkingDir) + " && " + cmd
 	}
+	if redirects {
+		cmd += outputRedirect(job)
+	}
+	return cmd
+}
+
+func outputRedirect(job *CronJob) string {
 	switch {
 	case job.DiscardOutput:
-		cmd += " > /dev/null 2>&1"
+		return " > /dev/null 2>&1"
 	case job.Output != "" && job.ErrorOutput != "":
 		stdout, stderr := ">", "2>"
 		if job.AppendOutput {
 			stdout, stderr = ">>", "2>>"
 		}
-		cmd += " " + stdout + " " + shellQuote(job.Output) + " " + stderr + " " + shellQuote(job.ErrorOutput)
+		return " " + stdout + " " + shellQuote(job.Output) + " " + stderr + " " + shellQuote(job.ErrorOutput)
 	case job.Output != "":
 		op := ">"
 		if job.AppendOutput {
 			op = ">>"
 		}
-		cmd += " " + op + " " + shellQuote(job.Output) + " 2>&1"
+		return " " + op + " " + shellQuote(job.Output) + " 2>&1"
 	case job.ErrorOutput != "":
 		op := "2>"
 		if job.AppendOutput {
 			op = "2>>"
 		}
-		cmd += " " + op + " " + shellQuote(job.ErrorOutput)
+		return " " + op + " " + shellQuote(job.ErrorOutput)
+	default:
+		return ""
 	}
-	return escapeCronPercent(cmd)
 }
 
 func shellQuote(s string) string {

@@ -121,7 +121,8 @@ With --allow-firewall the new port is opened before sshd is reloaded. The previo
 					return err
 				},
 				func(ctx context.Context, port int) error {
-					return fw.RemovePort(ctx, fmt.Sprintf("%d", port), "tcp")
+					_, err := fw.RemovePort(ctx, fmt.Sprintf("%d", port), "tcp", firewall.GuardOptions{})
+					return err
 				},
 			)
 			result, err := svc.SetPort(cmd.Context(), sshcfg.SetPortOptions{
@@ -175,6 +176,9 @@ func newSSHConfigDisableRootLoginCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "disable-root-login",
 		Short: "Disable root SSH login",
+		Long: `Disable root SSH login.
+
+This writes PermitRootLogin no, which blocks root for every method, including SSH keys and passwords.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := requireRootAndSupported(); err != nil {
 				return err
@@ -189,20 +193,31 @@ func newSSHConfigDisableRootLoginCmd() *cobra.Command {
 }
 
 func newSSHConfigEnableRootLoginCmd() *cobra.Command {
-	return &cobra.Command{
+	var keysOnly bool
+	cmd := &cobra.Command{
 		Use:   "enable-root-login",
 		Short: "Enable root SSH login",
+		Long: `Enable root SSH login.
+
+This writes PermitRootLogin yes, which also allows password login when password authentication is on.
+--keys-only writes PermitRootLogin prohibit-password, so root can log in with an SSH key and not a password.
+ssh config disable-root-login writes no and blocks root for every method.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := requireRootAndSupported(); err != nil {
 				return err
 			}
 			svc := sshcfg.New(globals.Flags.DryRun, globals.Flags.Verbose)
-			if err := svc.EnableRootLogin(cmd.Context(), globals.Flags.DryRun); err != nil {
+			if err := svc.EnableRootLogin(cmd.Context(), sshcfg.EnableRootLoginOptions{
+				KeysOnly: keysOnly,
+				DryRun:   globals.Flags.DryRun,
+			}); err != nil {
 				return err
 			}
 			return printSimpleResult(actions.SSHConfigEnableRootLogin, "Root SSH login enabled.", nil)
 		},
 	}
+	cmd.Flags().BoolVar(&keysOnly, "keys-only", false, "Allow root login with SSH keys only (PermitRootLogin prohibit-password)")
+	return cmd
 }
 
 func newSSHConfigDisablePasswordAuthCmd() *cobra.Command {

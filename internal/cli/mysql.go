@@ -34,14 +34,22 @@ func NewMySQLCmd() *cobra.Command {
 
 	userCmd := &cobra.Command{Use: "user", Short: "Manage MySQL users"}
 	userCmd.AddCommand(newMySQLUserAddCmd())
+	userCmd.AddCommand(newMySQLUserPasswordCmd())
 	userCmd.AddCommand(newMySQLUserRemoveCmd())
 	userCmd.AddCommand(newMySQLUserListCmd())
 	userCmd.AddCommand(newMySQLUserInfoCmd())
 
+	remoteCmd := &cobra.Command{Use: "remote", Short: "Control whether MySQL accepts remote connections"}
+	remoteCmd.AddCommand(newMySQLRemoteEnableCmd())
+	remoteCmd.AddCommand(newMySQLRemoteDisableCmd())
+	remoteCmd.AddCommand(newMySQLRemoteStatusCmd())
+
 	cmd.AddCommand(cfgCmd)
 	cmd.AddCommand(dbCmd)
 	cmd.AddCommand(userCmd)
+	cmd.AddCommand(remoteCmd)
 	cmd.AddCommand(newMySQLTestCmd())
+	cmd.AddCommand(newMySQLStatusCmd())
 	cmd.AddCommand(newMySQLInstallCmd())
 	cmd.AddCommand(newMySQLResetRootPasswordCmd())
 	cmd.AddCommand(newMySQLGrantCmd())
@@ -128,6 +136,68 @@ func newMySQLTestCmd() *cobra.Command {
 			return printSimpleResult(actions.MySQLTest, "MySQL connection successful.", nil)
 		},
 	}
+}
+
+func newMySQLStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show MySQL / MariaDB installation and service status",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc := mysql.New(false, globals.Flags.Verbose)
+			st, err := svc.Status(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			if machineOutput() {
+				emitResult(output.Success(actions.MySQLStatus, "", st))
+				return nil
+			}
+
+			printMySQLStatus(st)
+			return nil
+		},
+	}
+}
+
+func printMySQLStatus(st *mysql.Status) {
+	p := printer()
+	installed := "no"
+	if st.Installed {
+		installed = "yes"
+	}
+	version := "-"
+	if st.Version != nil {
+		version = *st.Version
+	}
+
+	p.Line("")
+	p.Line("  %-12s %s", "Installed:", installed)
+	p.Line("  %-12s %s", "Engine:", st.Engine)
+	p.Line("  %-12s %s", "Version:", version)
+	if st.Service != "" {
+		p.Line("  %-12s %s", "Service:", st.Service)
+	}
+	if st.Active != nil {
+		p.Line("  %-12s %s", "Active:", statusYesNo(*st.Active))
+	}
+	if st.Enabled != nil {
+		p.Line("  %-12s %s", "Enabled:", statusYesNo(*st.Enabled))
+	}
+	if st.Port != nil {
+		p.Line("  %-12s %d", "Port:", *st.Port)
+	}
+	if st.Socket != "" {
+		p.Line("  %-12s %s", "Socket:", st.Socket)
+	}
+	p.Line("")
+}
+
+func statusYesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
 }
 
 func newMySQLInstallCmd() *cobra.Command {
@@ -271,6 +341,35 @@ func printUserAddResult(result *mysql.UserAddResult) error {
 		} else {
 			p.Success(summary)
 		}
+	} else {
+		p.Success(summary)
+	}
+
+	return nil
+}
+
+func printUserPasswordResult(result *mysql.UserPasswordResult) error {
+	summary := fmt.Sprintf("MySQL password updated for %s.", result.Name)
+	r := output.Success(actions.MySQLUserPassword, summary, result)
+
+	if machineOutput() {
+		emitResult(r)
+		return nil
+	}
+
+	p := printer()
+	if !globals.Flags.Quiet && result.Generated {
+		p.Line("")
+		p.Line("============================================================")
+		p.Line("  %s", summary)
+		p.Line("")
+		p.Line("  PASSWORD (save this now - shown only once):")
+		p.Line("")
+		p.Line("  %s", result.Password)
+		p.Line("")
+		p.Line("  Connect with: mysql -u %s -p", result.Name)
+		p.Line("============================================================")
+		p.Line("")
 	} else {
 		p.Success(summary)
 	}
@@ -454,6 +553,55 @@ func newMySQLUserAddCmd() *cobra.Command {
 	return cmd
 }
 
+func newMySQLUserPasswordCmd() *cobra.Command {
+	var host string
+	var passwordFlag bool
+
+	cmd := &cobra.Command{
+		Use:   "password <name>",
+		Short: "Change a MySQL user's password",
+		Long: `Set a new password for an existing MySQL or MariaDB user.
+
+With no --host, every host the user exists on is updated. --host localhost updates both localhost and 127.0.0.1. Any other --host updates only that account. Grants and the auth plugin are left unchanged.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			if err := validate.MySQLUsername(name); err != nil {
+				return err
+			}
+			if host != "" {
+				if err := validate.MySQLHost(host); err != nil {
+					return err
+				}
+			}
+
+			opts := mysql.UserPasswordOptions{
+				Name:   name,
+				Host:   host,
+				DryRun: globals.Flags.DryRun,
+			}
+			if passwordFlag {
+				pw, err := promptPassword(fmt.Sprintf("Password for %s: ", name))
+				if err != nil {
+					return err
+				}
+				opts.Password = pw
+			}
+
+			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			result, err := svc.UserPassword(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+			return printUserPasswordResult(result)
+		},
+	}
+
+	cmd.Flags().StringVar(&host, "host", "", "Host to update (default: every host the user exists on)")
+	cmd.Flags().BoolVar(&passwordFlag, "password", false, "Prompt for a password instead of generating one")
+	return cmd
+}
+
 func newMySQLUserRemoveCmd() *cobra.Command {
 	var host string
 
@@ -490,7 +638,7 @@ func newMySQLUserRemoveCmd() *cobra.Command {
 				fmt.Sprintf("MySQL user %s dropped.", name), nil)
 		},
 	}
-	cmd.Flags().StringVar(&host, "host", "localhost", "User host restriction")
+	cmd.Flags().StringVar(&host, "host", "localhost", "User host (localhost also drops 127.0.0.1)")
 	return cmd
 }
 
@@ -683,4 +831,131 @@ func newMySQLRevokeCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&host, "host", "", "User host (default: all hosts the user exists on)")
 	return cmd
+}
+
+func newMySQLRemoteEnableCmd() *cobra.Command {
+	bind := "0.0.0.0"
+	cmd := &cobra.Command{
+		Use:   "enable",
+		Short: "Allow MySQL to accept connections beyond loopback",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			if err := mysql.ValidateBindAddress(bind); err != nil {
+				return err
+			}
+
+			ok, err := confirm.Ask(remoteEnableWarning(bind), globals.Flags.Yes)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return nil
+			}
+
+			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			st, err := svc.EnableRemote(cmd.Context(), mysql.RemoteEnableOptions{
+				Bind:   bind,
+				DryRun: globals.Flags.DryRun,
+			})
+			if err != nil {
+				return err
+			}
+
+			summary := fmt.Sprintf("MySQL bind address set to %s. Allow port 3306 through the firewall if remote clients should connect.", st.BindAddress)
+			if globals.Flags.DryRun {
+				summary = fmt.Sprintf("Dry run: would write %s and restart the database. Nothing was changed.", st.ManagedFile)
+			}
+			return printRemoteStatus(actions.MySQLRemoteEnable, summary, st)
+		},
+	}
+	cmd.Flags().StringVar(&bind, "bind", "0.0.0.0", "IP address to bind (default 0.0.0.0)")
+	return cmd
+}
+
+func newMySQLRemoteDisableCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "disable",
+		Short: "Remove Abstrax's remote bind-address drop-in",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+
+			svc := mysql.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			st, err := svc.DisableRemote(cmd.Context(), mysql.RemoteDisableOptions{
+				DryRun: globals.Flags.DryRun,
+			})
+			if err != nil {
+				return err
+			}
+
+			summary := "MySQL remote drop-in removed."
+			if globals.Flags.DryRun {
+				summary = fmt.Sprintf("Dry run: would remove %s and restart the database. Nothing was changed.", st.ManagedFile)
+			} else if st.Note != "" {
+				summary = st.Note
+			} else if st.BindAddress != "" {
+				summary = fmt.Sprintf("MySQL is listening on %s.", st.BindAddress)
+			}
+			return printRemoteStatus(actions.MySQLRemoteDisable, summary, st)
+		},
+	}
+}
+
+func newMySQLRemoteStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show the bind address the database server is using",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc := mysql.New(false, globals.Flags.Verbose)
+			st, err := svc.RemoteStatus(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			summary := "MySQL is listening on loopback."
+			if st.BindAddress == "unknown" {
+				summary = "MySQL live bind address is unknown."
+			} else if st.Enabled {
+				summary = fmt.Sprintf("MySQL is listening on %s.", st.BindAddress)
+			}
+			if st.Note != "" {
+				summary = st.Note
+			}
+			return printRemoteStatus(actions.MySQLRemoteStatus, summary, st)
+		},
+	}
+}
+
+func remoteEnableWarning(bind string) string {
+	exposure := "exposes it on that address"
+	if bind == "0.0.0.0" || bind == "::" {
+		exposure = "exposes it to all interfaces"
+	}
+	return fmt.Sprintf("WARNING: Binding MySQL to %s %s. The firewall is not changed; you must allow port 3306 yourself. Continue?", bind, exposure)
+}
+
+func printRemoteStatus(action, summary string, st *mysql.RemoteStatus) error {
+	if machineOutput() {
+		emitResult(output.Success(action, summary, st))
+		return nil
+	}
+	p := printer()
+	p.Success(summary)
+	if globals.Flags.Quiet || st == nil {
+		return nil
+	}
+	enabled := "no"
+	if st.Enabled {
+		enabled = "yes"
+	}
+	p.Line("")
+	p.Line("  %-14s %s", "Enabled:", enabled)
+	p.Line("  %-14s %s", "Bind address:", st.BindAddress)
+	p.Line("  %-14s %s", "Managed file:", st.ManagedFile)
+	p.Line("  %-14s %d", "Port:", st.Port)
+	p.Line("")
+	return nil
 }
