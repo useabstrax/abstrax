@@ -51,9 +51,14 @@ func (s *Service) DisableRootLogin(ctx context.Context, dryRun bool) error {
 	return s.applyDirective(ctx, "PermitRootLogin", "no", dryRun)
 }
 
-// EnableRootLogin sets PermitRootLogin to yes.
-func (s *Service) EnableRootLogin(ctx context.Context, dryRun bool) error {
-	return s.applyDirective(ctx, "PermitRootLogin", "yes", dryRun)
+// EnableRootLogin sets PermitRootLogin to yes, or to prohibit-password when
+// KeysOnly is set. prohibit-password allows an SSH key and refuses a password.
+func (s *Service) EnableRootLogin(ctx context.Context, opts EnableRootLoginOptions) error {
+	value := "yes"
+	if opts.KeysOnly {
+		value = "prohibit-password"
+	}
+	return s.applyDirective(ctx, "PermitRootLogin", value, opts.DryRun)
 }
 
 // DisablePasswordAuth sets PasswordAuthentication to no.

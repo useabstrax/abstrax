@@ -29,6 +29,12 @@ type SetTimeoutOptions struct {
 	DryRun  bool
 }
 
+// EnableRootLoginOptions holds options for enabling root SSH login.
+type EnableRootLoginOptions struct {
+	KeysOnly bool
+	DryRun   bool
+}
+
 // SSHConfig holds the SSH settings sshd is using.
 type SSHConfig struct {
 	Port                      string `json:"port"`

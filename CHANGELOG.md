@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **Server timezone** - `server status` includes the zone name, abbreviation, and current UTC offset. Cron schedules and timestamps use this clock.
+- **`ssh config enable-root-login --keys-only`** - Writes `PermitRootLogin prohibit-password`, so root can log in with an SSH key and not a password. Without the flag, the command still writes `yes`. `ssh config disable-root-login` still writes `no` and blocks root for every method.
 
 ## [2.4.0] - 2026-10-30
 
