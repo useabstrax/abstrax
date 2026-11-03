@@ -26,6 +26,7 @@ func NewProjectCmd() *cobra.Command {
 	cmd.AddCommand(newProjectAddCmd())
 	cmd.AddCommand(newProjectRemoveCmd())
 	cmd.AddCommand(newProjectModifyCmd())
+	cmd.AddCommand(newProjectRuntimeCmd())
 	cmd.AddCommand(newProjectListCmd())
 	cmd.AddCommand(newProjectInfoCmd())
 	cmd.AddCommand(newProjectInspectCmd())
@@ -365,6 +366,106 @@ func splitDomains(s string) []string {
 		}
 	}
 	return domains
+}
+
+func newProjectRuntimeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "runtime",
+		Short: "Manage a project's runtime",
+	}
+	cmd.AddCommand(newProjectRuntimeSetCmd())
+	return cmd
+}
+
+func newProjectRuntimeSetCmd() *cobra.Command {
+	opts := project.SetRuntimeOptions{}
+	var phpFlag, nodeFlag, rubyFlag, staticFlag bool
+
+	cmd := &cobra.Command{
+		Use:   "set <name>",
+		Short: "Change a project's runtime (php, node, ruby or static)",
+		Long: "Change a project's runtime type. Exactly one of --php, --node, --ruby or --static is required.\n" +
+			"Settings that belong to the old runtime are cleared, the nginx vhost is regenerated, and an\n" +
+			"isolated project's PHP-FPM pool is created or removed to match.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.Name = args[0]
+			opts.DryRun = globals.Flags.DryRun
+			opts.Yes = globals.Flags.Yes
+
+			runtime, err := selectedRuntime(phpFlag, nodeFlag, rubyFlag, staticFlag)
+			if err != nil {
+				return err
+			}
+			opts.Runtime = runtime
+
+			if err := validate.ProjectName(opts.Name); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+
+			if !opts.DryRun && !opts.Yes {
+				ok, err := confirm.Ask(
+					fmt.Sprintf("Change runtime of project %q to %s?", opts.Name, runtime),
+					globals.Flags.Yes,
+				)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
+			}
+
+			svc := project.New(opts.DryRun, globals.Flags.Verbose)
+			state, err := svc.SetRuntime(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+
+			return printSimpleResult(actions.ProjectRuntimeSet,
+				fmt.Sprintf("Project %s runtime set to %s.", opts.Name, state.Runtime), state)
+		},
+	}
+
+	cmd.Flags().BoolVar(&phpFlag, "php", false, "Switch to PHP")
+	cmd.Flags().BoolVar(&nodeFlag, "node", false, "Switch to Node.js")
+	cmd.Flags().BoolVar(&rubyFlag, "ruby", false, "Switch to Ruby")
+	cmd.Flags().BoolVar(&staticFlag, "static", false, "Switch to a static site")
+	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "", "PHP version (with --php)")
+	cmd.Flags().StringVar(&opts.NodeVersion, "node-version", "", "Node.js version (with --node)")
+	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", "", "Ruby version (with --ruby)")
+	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory relative to the project path (php, static)")
+	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy to this local port (node, ruby)")
+
+	return cmd
+}
+
+// selectedRuntime returns the one runtime chosen by the selector flags.
+func selectedRuntime(php, node, ruby, static bool) (project.Runtime, error) {
+	var chosen []project.Runtime
+	if php {
+		chosen = append(chosen, project.RuntimePHP)
+	}
+	if node {
+		chosen = append(chosen, project.RuntimeNode)
+	}
+	if ruby {
+		chosen = append(chosen, project.RuntimeRuby)
+	}
+	if static {
+		chosen = append(chosen, project.RuntimeStatic)
+	}
+	switch len(chosen) {
+	case 1:
+		return chosen[0], nil
+	case 0:
+		return "", fmt.Errorf("choose a runtime with exactly one of --php, --node, --ruby or --static")
+	default:
+		return "", fmt.Errorf("choose only one of --php, --node, --ruby or --static")
+	}
 }
 
 func newProjectListCmd() *cobra.Command {

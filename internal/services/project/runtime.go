@@ -82,7 +82,11 @@ func (s *Service) ensureRuntime(ctx context.Context, spec RuntimeSpec, yes, dryR
 		return nil
 	}
 
-	if spec.Installed() {
+	installed := spec.Installed
+	if s.runtimeInstalled != nil {
+		installed = func() bool { return s.runtimeInstalled(spec) }
+	}
+	if installed() {
 		return nil
 	}
 
