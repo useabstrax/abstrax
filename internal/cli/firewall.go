@@ -49,6 +49,8 @@ func NewFirewallCmd() *cobra.Command {
 	cmd.AddCommand(newFirewallDenyCmd())
 	cmd.AddCommand(newFirewallAllowIPCmd())
 	cmd.AddCommand(newFirewallDenyIPCmd())
+	cmd.AddCommand(newFirewallDefaultsCmd())
+	cmd.AddCommand(newFirewallPingCmd())
 	cmd.AddCommand(ruleCmd)
 	cmd.AddCommand(removeCmd)
 
@@ -61,7 +63,7 @@ func newFirewallStatusCmd() *cobra.Command {
 		Short: "Show firewall status",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc := firewall.New(false, globals.Flags.Verbose)
-			status, err := svc.GetStatus(cmd.Context())
+			status, err := svc.StatusWithDefaults(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -79,6 +81,7 @@ func newFirewallStatusCmd() *cobra.Command {
 			p.Line("")
 			p.Line("  %-12s %s", "Firewall:", status.Backend)
 			p.Line("  %-12s %s", "Status:", active)
+			printFirewallDefaults(p, status.Defaults)
 			if len(status.Rules) > 0 {
 				p.Line("")
 				p.Line("  Rules:")
@@ -94,6 +97,18 @@ func newFirewallStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func printFirewallDefaults(p *output.Printer, d *firewall.Defaults) {
+	if d == nil {
+		return
+	}
+	p.Line("  %-12s %s", "Incoming:", d.Incoming)
+	p.Line("  %-12s %s", "Outgoing:", d.Outgoing)
+	if d.Routed != "" {
+		p.Line("  %-12s %s", "Routed:", d.Routed)
+	}
+	p.Line("  %-12s %s", "Ping:", d.Ping)
 }
 
 func newFirewallInstallCmd() *cobra.Command {

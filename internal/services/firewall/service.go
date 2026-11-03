@@ -21,6 +21,13 @@ type Service struct {
 	// sshPort, when set, supplies the SSH port instead of reading sshd config.
 	// Tests set it so they do not touch the real sshd configuration.
 	sshPort func() (int, error)
+	// dryRun stops UFW file edits. The runner has its own dry-run flag.
+	dryRun bool
+	// UFW file locations. Empty means the system paths. Tests set them to
+	// temporary files.
+	ufwBeforeRules  string
+	ufwBefore6Rules string
+	ufwDefaultFile  string
 }
 
 // New creates a Service with automatic backend detection.
@@ -28,6 +35,7 @@ func New(dryRun, verbose bool) *Service {
 	return &Service{
 		runner:  executil.New(dryRun, verbose),
 		backend: detectBackend(),
+		dryRun:  dryRun,
 	}
 }
 
@@ -146,6 +154,19 @@ func (s *Service) GetStatus(ctx context.Context) (*Status, error) {
 		return s.firewalldStatus(ctx)
 	}
 	return s.ufwStatus(ctx)
+}
+
+// StatusWithDefaults returns the status including the default policy.
+// A defaults read failure leaves Defaults unset instead of failing the status.
+func (s *Service) StatusWithDefaults(ctx context.Context) (*Status, error) {
+	status, err := s.GetStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if defaults, err := s.Defaults(ctx); err == nil {
+		status.Defaults = defaults
+	}
+	return status, nil
 }
 
 func (s *Service) ufwStatus(ctx context.Context) (*Status, error) {

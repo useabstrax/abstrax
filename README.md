@@ -159,6 +159,21 @@ Removing the last rule that allows TCP to the SSH port is refused while the fire
 
 `firewall allow`, `deny`, `allow-ip`, and `deny-ip` allow your current client IP on the SSH port only in an interactive SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `who`). From a script, that protection does nothing.
 
+### Firewall defaults and ping
+
+`firewall defaults` shows the default incoming and outgoing policy, the routed policy on UFW, and whether inbound ping is allowed. `firewall status --json` includes the same values in a `defaults` object.
+
+```bash
+abstrax firewall defaults --json
+sudo abstrax firewall defaults set --incoming deny
+sudo abstrax firewall defaults set --incoming reject --outgoing allow
+sudo abstrax firewall ping block
+```
+
+`--incoming` takes `deny`, `reject`, or `allow`; `--outgoing` takes `allow`, `deny`, or `reject` and works on UFW only. On firewalld, the incoming policy is the target of the default zone (`DROP` is `deny`) and `--outgoing` is refused. `--incoming allow` asks for confirmation; pass `--yes` in scripts. `--incoming deny` or `reject` is refused while the firewall is active and no rule allows TCP to the SSH port, unless the policy already blocks incoming traffic. Pass `--force` to apply it anyway.
+
+`firewall ping allow|block` switches the echo-request rules in `/etc/ufw/before.rules` and `before6.rules` on UFW (keeping a `.bak` of each changed file and reloading UFW), or the `echo-request` ICMP block in the default zone on firewalld.
+
 ### Cron jobs
 
 `cron add` stores the command, working directory, and output redirect as separate fields. `cron info` and `cron list --json` return `working_dir`, `output`, `error_output`, `append_output`, and `discard_output` on their own, so `cron modify --command` does not drop or wrap them.

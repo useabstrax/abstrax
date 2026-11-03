@@ -145,6 +145,9 @@ const (
 	FirewallRuleRm        = "firewall.rule.remove"
 	FirewallRemoveService = "firewall.remove.service"
 	FirewallRemovePort    = "firewall.remove.port"
+	FirewallDefaults      = "firewall.defaults"
+	FirewallDefaultsSet   = "firewall.defaults.set"
+	FirewallPing          = "firewall.ping"
 
 	// Repository actions.
 	RepoEnable = "repo.enable"
