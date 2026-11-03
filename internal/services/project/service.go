@@ -605,7 +605,9 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 		sb.WriteString("    }\n")
 		sb.WriteString("}\n")
 	} else {
-		writeServerBody(&sb, opts, root, logLines)
+		if err := writeServerBody(&sb, opts, root, logLines); err != nil {
+			return "", err
+		}
 		sb.WriteString("}\n")
 	}
 
@@ -614,7 +616,9 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 		sb.WriteString("    listen 443 ssl;\n")
 		sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
 		writeTLSDirectives(&sb, opts)
-		writeServerBody(&sb, opts, root, logLines)
+		if err := writeServerBody(&sb, opts, root, logLines); err != nil {
+			return "", err
+		}
 		sb.WriteString("}\n")
 	}
 
@@ -622,11 +626,18 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 }
 
 // writeServerBody writes root, index, logs, and runtime locations for a server block.
-func writeServerBody(sb *strings.Builder, opts vhostConfig, root, logLines string) {
+func writeServerBody(sb *strings.Builder, opts vhostConfig, root, logLines string) error {
 	sb.WriteString(fmt.Sprintf("    root %s;\n", root))
 	sb.WriteString("    index index.html index.htm index.php;\n")
 	sb.WriteString(logLines)
 	sb.WriteString("\n")
+
+	// Redirects come first so they win over the runtime locations below.
+	redirects, err := renderRedirects(opts.Redirects)
+	if err != nil {
+		return err
+	}
+	sb.WriteString(redirects)
 
 	switch opts.Runtime {
 	case RuntimePHP:
@@ -671,6 +682,7 @@ func writeServerBody(sb *strings.Builder, opts vhostConfig, root, logLines strin
 		sb.WriteString("        try_files $uri $uri/ =404;\n")
 		sb.WriteString("    }\n")
 	}
+	return nil
 }
 
 func loadApprovedRoots() ([]string, error) {

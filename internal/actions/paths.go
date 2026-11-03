@@ -184,4 +184,9 @@ var commandPaths = map[string][]string{
 	ProjectInspect:        {"project", "inspect"},
 	ProjectServiceRestart: {"project", "service", "restart"},
 	ProjectServiceReload:  {"project", "service", "reload"},
+
+	ProjectRedirectList:   {"project", "redirect", "list"},
+	ProjectRedirectAdd:    {"project", "redirect", "add"},
+	ProjectRedirectModify: {"project", "redirect", "modify"},
+	ProjectRedirectRemove: {"project", "redirect", "remove"},
 }

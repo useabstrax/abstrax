@@ -26,6 +26,7 @@ type vhostConfig struct {
 	// SSLOptionsPath and SSLDHParamPath are included when the files exist.
 	SSLOptionsPath string
 	SSLDHParamPath string
+	Redirects      []Redirect
 }
 
 func vhostOptionsFromAdd(opts AddOptions, state *State, paths *ValidatedPaths) vhostConfig {
@@ -65,5 +66,6 @@ func (s *State) vhostConfig() vhostConfig {
 		PHPSocket:   phpSocketForState(s),
 		SharedLogs:  s.SharedLogs,
 		SSL:         s.EffectiveSSL(),
+		Redirects:   s.Redirects,
 	}
 }

@@ -30,6 +30,7 @@ func NewProjectCmd() *cobra.Command {
 	cmd.AddCommand(newProjectInfoCmd())
 	cmd.AddCommand(newProjectInspectCmd())
 	cmd.AddCommand(newProjectServiceCmd())
+	cmd.AddCommand(newProjectRedirectCmd())
 	cmd.AddCommand(newProjectEnableCmd())
 	cmd.AddCommand(newProjectDisableCmd())
 	cmd.AddCommand(newProjectReloadCmd())
@@ -456,6 +457,9 @@ func newProjectInfoCmd() *cobra.Command {
 			p.Line("  %-14s %s", "SSL:", ssl)
 			if state.VhostPath != "" {
 				p.Line("  %-14s %s", "Vhost:", state.VhostPath)
+			}
+			if len(state.Redirects) > 0 {
+				p.Line("  %-14s %d (see: project redirect list %s)", "Redirects:", len(state.Redirects), state.Name)
 			}
 			if state.AccessLogPath != "" {
 				p.Line("  %-14s %s", "Access log:", state.AccessLogPath)

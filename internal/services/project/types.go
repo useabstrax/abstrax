@@ -130,6 +130,7 @@ type State struct {
 	PHPPoolName   string           `json:"php_pool_name,omitempty"`
 	PHPSocketPath string           `json:"php_socket_path,omitempty"`
 	Services      []ProjectService `json:"services,omitempty"`
+	Redirects     []Redirect       `json:"redirects,omitempty"`
 	CreatedAt     time.Time        `json:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at"`
 }
@@ -189,4 +190,12 @@ func (s SSLState) MarshalJSON() ([]byte, error) {
 		out.ExpiresAt = &t
 	}
 	return json.Marshal(out)
+}
+
+// Redirect is a path redirect rendered into the project's nginx vhost.
+type Redirect struct {
+	ID          string `json:"id"`
+	Source      string `json:"source"`      // exact path, starts with /
+	Destination string `json:"destination"` // absolute http(s) URL or path
+	Code        int    `json:"code"`        // 301, 302, 307, or 308
 }
