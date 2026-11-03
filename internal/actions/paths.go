@@ -62,6 +62,10 @@ var commandPaths = map[string][]string{
 	PackageInfo:     {"package", "info"},
 	PackageList:     {"package", "list"},
 
+	PackageAutoUpdatesStatus:  {"package", "auto-updates", "status"},
+	PackageAutoUpdatesEnable:  {"package", "auto-updates", "enable"},
+	PackageAutoUpdatesDisable: {"package", "auto-updates", "disable"},
+
 	ServiceStart:   {"service", "start"},
 	ServiceStop:    {"service", "stop"},
 	ServiceRestart: {"service", "restart"},

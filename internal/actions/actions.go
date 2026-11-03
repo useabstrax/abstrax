@@ -47,6 +47,10 @@ const (
 	PackageInfo     = "package.info"
 	PackageList     = "package.list"
 
+	PackageAutoUpdatesStatus  = "package.auto-updates.status"
+	PackageAutoUpdatesEnable  = "package.auto-updates.enable"
+	PackageAutoUpdatesDisable = "package.auto-updates.disable"
+
 	// Service (systemd) actions.
 	ServiceStart   = "service.start"
 	ServiceStop    = "service.stop"

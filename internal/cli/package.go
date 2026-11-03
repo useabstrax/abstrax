@@ -27,6 +27,7 @@ func NewPackageCmd() *cobra.Command {
 	cmd.AddCommand(newPkgSearchCmd())
 	cmd.AddCommand(newPkgInfoCmd())
 	cmd.AddCommand(newPkgListCmd())
+	cmd.AddCommand(newPkgAutoUpdatesCmd())
 
 	return cmd
 }
