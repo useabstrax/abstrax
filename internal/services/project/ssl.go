@@ -183,7 +183,7 @@ func (s *Service) SetRunner(r *executil.Runner) {
 
 // RenderVhost rewrites the project's nginx vhost from its state, including TLS
 // when the project has SSL enabled. It validates with nginx -t and reloads. On
-// failure the previous vhost is restored. Projects without an nginx vhost are
+// failure the previous vhost is restored. A disabled vhost stays disabled. Projects without an nginx vhost are
 // left alone.
 func (s *Service) RenderVhost(ctx context.Context, state *State) error {
 	if state == nil {
@@ -192,7 +192,8 @@ func (s *Service) RenderVhost(ctx context.Context, state *State) error {
 	if state.WebServer != WebServerNginx || state.VhostPath == "" {
 		return nil
 	}
-	vhostPath, err := s.createNginxVhost(ctx, state.vhostConfig())
+	// A vhost turned off with Disable stays off when it is rewritten.
+	vhostPath, err := s.writeNginxVhost(ctx, state.vhostConfig(), state.VhostDisabled)
 	if err != nil {
 		return err
 	}

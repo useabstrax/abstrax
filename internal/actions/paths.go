@@ -189,4 +189,6 @@ var commandPaths = map[string][]string{
 	ProjectRedirectAdd:    {"project", "redirect", "add"},
 	ProjectRedirectModify: {"project", "redirect", "modify"},
 	ProjectRedirectRemove: {"project", "redirect", "remove"},
+	ProjectVhostAdd:       {"project", "vhost", "add"},
+	ProjectVhostRemove:    {"project", "vhost", "remove"},
 }

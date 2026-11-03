@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **`project redirect`** - `project redirect list|add|modify|remove` manages exact-path redirects for a project (`project.redirect.list`, `.add`, `.modify`, `.remove`). `add <project> <source> <destination> [--code]` takes a source path starting with `/`, a destination that is a path or an absolute `http(s)` URL, and a status code of 301 (default), 302, 307, or 308. Each redirect has a short ID shown by `list`; `modify` and `remove` take that ID. Redirects are stored in the project state and written as `location = <source> { return <code> <destination>; }` blocks ahead of the runtime locations in the managed nginx vhost, sorted by ID, so `project modify` keeps them. The project needs a managed nginx vhost. Sources and destinations containing whitespace, quotes, `;`, braces, backslashes, or `$` are rejected. The vhost is written before state is saved, and a vhost that nginx rejects is rolled back to its previous contents.
-
+- **`project vhost add` and `project vhost remove`** - `project vhost add <name>` creates an nginx vhost for a project that has none, such as one added with `--no-vhost`. `--domains`, `--port`, and `--web-root` override the stored values. `project vhost remove <name>` deletes the vhost (and its `.disabled` copy), clears `vhost_path` and `ssl_enabled`, reloads nginx, and keeps the project files and state. Registered as `project.vhost.add` and `project.vhost.remove`. The result is the updated project state.
 - **SSL state on projects** - `project info` and the project state file return an `ssl` object with `certificate_name`, `domains`, `redirect_http`, `staging`, `issued_at`, `expires_at`, and `last_error`. `ssl_enabled` is still written. A project that only has `ssl_enabled` is adopted the first time Abstrax needs its certificate name: the name comes from the `ssl_certificate` path in the existing vhost, then from the first domain.
 - **`ssl status` fields** - Each entry reports `project_name` (the real project name), `certificate_name`, `expiry` (RFC3339), `days_remaining`, `redirect_http`, `staging`, and `status` (`valid`, `expiring` within 30 days, `expired`, or `missing`). Status is read from project state and the certificate under `/etc/letsencrypt/live`. `certbot certificates` output is only a fallback, and also lists certificates no project owns.
 
@@ -20,13 +20,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`ssl remove`** - Rewrites the vhost without HTTPS and runs `nginx -t` before `certbot delete`, then clears the stored SSL state. If nginx rejects the vhost, the certificate is left alone. If `certbot delete` fails, HTTPS is put back.
 - **`ssl renew`** - Uses the stored certificate name, reloads nginx, and refreshes `ssl.expires_at`.
 - **Project vhosts** - The nginx vhost renders an HTTPS server (`listen 443 ssl`) for projects with SSL enabled, with an HTTP server that redirects when `redirect_http` is true. A failed vhost rewrite restores the previous file.
+- **`project enable` and `project disable`** - Store the choice as `vhost_disabled` in the project state. `project modify` keeps a disabled vhost disabled when it rewrites the file, and previously turned it back on.
+- **Vhost rewrites** - `project modify` and `project vhost add` restore the previous vhost file when `nginx -t` rejects the new one. On Debian-family systems the new file is now enabled before `nginx -t` runs, so the test checks it.
+- **Project state** - `project add` stores `port` and `web_root`, so a later vhost rewrite keeps them.
 
 ### Fixed
 
 - **`--action` / `--payload` booleans** - A JSON `false` value now encodes as `--key=false` instead of being dropped. Agents can turn off default-true flags such as `shared-logs` and `redirect-http`. Boolean `true` still emits a bare `--key`.
 - **`project modify` side effects** - The runtime install check runs only when the active runtime's version or the runtime changes. The nginx vhost is rewritten and reloaded only when a value that appears in it changed. Previously every `project modify` did both.
 - **`project modify` removing HTTPS** - Rewriting the vhost dropped the certbot-added HTTPS server, so a modified project silently lost SSL. The vhost is now rendered from stored SSL state, so HTTPS stays in place.
-
 
 ## [3.0.0] - 2026-11-02
 

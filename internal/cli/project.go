@@ -31,6 +31,7 @@ func NewProjectCmd() *cobra.Command {
 	cmd.AddCommand(newProjectInspectCmd())
 	cmd.AddCommand(newProjectServiceCmd())
 	cmd.AddCommand(newProjectRedirectCmd())
+	cmd.AddCommand(newProjectVhostCmd())
 	cmd.AddCommand(newProjectEnableCmd())
 	cmd.AddCommand(newProjectDisableCmd())
 	cmd.AddCommand(newProjectReloadCmd())
@@ -577,6 +578,78 @@ func newProjectServiceReloadCmd() *cobra.Command {
 			}
 			return printSimpleResult(actions.ProjectServiceReload,
 				fmt.Sprintf("Reloaded service %s for project %s.", args[1], args[0]), nil)
+		},
+	}
+}
+
+func newProjectVhostCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "vhost",
+		Short: "Add or remove a project's nginx vhost",
+	}
+	cmd.AddCommand(newProjectVhostAddCmd())
+	cmd.AddCommand(newProjectVhostRemoveCmd())
+	return cmd
+}
+
+func newProjectVhostAddCmd() *cobra.Command {
+	var opts project.AddVhostOptions
+	var domainsStr string
+
+	cmd := &cobra.Command{
+		Use:   "add <name>",
+		Short: "Add an nginx vhost to a project that has none",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.Name = args[0]
+			if err := validate.ProjectName(opts.Name); err != nil {
+				return err
+			}
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			if domainsStr != "" {
+				opts.Domains = strings.Split(domainsStr, ",")
+				for i, d := range opts.Domains {
+					opts.Domains[i] = strings.TrimSpace(d)
+					if err := validate.Domain(opts.Domains[i]); err != nil {
+						return err
+					}
+				}
+			}
+			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			state, err := svc.AddVhost(cmd.Context(), opts)
+			if err != nil {
+				return err
+			}
+			return printSimpleResult(actions.ProjectVhostAdd,
+				fmt.Sprintf("Added vhost to project %s.", opts.Name), state)
+		},
+	}
+
+	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names (default: the project's stored domains)")
+	cmd.Flags().IntVar(&opts.Port, "port", 0, "HTTP port (default: the project's stored port, or 80)")
+	cmd.Flags().StringVar(&opts.WebRoot, "web-root", "", "Custom web root directory inside the project path")
+
+	return cmd
+}
+
+func newProjectVhostRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <name>",
+		Short: "Remove a project's nginx vhost and keep the project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			svc := project.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			state, err := svc.RemoveVhost(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return printSimpleResult(actions.ProjectVhostRemove,
+				fmt.Sprintf("Removed vhost from project %s.", args[0]), state)
 		},
 	}
 }

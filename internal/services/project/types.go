@@ -57,6 +57,15 @@ type AddOptions struct {
 	Progress     func(step, message string)
 }
 
+// AddVhostOptions holds options for adding an nginx vhost to an existing project.
+// Zero values keep what the project state already stores.
+type AddVhostOptions struct {
+	Name    string
+	Domains []string
+	Port    int
+	WebRoot string
+}
+
 // RemoveOptions holds options for removing a project.
 type RemoveOptions struct {
 	Name          string
@@ -104,19 +113,27 @@ type ModifyOptions struct {
 
 // State holds persisted project state.
 type State struct {
-	Name          string           `json:"name"`
-	Path          string           `json:"path"`
-	Domains       []string         `json:"domains"`
-	WebServer     WebServer        `json:"web_server"`
-	Runtime       Runtime          `json:"runtime"`
-	PHPVersion    string           `json:"php_version,omitempty"`
-	NodeVersion   string           `json:"node_version,omitempty"`
-	RubyVersion   string           `json:"ruby_version,omitempty"`
-	PublicDir     string           `json:"public_dir,omitempty"`
-	ProxyPort     int              `json:"proxy_port,omitempty"`
-	SSLEnabled    bool             `json:"ssl_enabled"`
-	SSL           *SSLState        `json:"ssl,omitempty"`
-	VhostPath     string           `json:"vhost_path"`
+	Name        string    `json:"name"`
+	Path        string    `json:"path"`
+	Domains     []string  `json:"domains"`
+	WebServer   WebServer `json:"web_server"`
+	Runtime     Runtime   `json:"runtime"`
+	PHPVersion  string    `json:"php_version,omitempty"`
+	NodeVersion string    `json:"node_version,omitempty"`
+	RubyVersion string    `json:"ruby_version,omitempty"`
+	PublicDir   string    `json:"public_dir,omitempty"`
+	ProxyPort   int       `json:"proxy_port,omitempty"`
+	SSLEnabled  bool      `json:"ssl_enabled"`
+	SSL         *SSLState `json:"ssl,omitempty"`
+	VhostPath   string    `json:"vhost_path"`
+	// VhostDisabled records that the vhost was turned off with Disable. False or
+	// absent means the vhost is enabled whenever VhostPath is set.
+	VhostDisabled bool `json:"vhost_disabled,omitempty"`
+	// Port and WebRoot are the listen port and document root override the vhost
+	// was created with. A zero Port means 80. An empty WebRoot means the project
+	// path (or its public directory).
+	Port          int              `json:"port,omitempty"`
+	WebRoot       string           `json:"web_root,omitempty"`
 	SharedLogs    bool             `json:"shared_logs,omitempty"`
 	AccessLogPath string           `json:"access_log_path,omitempty"`
 	ErrorLogPath  string           `json:"error_log_path,omitempty"`
