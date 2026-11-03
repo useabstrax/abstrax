@@ -151,6 +151,9 @@ var commandPaths = map[string][]string{
 	FirewallRuleRm:        {"firewall", "rule", "remove"},
 	FirewallRemoveService: {"firewall", "remove", "service"},
 	FirewallRemovePort:    {"firewall", "remove", "port"},
+	FirewallDefaults:      {"firewall", "defaults"},
+	FirewallDefaultsSet:   {"firewall", "defaults", "set"},
+	FirewallPing:          {"firewall", "ping"},
 
 	RepoEnable: {"repo", "enable"},
 

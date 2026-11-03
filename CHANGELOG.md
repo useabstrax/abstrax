@@ -4,6 +4,15 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`firewall defaults`** - Shows the default firewall policy as `{backend, defaults}`: `defaults.incoming` and `defaults.outgoing` (`allow`, `deny`, or `reject`), `defaults.routed` (UFW only, for example `disabled`), and `defaults.ping` (`allow` or `block`; `mixed` if the IPv4 and IPv6 rules disagree, `unknown` if it cannot be read). On UFW it reads `ufw status verbose`, and `/etc/default/ufw` while UFW is inactive. On firewalld it reads the target of the default zone: `default` and `REJECT` are `reject`, `DROP` is `deny`, and `ACCEPT` is `allow`. firewalld reports `outgoing` as `allow`. Registered as `firewall.defaults`.
+- **`firewall defaults set`** - `firewall defaults set --incoming deny|reject|allow [--outgoing allow|deny|reject]` runs `ufw default <policy> incoming|outgoing` on UFW, or sets the default zone target (`DROP`, `%%REJECT%%`, `ACCEPT`) and reloads on firewalld. `--outgoing` is refused on firewalld. `--incoming allow` warns and asks for confirmation (`--yes` skips it). `--incoming deny` or `reject` is refused while the firewall is active and no rule allows TCP to the SSH port, unless the policy already blocks incoming traffic. `--force` applies it anyway; `--yes` does not. Successful `--json` output includes `ssh_check` when the check ran. Registered as `firewall.defaults.set`.
+- **`firewall ping`** - `firewall ping allow|block` controls inbound ping (ICMP echo requests). On UFW it switches the INPUT `echo-request` rules in `/etc/ufw/before.rules` and `before6.rules` between `ACCEPT` and `DROP`, writes a `.bak` of each changed file, reloads UFW, and restores the files if the reload fails. On firewalld it adds or removes the `echo-request` ICMP block in the default zone and reloads. Registered as `firewall.ping`.
+- **`firewall status` defaults** - `firewall status --json` includes a `defaults` object with the same fields as `firewall defaults`. It is omitted if the defaults cannot be read.
+
 ## [3.1.0] - 2026-11-03
 
 ### Added
