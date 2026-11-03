@@ -115,8 +115,7 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 		return nil, fmt.Errorf("php-fpm configuration test failed: %s", msg)
 	}
 
-	svc := svcmanager.New(s.dryRun, false)
-	if err := svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion))); err != nil {
+	if err := s.reloadPHPFPM(ctx, state.PHPVersion); err != nil {
 		_ = os.Remove(conf.ConfigPath)
 		return nil, fmt.Errorf("reloading php-fpm: %w", err)
 	}
@@ -132,8 +131,7 @@ func (s *Service) removePHPPool(ctx context.Context, state *State) error {
 	}
 	_ = os.Remove(state.PHPPoolPath())
 	if state.PHPVersion != "" {
-		svc := svcmanager.New(s.dryRun, false)
-		_ = svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(state.PHPVersion)))
+		_ = s.reloadPHPFPM(ctx, state.PHPVersion)
 	}
 	_ = os.Remove(state.PHPSocketPath)
 	return nil
@@ -157,6 +155,9 @@ func phpSocketForState(state *State) string {
 }
 
 func (s *Service) reloadPHPFPM(ctx context.Context, phpVersion string) error {
+	if s.phpfpmReloader != nil {
+		return s.phpfpmReloader(ctx, normalizePHPVersion(phpVersion))
+	}
 	svc := svcmanager.New(s.dryRun, false)
 	return svc.Reload(ctx, platformProvider.PHPFPMServiceName(normalizePHPVersion(phpVersion)))
 }

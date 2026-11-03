@@ -196,4 +196,7 @@ const (
 	// Project vhost actions.
 	ProjectVhostAdd    = "project.vhost.add"
 	ProjectVhostRemove = "project.vhost.remove"
+
+	// Project runtime actions.
+	ProjectRuntimeSet = "project.runtime.set"
 )

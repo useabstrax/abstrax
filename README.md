@@ -234,6 +234,10 @@ Locking does not end sessions that are already open. `user logout <name> --all` 
 
 Each project nginx virtual host logs to `/var/log/nginx/<project>-access.log` and `/var/log/nginx/<project>-error.log`. `project info` and `project inspect` show those paths. `project add --shared-logs` and `project modify --shared-logs` keep the server-wide nginx logs instead. That choice is remembered, so a later `project modify` does not switch it unless you pass the flag again. Existing virtual hosts stay as they are until the next `project modify`. `project remove` keeps the log files; `project remove --delete-files` deletes them.
 
+### Project runtime
+
+`project runtime set <name> --php|--node|--ruby|--static` changes a project's runtime. Settings from the old runtime are cleared, the nginx vhost is regenerated, and a user-isolated project's PHP-FPM pool is created or removed to match. If `nginx -t` rejects the new vhost, the old one is restored. `--dry-run` previews the result.
+
 ### PHP projects
 
 When multiple PHP versions are installed on a server, use the versioned CLI binary (`php8.5`, `php8.4`, and so on) for Artisan, Composer, cron jobs, and daemons - not the unversioned `php` command. Abstrax routes web requests to the correct PHP-FPM version per project, but CLI commands do not switch automatically. See [Projects](https://useabstrax.com/docs/commands/projects#php-on-the-command-line).

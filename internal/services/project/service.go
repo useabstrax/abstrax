@@ -36,6 +36,12 @@ type Service struct {
 	// nginxInstalled reports whether nginx is installed. Nil uses web.Installed.
 	// Tests set this so they do not depend on the host.
 	nginxInstalled func() bool
+	// phpfpmReloader reloads the PHP-FPM service for a version. Nil uses the
+	// system service manager. Tests set it to avoid touching real services.
+	phpfpmReloader func(ctx context.Context, phpVersion string) error
+	// runtimeInstalled overrides the runtime availability check. Nil uses the
+	// real package and binary checks. Tests set it.
+	runtimeInstalled func(RuntimeSpec) bool
 }
 
 // New creates a Service.
