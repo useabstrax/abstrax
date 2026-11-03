@@ -262,58 +262,28 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 }
 
 // Modify updates project configuration.
+//
+// Fields are applied from opts.Changed, not from zero-value checks, so a
+// changed flag with an empty value clears the stored field. See applyModify.
 func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error) {
 	state, err := s.loadState(opts.Name)
 	if err != nil {
 		return nil, fmt.Errorf("project %q not found", opts.Name)
 	}
 
-	if err := s.ensureRuntime(ctx, runtimeSpecFromState(state, opts), opts.Yes, opts.DryRun, nil); err != nil {
+	before := state.vhostConfig()
+	if err := s.applyModify(ctx, state, opts); err != nil {
 		return nil, err
 	}
 
-	if opts.Path != "" {
-		state.Path = opts.Path
-	}
-	if len(opts.Domains) > 0 {
-		state.Domains = opts.Domains
-	}
-	if opts.AddDomain != "" {
-		state.Domains = append(state.Domains, opts.AddDomain)
-	}
-	if opts.RemoveDomain != "" {
-		var domains []string
-		for _, d := range state.Domains {
-			if d != opts.RemoveDomain {
-				domains = append(domains, d)
-			}
+	if modifyTouchesRuntime(state, opts) {
+		if err := s.ensureRuntime(ctx, runtimeSpecFromState(state), opts.Yes, opts.DryRun, nil); err != nil {
+			return nil, err
 		}
-		state.Domains = domains
-	}
-	if opts.Runtime != "" {
-		state.Runtime = opts.Runtime
-	}
-	if opts.PHPVersion != "" {
-		state.PHPVersion = normalizePHPVersion(opts.PHPVersion)
-	}
-	if opts.NodeVersion != "" {
-		state.NodeVersion = normalizeNodeVersion(opts.NodeVersion)
-	}
-	if opts.RubyVersion != "" {
-		state.RubyVersion = normalizeRubyVersion(opts.RubyVersion)
-	}
-	if opts.PublicDir != "" {
-		state.PublicDir = opts.PublicDir
-	}
-	if opts.ProxyPort != 0 {
-		state.ProxyPort = opts.ProxyPort
-	}
-	if opts.SharedLogs != nil {
-		state.SharedLogs = *opts.SharedLogs
 	}
 	state.UpdatedAt = time.Now()
 
-	if state.VhostPath != "" && state.WebServer == WebServerNginx {
+	if state.VhostPath != "" && state.WebServer == WebServerNginx && !vhostConfigEqual(before, state.vhostConfig()) {
 		if _, err := s.createNginxVhost(ctx, state.vhostConfig()); err != nil {
 			return nil, err
 		}

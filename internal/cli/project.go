@@ -295,6 +295,7 @@ func newProjectRemoveCmd() *cobra.Command {
 func newProjectModifyCmd() *cobra.Command {
 	opts := project.ModifyOptions{}
 	var domainsStr string
+	var clearDomains bool
 	var sharedLogs bool
 
 	cmd := &cobra.Command{
@@ -310,10 +311,20 @@ func newProjectModifyCmd() *cobra.Command {
 				return err
 			}
 
-			if domainsStr != "" {
-				opts.Domains = strings.Split(domainsStr, ",")
+			opts.Changed = changedFlags(cmd,
+				"domains", "add-domain", "remove-domain", "path",
+				"php-version", "node-version", "ruby-version",
+				"public-dir", "proxy-port", "shared-logs")
+			if clearDomains {
+				if opts.Changed["domains"] {
+					return fmt.Errorf("--clear-domains cannot be combined with --domains")
+				}
+				opts.Changed["domains"] = true
 			}
-			if cmd.Flags().Changed("shared-logs") {
+			if opts.Changed["domains"] {
+				opts.Domains = splitDomains(domainsStr)
+			}
+			if opts.Changed["shared-logs"] {
 				opts.SharedLogs = &sharedLogs
 			}
 
@@ -328,18 +339,30 @@ func newProjectModifyCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.Path, "path", "", "Project root path")
-	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names")
+	cmd.Flags().StringVar(&opts.Path, "path", "", "Project root path; updates the stored path only and does not move files")
+	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names (empty clears them)")
+	cmd.Flags().BoolVar(&clearDomains, "clear-domains", false, "Remove every domain (refused when the project has an nginx vhost)")
 	cmd.Flags().StringVar(&opts.AddDomain, "add-domain", "", "Add a domain")
 	cmd.Flags().StringVar(&opts.RemoveDomain, "remove-domain", "", "Remove a domain")
-	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "", "PHP version")
-	cmd.Flags().StringVar(&opts.NodeVersion, "node-version", "", "Node.js version")
-	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", "", "Ruby version")
-	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory")
-	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy port")
+	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "", "PHP version (empty clears it; the active runtime falls back to the default)")
+	cmd.Flags().StringVar(&opts.NodeVersion, "node-version", "", "Node.js version (empty clears it; the active runtime falls back to the default)")
+	cmd.Flags().StringVar(&opts.RubyVersion, "ruby-version", "", "Ruby version (empty clears it; the active runtime falls back to the default)")
+	cmd.Flags().StringVar(&opts.PublicDir, "public-dir", "", "Public directory (empty clears it)")
+	cmd.Flags().IntVar(&opts.ProxyPort, "proxy-port", 0, "Proxy port (0 clears it)")
 	cmd.Flags().BoolVar(&sharedLogs, "shared-logs", false, "Use the server-wide nginx logs instead of per-project log files")
 
 	return cmd
+}
+
+// splitDomains splits a comma-separated domain list, dropping empty entries.
+func splitDomains(s string) []string {
+	var domains []string
+	for _, d := range strings.Split(s, ",") {
+		if d = strings.TrimSpace(d); d != "" {
+			domains = append(domains, d)
+		}
+	}
+	return domains
 }
 
 func newProjectListCmd() *cobra.Command {

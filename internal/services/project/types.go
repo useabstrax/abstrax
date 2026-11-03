@@ -68,8 +68,15 @@ type RemoveOptions struct {
 }
 
 // ModifyOptions holds options for modifying a project.
+//
+// Changed records which flags were set explicitly (keys: domains, add-domain,
+// remove-domain, path, php-version, node-version, ruby-version, public-dir,
+// proxy-port, shared-logs). A changed flag with an empty value clears the
+// stored field: empty domains, public-dir, or a version, or proxy-port 0.
+// Fields without an entry in Changed are left as they are.
 type ModifyOptions struct {
-	Name         string
+	Name string
+	// Path updates the stored project path only. Files on disk are not moved.
 	Path         string
 	Domains      []string
 	AddDomain    string
@@ -89,6 +96,7 @@ type ModifyOptions struct {
 	RedirectHTTP bool
 	Yes          bool
 	DryRun       bool
+	Changed      map[string]bool
 }
 
 // State holds persisted project state.

@@ -204,6 +204,7 @@ func TestModifySharedLogsPersists(t *testing.T) {
 	got, err := svc.Modify(context.Background(), ModifyOptions{
 		Name:      "example",
 		AddDomain: "example.com",
+		Changed:   map[string]bool{"add-domain": true},
 	})
 	if err != nil {
 		t.Fatal(err)
