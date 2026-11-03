@@ -611,7 +611,27 @@ func newProjectInspectCmd() *cobra.Command {
 			p.Line("  Path:    %s", resp.Project.Path)
 			p.Line("  User:    %s", resp.Project.User)
 			p.Line("  Runtime: %s %s", resp.Project.Runtime.Type, resp.Project.Runtime.Version)
+			if resp.Project.WebServer != "" {
+				p.Line("  Web server: %s", resp.Project.WebServer)
+			}
+			if resp.Project.PublicDir != "" {
+				p.Line("  Public dir: %s", resp.Project.PublicDir)
+			}
+			if resp.Project.ProxyPort != 0 {
+				p.Line("  Proxy port: %d", resp.Project.ProxyPort)
+			}
 			p.Line("  Domains: %s", strings.Join(resp.Project.Domains, ", "))
+			if resp.Project.Vhost.Present {
+				vhostState := "disabled"
+				if resp.Project.Vhost.Enabled {
+					vhostState = "enabled"
+				}
+				p.Line("  Vhost:   %s (%s)", resp.Project.Vhost.Path, vhostState)
+			} else {
+				p.Line("  Vhost:   none")
+			}
+			p.Line("  SSL:     %s", boolWord(resp.Project.SSL.Enabled))
+			p.Line("  Shared logs: %s", boolWord(resp.Project.SharedLogs))
 			if resp.Project.AccessLogPath != "" {
 				p.Line("  Access log: %s", resp.Project.AccessLogPath)
 			}
@@ -624,9 +644,22 @@ func newProjectInspectCmd() *cobra.Command {
 					p.Line("    - %s (%s)", s.Name, s.Type)
 				}
 			}
+			if resp.Project.CreatedAt != "" {
+				p.Line("  Created: %s", resp.Project.CreatedAt)
+			}
+			if resp.Project.UpdatedAt != "" {
+				p.Line("  Updated: %s", resp.Project.UpdatedAt)
+			}
 			return nil
 		},
 	}
+}
+
+func boolWord(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
 }
 
 func newProjectServiceCmd() *cobra.Command {

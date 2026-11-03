@@ -126,6 +126,12 @@ func TestProjectInspectFixtureMatchesSDK(t *testing.T) {
 	if !strings.Contains(inspect.Project.Runtime.Type, "php") {
 		t.Fatalf("runtime = %+v", inspect.Project.Runtime)
 	}
+	if inspect.Project.WebServer != "nginx" || !inspect.Project.Vhost.Present || !inspect.Project.Vhost.Enabled {
+		t.Fatalf("web server / vhost = %q %+v", inspect.Project.WebServer, inspect.Project.Vhost)
+	}
+	if !inspect.Project.SSL.Enabled || inspect.Project.CreatedAt == "" || inspect.Project.UpdatedAt == "" {
+		t.Fatalf("ssl/timestamps = %+v", inspect.Project)
+	}
 }
 
 // InspectResponse mirrors the CLI project inspect API for contract tests.
@@ -135,12 +141,30 @@ type InspectResponse struct {
 }
 
 type InspectProject struct {
-	Name     string           `json:"name"`
-	Path     string           `json:"path"`
-	User     string           `json:"user"`
-	Runtime  InspectRuntime   `json:"runtime"`
-	Domains  []string         `json:"domains"`
-	Services []InspectService `json:"services"`
+	Name       string           `json:"name"`
+	Path       string           `json:"path"`
+	User       string           `json:"user"`
+	WebServer  string           `json:"web_server"`
+	Runtime    InspectRuntime   `json:"runtime"`
+	PublicDir  string           `json:"public_dir,omitempty"`
+	ProxyPort  int              `json:"proxy_port,omitempty"`
+	Domains    []string         `json:"domains"`
+	Vhost      InspectVhost     `json:"vhost"`
+	SharedLogs bool             `json:"shared_logs"`
+	SSL        InspectSSL       `json:"ssl"`
+	Services   []InspectService `json:"services"`
+	CreatedAt  string           `json:"created_at,omitempty"`
+	UpdatedAt  string           `json:"updated_at,omitempty"`
+}
+
+type InspectVhost struct {
+	Present bool   `json:"present"`
+	Path    string `json:"path"`
+	Enabled bool   `json:"enabled"`
+}
+
+type InspectSSL struct {
+	Enabled bool `json:"enabled"`
 }
 
 type InspectRuntime struct {
