@@ -192,4 +192,8 @@ const (
 	ProjectRedirectAdd    = "project.redirect.add"
 	ProjectRedirectModify = "project.redirect.modify"
 	ProjectRedirectRemove = "project.redirect.remove"
+
+	// Project vhost actions.
+	ProjectVhostAdd    = "project.vhost.add"
+	ProjectVhostRemove = "project.vhost.remove"
 )

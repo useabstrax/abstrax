@@ -33,6 +33,9 @@ type Service struct {
 	nginxLogDir string
 	// letsEncryptDir is the certbot config directory. Empty means /etc/letsencrypt.
 	letsEncryptDir string
+	// nginxInstalled reports whether nginx is installed. Nil uses web.Installed.
+	// Tests set this so they do not depend on the host.
+	nginxInstalled func() bool
 }
 
 // New creates a Service.
@@ -147,6 +150,8 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		Name:          opts.Name,
 		Path:          validated.ProjectPath,
 		Domains:       opts.Domains,
+		Port:          opts.Port,
+		WebRoot:       opts.WebRoot,
 		WebServer:     opts.WebServer,
 		Runtime:       opts.Runtime,
 		Owner:         id.User,
@@ -290,6 +295,7 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	s.AdoptSSL(state)
 
 	if state.VhostPath != "" && state.WebServer == WebServerNginx && !vhostConfigEqual(before, state.vhostConfig()) {
+		// RenderVhost keeps a disabled vhost disabled and applies TLS from state.
 		if err := s.RenderVhost(ctx, state); err != nil {
 			return nil, err
 		}
@@ -353,6 +359,11 @@ func (s *Service) Enable(ctx context.Context, name string) error {
 	if err := s.enableVhostFile(state.VhostPath); err != nil {
 		return fmt.Errorf("enabling vhost: %w", err)
 	}
+	state.VhostDisabled = false
+	state.UpdatedAt = time.Now()
+	if err := s.saveState(state); err != nil {
+		return fmt.Errorf("saving project state: %w", err)
+	}
 	_, err = s.runner.Run(ctx, "nginx", "-s", "reload")
 	return err
 }
@@ -368,6 +379,11 @@ func (s *Service) Disable(ctx context.Context, name string) error {
 	}
 	if err := s.disableVhostFile(state.VhostPath); err != nil {
 		return fmt.Errorf("disabling vhost: %w", err)
+	}
+	state.VhostDisabled = true
+	state.UpdatedAt = time.Now()
+	if err := s.saveState(state); err != nil {
+		return fmt.Errorf("saving project state: %w", err)
 	}
 	_, err = s.runner.Run(ctx, "nginx", "-s", "reload")
 	return err
@@ -386,18 +402,82 @@ func (s *Service) Reload(ctx context.Context, name string) error {
 }
 
 func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (string, error) {
-	confName := "abstrax-" + opts.Name
-	var vhostPath string
+	return s.writeNginxVhost(ctx, opts, false)
+}
+
+// nginxVhostFilePath returns the path of the managed vhost file for a project
+// and creates the directory that holds it.
+func (s *Service) nginxVhostFilePath(name string) (string, error) {
+	confName := "abstrax-" + name
 	if s.nginxLayout == platform.NginxConfD {
 		if err := os.MkdirAll(s.nginxConfDir, 0755); err != nil {
 			return "", err
 		}
-		vhostPath = s.provider.NginxSiteConfigPath(confName)
-	} else {
-		if err := os.MkdirAll(s.nginxAvail, 0755); err != nil {
-			return "", err
+		return s.provider.NginxSiteConfigPath(confName), nil
+	}
+	if err := os.MkdirAll(s.nginxAvail, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.nginxAvail, confName), nil
+}
+
+// vhostSnapshot records a vhost's files so a failed rewrite can be undone.
+type vhostSnapshot struct {
+	path        string
+	active      []byte
+	hasActive   bool
+	disabled    []byte
+	hasDisabled bool
+	linked      bool
+}
+
+func (s *Service) snapshotVhost(vhostPath string) vhostSnapshot {
+	snap := vhostSnapshot{path: vhostPath}
+	if data, err := os.ReadFile(vhostPath); err == nil {
+		snap.active, snap.hasActive = data, true
+	}
+	if s.nginxLayout == platform.NginxConfD {
+		if data, err := os.ReadFile(disabledVhostPath(vhostPath)); err == nil {
+			snap.disabled, snap.hasDisabled = data, true
 		}
-		vhostPath = filepath.Join(s.nginxAvail, confName)
+		return snap
+	}
+	link := filepath.Join(s.nginxEnabled, filepath.Base(vhostPath))
+	if _, err := os.Lstat(link); err == nil {
+		snap.linked = true
+	}
+	return snap
+}
+
+func (s *Service) restoreVhost(snap vhostSnapshot) {
+	if snap.hasActive {
+		_ = os.WriteFile(snap.path, snap.active, 0644)
+	} else {
+		_ = os.Remove(snap.path)
+	}
+	if s.nginxLayout == platform.NginxConfD {
+		disabled := disabledVhostPath(snap.path)
+		if snap.hasDisabled {
+			_ = os.WriteFile(disabled, snap.disabled, 0644)
+		} else {
+			_ = os.Remove(disabled)
+		}
+		return
+	}
+	if snap.linked {
+		_ = s.enableVhostFile(snap.path)
+	} else {
+		_ = s.disableVhostFile(snap.path)
+	}
+}
+
+// writeNginxVhost writes the vhost file, validates it with nginx -t, and then
+// leaves it enabled, or disabled when keepDisabled is set. A failed validation
+// restores the previous files.
+func (s *Service) writeNginxVhost(ctx context.Context, opts vhostConfig, keepDisabled bool) (string, error) {
+	vhostPath, err := s.nginxVhostFilePath(opts.Name)
+	if err != nil {
+		return "", err
 	}
 
 	conf, err := s.renderNginxConfig(opts)
@@ -405,30 +485,36 @@ func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (strin
 		return "", err
 	}
 
-	// Keep the previous vhost so a failed rewrite does not take the site down.
-	previous, readErr := os.ReadFile(vhostPath)
-	hadPrevious := readErr == nil
-	restore := func() {
-		if hadPrevious {
-			_ = os.WriteFile(vhostPath, previous, 0644)
-		} else {
-			_ = os.Remove(vhostPath)
-		}
-	}
+	snap := s.snapshotVhost(vhostPath)
 
 	if err := os.WriteFile(vhostPath, []byte(conf), 0644); err != nil {
+		s.restoreVhost(snap)
 		return "", fmt.Errorf("writing nginx config: %w", err)
 	}
+	if s.nginxLayout == platform.NginxConfD {
+		// The fresh file supersedes a disabled copy. Leaving both would let a
+		// later enable rename the stale copy over this one.
+		_ = os.Remove(disabledVhostPath(vhostPath))
+	}
 
-	// Validate.
+	// Enable before validating so nginx -t reads the new file.
+	if err := s.enableVhostFile(vhostPath); err != nil {
+		s.restoreVhost(snap)
+		return "", fmt.Errorf("enabling nginx vhost: %w", err)
+	}
+
 	if res, err := s.runner.RunSilent(ctx, "nginx", "-t"); err != nil || res.ExitCode != 0 {
-		restore()
+		s.restoreVhost(snap)
 		return "", fmt.Errorf("nginx config validation failed: %s", res.Stderr)
 	}
 
-	if err := s.enableVhostFile(vhostPath); err != nil {
-		restore()
-		return "", fmt.Errorf("enabling nginx vhost: %w", err)
+	if keepDisabled {
+		if err := s.disableVhostFile(vhostPath); err != nil {
+			s.restoreVhost(snap)
+			return "", fmt.Errorf("disabling nginx vhost: %w", err)
+		}
+		// Nothing live changed, so nginx needs no reload.
+		return vhostPath, nil
 	}
 
 	_, _ = s.runner.Run(ctx, "nginx", "-s", "reload")
