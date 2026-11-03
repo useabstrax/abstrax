@@ -14,7 +14,8 @@ const payloadArgsKey = "args"
 
 // PayloadToArgs converts a JSON object payload into CLI flags and positional
 // arguments. The reserved key "args" (a string array) becomes positionals.
-// Every other key becomes --key or --key=value.
+// Every other key becomes --key or --key=value. Boolean true emits a bare
+// --key; boolean false emits --key=false so default-true flags can be cleared.
 func PayloadToArgs(raw json.RawMessage) (flags []string, args []string, err error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
@@ -81,7 +82,7 @@ func decodeFlag(key string, v any) ([]string, error) {
 		return nil, fmt.Errorf("invalid payload: %q must not be null", key)
 	case bool:
 		if !val {
-			return nil, nil
+			return []string{flag + "=false"}, nil
 		}
 		return []string{flag}, nil
 	case string:

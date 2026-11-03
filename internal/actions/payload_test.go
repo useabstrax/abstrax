@@ -22,13 +22,20 @@ func TestPayloadToArgs(t *testing.T) {
 	}
 }
 
-func TestPayloadToArgsOmitsFalse(t *testing.T) {
-	flags, args, err := PayloadToArgs(json.RawMessage(`{"force":false}`))
+func TestPayloadToArgsEncodesFalse(t *testing.T) {
+	flags, args, err := PayloadToArgs(json.RawMessage(`{"shared-logs":false,"redirect-http":false,"force":true}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(flags) != 0 || len(args) != 0 {
-		t.Fatalf("flags=%#v args=%#v", flags, args)
+	if len(args) != 0 {
+		t.Fatalf("args=%#v", args)
+	}
+	got := strings.Join(flags, " ")
+	if !strings.Contains(got, "--shared-logs=false") || !strings.Contains(got, "--redirect-http=false") || !strings.Contains(got, "--force") {
+		t.Fatalf("flags = %#v", flags)
+	}
+	if strings.Contains(got, "--force=false") || strings.Contains(got, "--force=true") {
+		t.Fatalf("true should emit bare flag: %#v", flags)
 	}
 }
 

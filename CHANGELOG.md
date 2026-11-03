@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`--action` / `--payload` booleans** - A JSON `false` value now encodes as `--key=false` instead of being dropped. Agents can turn off default-true flags such as `shared-logs` and `redirect-http`. Boolean `true` still emits a bare `--key`.
+
 ## [3.0.0] - 2026-11-02
 
 ### Added
