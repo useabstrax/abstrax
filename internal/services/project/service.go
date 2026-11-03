@@ -31,6 +31,8 @@ type Service struct {
 	// nginxLogDir is the directory for per-project access and error logs.
 	// The default is /var/log/nginx. Tests set this to a temporary directory.
 	nginxLogDir string
+	// letsEncryptDir is the certbot config directory. Empty means /etc/letsencrypt.
+	letsEncryptDir string
 }
 
 // New creates a Service.
@@ -283,8 +285,12 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	}
 	state.UpdatedAt = time.Now()
 
+	// Projects set up before Abstrax stored SSL metadata keep their HTTPS
+	// listener when the vhost is rewritten.
+	s.AdoptSSL(state)
+
 	if state.VhostPath != "" && state.WebServer == WebServerNginx && !vhostConfigEqual(before, state.vhostConfig()) {
-		if _, err := s.createNginxVhost(ctx, state.vhostConfig()); err != nil {
+		if err := s.RenderVhost(ctx, state); err != nil {
 			return nil, err
 		}
 	}
@@ -399,18 +405,29 @@ func (s *Service) createNginxVhost(ctx context.Context, opts vhostConfig) (strin
 		return "", err
 	}
 
+	// Keep the previous vhost so a failed rewrite does not take the site down.
+	previous, readErr := os.ReadFile(vhostPath)
+	hadPrevious := readErr == nil
+	restore := func() {
+		if hadPrevious {
+			_ = os.WriteFile(vhostPath, previous, 0644)
+		} else {
+			_ = os.Remove(vhostPath)
+		}
+	}
+
 	if err := os.WriteFile(vhostPath, []byte(conf), 0644); err != nil {
 		return "", fmt.Errorf("writing nginx config: %w", err)
 	}
 
 	// Validate.
 	if res, err := s.runner.RunSilent(ctx, "nginx", "-t"); err != nil || res.ExitCode != 0 {
-		_ = os.Remove(vhostPath)
+		restore()
 		return "", fmt.Errorf("nginx config validation failed: %s", res.Stderr)
 	}
 
 	if err := s.enableVhostFile(vhostPath); err != nil {
-		_ = os.Remove(vhostPath)
+		restore()
 		return "", fmt.Errorf("enabling nginx vhost: %w", err)
 	}
 
@@ -473,6 +490,7 @@ func (s *Service) renderNginxConfig(opts vhostConfig) (string, error) {
 	if opts.LogDir == "" {
 		opts.LogDir = s.nginxLogDirectory()
 	}
+	s.tlsAssets(&opts)
 	return buildNginxConfig(opts)
 }
 
@@ -557,21 +575,57 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 		root = filepath.Join(opts.Path, opts.PublicDir)
 	}
 
-	var sb strings.Builder
-	sb.WriteString("# Managed by Abstrax\n")
-	sb.WriteString("server {\n")
-	sb.WriteString(fmt.Sprintf("    listen %d;\n", listenPort))
-	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
-	sb.WriteString(fmt.Sprintf("    root %s;\n", root))
-	sb.WriteString("    index index.html index.htm index.php;\n")
+	var logLines string
 	if !opts.SharedLogs {
 		accessPath, errorPath, err := projectLogPaths(opts.LogDir, opts.Name)
 		if err != nil {
 			return "", err
 		}
-		sb.WriteString(fmt.Sprintf("    access_log %s;\n", accessPath))
-		sb.WriteString(fmt.Sprintf("    error_log %s;\n", errorPath))
+		logLines = fmt.Sprintf("    access_log %s;\n    error_log %s;\n", accessPath, errorPath)
 	}
+
+	if opts.SSL != nil && !ValidCertName(opts.SSL.CertificateName) {
+		return "", fmt.Errorf("invalid SSL certificate name %q for project %q", opts.SSL.CertificateName, opts.Name)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# Managed by Abstrax\n")
+
+	// Plain HTTP server. With SSL and RedirectHTTP it only redirects; the
+	// location block (not a server-level return) leaves room for certbot's
+	// temporary challenge location during renewal.
+	sb.WriteString("server {\n")
+	sb.WriteString(fmt.Sprintf("    listen %d;\n", listenPort))
+	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
+	if opts.SSL != nil && opts.SSL.RedirectHTTP {
+		sb.WriteString(logLines)
+		sb.WriteString("\n")
+		sb.WriteString("    location / {\n")
+		sb.WriteString("        return 301 https://$host$request_uri;\n")
+		sb.WriteString("    }\n")
+		sb.WriteString("}\n")
+	} else {
+		writeServerBody(&sb, opts, root, logLines)
+		sb.WriteString("}\n")
+	}
+
+	if opts.SSL != nil {
+		sb.WriteString("\nserver {\n")
+		sb.WriteString("    listen 443 ssl;\n")
+		sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
+		writeTLSDirectives(&sb, opts)
+		writeServerBody(&sb, opts, root, logLines)
+		sb.WriteString("}\n")
+	}
+
+	return sb.String(), nil
+}
+
+// writeServerBody writes root, index, logs, and runtime locations for a server block.
+func writeServerBody(sb *strings.Builder, opts vhostConfig, root, logLines string) {
+	sb.WriteString(fmt.Sprintf("    root %s;\n", root))
+	sb.WriteString("    index index.html index.htm index.php;\n")
+	sb.WriteString(logLines)
 	sb.WriteString("\n")
 
 	switch opts.Runtime {
@@ -617,9 +671,6 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 		sb.WriteString("        try_files $uri $uri/ =404;\n")
 		sb.WriteString("    }\n")
 	}
-
-	sb.WriteString("}\n")
-	return sb.String(), nil
 }
 
 func loadApprovedRoots() ([]string, error) {

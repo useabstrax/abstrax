@@ -6,14 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **SSL state on projects** - `project info` and the project state file return an `ssl` object with `certificate_name`, `domains`, `redirect_http`, `staging`, `issued_at`, `expires_at`, and `last_error`. `ssl_enabled` is still written. A project that only has `ssl_enabled` is adopted the first time Abstrax needs its certificate name: the name comes from the `ssl_certificate` path in the existing vhost, then from the first domain.
+- **`ssl status` fields** - Each entry reports `project_name` (the real project name), `certificate_name`, `expiry` (RFC3339), `days_remaining`, `redirect_http`, `staging`, and `status` (`valid`, `expiring` within 30 days, `expired`, or `missing`). Status is read from project state and the certificate under `/etc/letsencrypt/live`. `certbot certificates` output is only a fallback, and also lists certificates no project owns.
+
 ### Changed
 
 - **`project modify` clears fields explicitly** - A flag passed with an empty value now clears the stored field instead of being ignored: `--domains=""`, `--public-dir=""`, `--proxy-port=0`, and an empty `--php-version`, `--node-version`, or `--ruby-version`. Flags that are not passed leave the field unchanged. An empty version is cleared, but the active runtime keeps its default version. `--clear-domains` removes every domain and cannot be combined with `--domains`. Removing every domain (with `--domains`, `--clear-domains`, or `--remove-domain`) is refused when the project has an nginx vhost, because the vhost would be written with `server_name _` and answer for every host. `--add-domain` and `--domains` validate each domain. `--proxy-port` is validated as a port, and `--public-dir` must stay inside the project path. `--path` must not be empty and is checked as `project add` checks it. It updates the stored path only and does not move files on disk.
+- **`ssl add`** - Runs `certbot certonly --nginx --cert-name abstrax-<project>` and then writes HTTPS into the project's nginx vhost itself, validating with `nginx -t` before reloading. Certbot no longer edits the vhost. The certificate name is stored and reused for later adds, renewals, status, and removal. A deploy hook reloads nginx after each renewal. If nginx rejects the HTTPS vhost, the previous vhost is restored, `ssl_enabled` stays off, and `ssl.last_error` records why.
+- **`ssl remove`** - Rewrites the vhost without HTTPS and runs `nginx -t` before `certbot delete`, then clears the stored SSL state. If nginx rejects the vhost, the certificate is left alone. If `certbot delete` fails, HTTPS is put back.
+- **`ssl renew`** - Uses the stored certificate name, reloads nginx, and refreshes `ssl.expires_at`.
+- **Project vhosts** - The nginx vhost renders an HTTPS server (`listen 443 ssl`) for projects with SSL enabled, with an HTTP server that redirects when `redirect_http` is true. A failed vhost rewrite restores the previous file.
 
 ### Fixed
 
 - **`--action` / `--payload` booleans** - A JSON `false` value now encodes as `--key=false` instead of being dropped. Agents can turn off default-true flags such as `shared-logs` and `redirect-http`. Boolean `true` still emits a bare `--key`.
 - **`project modify` side effects** - The runtime install check runs only when the active runtime's version or the runtime changes. The nginx vhost is rewritten and reloaded only when a value that appears in it changed. Previously every `project modify` did both.
+- **`project modify` removing HTTPS** - Rewriting the vhost dropped the certbot-added HTTPS server, so a modified project silently lost SSL. The vhost is now rendered from stored SSL state, so HTTPS stays in place.
 
 
 ## [3.0.0] - 2026-11-02
