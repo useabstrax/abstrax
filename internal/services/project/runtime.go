@@ -35,37 +35,16 @@ func runtimeSpecFromAdd(opts AddOptions) RuntimeSpec {
 	}
 }
 
-func runtimeSpecFromState(state *State, opts ModifyOptions) RuntimeSpec {
-	runtime := state.Runtime
-	if opts.Runtime != "" {
-		runtime = opts.Runtime
-	}
-
-	switch runtime {
+// runtimeSpecFromState returns the runtime requirement for the project as
+// stored, using the default version when none is stored.
+func runtimeSpecFromState(state *State) RuntimeSpec {
+	switch state.Runtime {
 	case RuntimePHP:
-		version := state.PHPVersion
-		if opts.PHPVersion != "" {
-			version = normalizePHPVersion(opts.PHPVersion)
-		} else if version == "" {
-			version = DefaultPHPVersion
-		}
-		return RuntimeSpec{Runtime: RuntimePHP, Version: version}
+		return RuntimeSpec{Runtime: RuntimePHP, Version: normalizePHPVersion(state.PHPVersion)}
 	case RuntimeNode:
-		version := state.NodeVersion
-		if opts.NodeVersion != "" {
-			version = normalizeNodeVersion(opts.NodeVersion)
-		} else if version == "" {
-			version = DefaultNodeVersion
-		}
-		return RuntimeSpec{Runtime: RuntimeNode, Version: version}
+		return RuntimeSpec{Runtime: RuntimeNode, Version: normalizeNodeVersion(state.NodeVersion)}
 	case RuntimeRuby:
-		version := state.RubyVersion
-		if opts.RubyVersion != "" {
-			version = normalizeRubyVersion(opts.RubyVersion)
-		} else if version == "" {
-			version = DefaultRubyVersion
-		}
-		return RuntimeSpec{Runtime: RuntimeRuby, Version: version}
+		return RuntimeSpec{Runtime: RuntimeRuby, Version: normalizeRubyVersion(state.RubyVersion)}
 	default:
 		return RuntimeSpec{}
 	}

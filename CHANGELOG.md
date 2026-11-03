@@ -6,9 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`project modify` clears fields explicitly** - A flag passed with an empty value now clears the stored field instead of being ignored: `--domains=""`, `--public-dir=""`, `--proxy-port=0`, and an empty `--php-version`, `--node-version`, or `--ruby-version`. Flags that are not passed leave the field unchanged. An empty version is cleared, but the active runtime keeps its default version. `--clear-domains` removes every domain and cannot be combined with `--domains`. Removing every domain (with `--domains`, `--clear-domains`, or `--remove-domain`) is refused when the project has an nginx vhost, because the vhost would be written with `server_name _` and answer for every host. `--add-domain` and `--domains` validate each domain. `--proxy-port` is validated as a port, and `--public-dir` must stay inside the project path. `--path` must not be empty and is checked as `project add` checks it. It updates the stored path only and does not move files on disk.
+
 ### Fixed
 
 - **`--action` / `--payload` booleans** - A JSON `false` value now encodes as `--key=false` instead of being dropped. Agents can turn off default-true flags such as `shared-logs` and `redirect-http`. Boolean `true` still emits a bare `--key`.
+- **`project modify` side effects** - The runtime install check runs only when the active runtime's version or the runtime changes. The nginx vhost is rewritten and reloaded only when a value that appears in it changed. Previously every `project modify` did both.
+
 
 ## [3.0.0] - 2026-11-02
 
