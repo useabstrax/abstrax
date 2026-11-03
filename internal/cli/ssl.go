@@ -163,12 +163,14 @@ func newSSLStatusCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"PROJECT", "DOMAINS", "EXPIRY"})
+			t := output.NewTable([]string{"PROJECT", "CERTIFICATE", "DOMAINS", "EXPIRY", "STATUS"})
 			for _, s := range statuses {
 				t.Append([]string{
 					s.ProjectName,
+					s.CertificateName,
 					strings.Join(s.Domains, ", "),
 					s.Expiry,
+					s.Status,
 				})
 			}
 			t.Render()

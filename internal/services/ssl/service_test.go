@@ -1,6 +1,7 @@
 package ssl
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -22,47 +23,44 @@ func TestInstallCommand(t *testing.T) {
 
 func TestBuildCertbotAddArgs(t *testing.T) {
 	args := buildCertbotAddArgs(AddOptions{
-		Email:        "admin@example.com",
-		Domains:      []string{"example.com", " www.example.com "},
-		RedirectHTTP: true,
-		Staging:      true,
+		Email:    "admin@example.com",
+		Domains:  []string{"example.com", " www.example.com "},
+		CertName: "abstrax-example",
+		Staging:  true,
 	})
 
 	want := []string{
+		"certonly",
 		"--nginx",
 		"--non-interactive",
 		"--agree-tos",
 		"--email", "admin@example.com",
+		"--cert-name", "abstrax-example",
+		"--expand",
+		"--deploy-hook", "nginx -s reload",
 		"-d", "example.com",
 		"-d", "www.example.com",
 		"--staging",
-		"--redirect",
 	}
 
-	if len(args) != len(want) {
-		t.Fatalf("len(args) = %d, want %d: %#v", len(args), len(want), args)
-	}
-	for i := range want {
-		if args[i] != want[i] {
-			t.Fatalf("args[%d] = %q, want %q (full args: %#v)", i, args[i], want[i], args)
-		}
-	}
-
-	for _, arg := range args {
-		if arg == "certonly" {
-			t.Fatalf("certbot add must not use certonly subcommand, got %#v", args)
-		}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args = %#v\nwant   %#v", args, want)
 	}
 }
 
-func TestBuildCertbotAddArgsNoRedirect(t *testing.T) {
+func TestBuildCertbotAddArgsNeverInstalls(t *testing.T) {
 	args := buildCertbotAddArgs(AddOptions{
 		Email:        "admin@example.com",
 		Domains:      []string{"example.com"},
-		RedirectHTTP: false,
+		CertName:     "abstrax-example",
+		RedirectHTTP: true,
 	})
-
-	if args[len(args)-1] != "--no-redirect" {
-		t.Fatalf("expected --no-redirect, got %#v", args)
+	for _, arg := range args {
+		if arg == "--redirect" || arg == "--no-redirect" || arg == "--installer" {
+			t.Fatalf("certbot must not edit nginx; got %#v", args)
+		}
+	}
+	if args[0] != "certonly" {
+		t.Fatalf("args = %#v", args)
 	}
 }

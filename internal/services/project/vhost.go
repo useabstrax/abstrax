@@ -17,6 +17,15 @@ type vhostConfig struct {
 	PHPSocket   string
 	LogDir      string
 	SharedLogs  bool
+
+	// SSL, when set, renders an HTTPS server that uses the certificate named
+	// by SSL.CertificateName under LetsEncryptDir/live.
+	SSL *SSLState
+	// LetsEncryptDir is the certbot config directory (default /etc/letsencrypt).
+	LetsEncryptDir string
+	// SSLOptionsPath and SSLDHParamPath are included when the files exist.
+	SSLOptionsPath string
+	SSLDHParamPath string
 }
 
 func vhostOptionsFromAdd(opts AddOptions, state *State, paths *ValidatedPaths) vhostConfig {
@@ -55,5 +64,6 @@ func (s *State) vhostConfig() vhostConfig {
 		ProxyPort:   s.ProxyPort,
 		PHPSocket:   phpSocketForState(s),
 		SharedLogs:  s.SharedLogs,
+		SSL:         s.EffectiveSSL(),
 	}
 }
