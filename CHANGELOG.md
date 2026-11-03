@@ -8,10 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+## [Unreleased]
+
+### Added
+
 - **`firewall defaults`** - Shows the default firewall policy as `{backend, defaults}`: `defaults.incoming` and `defaults.outgoing` (`allow`, `deny`, or `reject`), `defaults.routed` (UFW only, for example `disabled`), and `defaults.ping` (`allow` or `block`; `mixed` if the IPv4 and IPv6 rules disagree, `unknown` if it cannot be read). On UFW it reads `ufw status verbose`, and `/etc/default/ufw` while UFW is inactive. On firewalld it reads the target of the default zone: `default` and `REJECT` are `reject`, `DROP` is `deny`, and `ACCEPT` is `allow`. firewalld reports `outgoing` as `allow`. Registered as `firewall.defaults`.
 - **`firewall defaults set`** - `firewall defaults set --incoming deny|reject|allow [--outgoing allow|deny|reject]` runs `ufw default <policy> incoming|outgoing` on UFW, or sets the default zone target (`DROP`, `%%REJECT%%`, `ACCEPT`) and reloads on firewalld. `--outgoing` is refused on firewalld. `--incoming allow` warns and asks for confirmation (`--yes` skips it). `--incoming deny` or `reject` is refused while the firewall is active and no rule allows TCP to the SSH port, unless the policy already blocks incoming traffic. `--force` applies it anyway; `--yes` does not. Successful `--json` output includes `ssh_check` when the check ran. Registered as `firewall.defaults.set`.
 - **`firewall ping`** - `firewall ping allow|block` controls inbound ping (ICMP echo requests). On UFW it switches the INPUT `echo-request` rules in `/etc/ufw/before.rules` and `before6.rules` between `ACCEPT` and `DROP`, writes a `.bak` of each changed file, reloads UFW, and restores the files if the reload fails. On firewalld it adds or removes the `echo-request` ICMP block in the default zone and reloads. Registered as `firewall.ping`.
 - **`firewall status` defaults** - `firewall status --json` includes a `defaults` object with the same fields as `firewall defaults`. It is omitted if the defaults cannot be read.
+
+- **`package auto-updates`** - `package auto-updates status|enable|disable` manages automatic security updates, registered as `package.auto-updates.status`, `package.auto-updates.enable`, and `package.auto-updates.disable`. Updates are limited to security origins, and the server is never rebooted automatically; `server reboot-required` reports when a reboot is needed. `enable` and `disable` require root. `status` changes nothing and does not require root. It returns `backend`, `installed`, `enabled`, `managed`, `config_path`, `last_run` (RFC3339 UTC, or `null`), and `last_result` (`success`, `failed`, `unknown`, or `never_run`).
+
+  - **Debian and Ubuntu** - Installs `unattended-upgrades` when it is missing and writes `/etc/apt/apt.conf.d/52abstrax-auto-updates`. The file sets `APT::Periodic::Unattended-Upgrade "1"`, replaces the distro origin lists with security origins only, and sets `Automatic-Reboot "false"`. `disable` rewrites the same file with `APT::Periodic::Unattended-Upgrade "0"`. Distro files are not edited. `status` reads the effective setting from `apt-config`. The last run is the mtime of `/var/lib/apt/periodic/unattended-upgrades-stamp`, and the result comes from the last outcome line in `/var/log/unattended-upgrades/unattended-upgrades.log`.
+
+  - **RHEL family** - Installs `dnf-automatic`, writes `/etc/abstrax/dnf-automatic.conf` (`upgrade_type = security`, `apply_updates = yes`, `reboot = never`), and adds a systemd drop-in `/etc/systemd/system/dnf-automatic-install.service.d/50-abstrax.conf` that runs `dnf-automatic` with that file. Then it runs `systemctl enable --now dnf-automatic-install.timer`. `disable` stops and disables the timer, removes both Abstrax files, and reloads systemd, which leaves `/etc/dnf/automatic.conf` untouched. The last run is the mtime of the timer stamp `/var/lib/systemd/timers/stamp-dnf-automatic-install.timer`. The result comes from `systemctl show dnf-automatic-install.service` and is only known for runs since boot; an earlier run reports `unknown`.
+
 
 ## [3.1.0] - 2026-11-03
 

@@ -144,6 +144,16 @@ sudo abstrax server reboot --delay 90 --dry-run
 `package upgrade --security-only` installs only those security updates. On Debian and Ubuntu that is the packages from the security pocket. On RHEL-family systems it runs `dnf upgrade -y --security`.
 `server reboot-required` reports whether a reboot is needed. On Debian and Ubuntu it reads `/var/run/reboot-required`. On RHEL-family systems it runs `needs-restarting -r`. If that command is not installed, the result says so and does not fail.
 
+### Automatic security updates
+
+```bash
+abstrax package auto-updates status
+sudo abstrax package auto-updates enable
+sudo abstrax package auto-updates disable
+```
+
+`package auto-updates enable` turns on automatic security updates. Debian and Ubuntu use `unattended-upgrades`, with Abstrax settings in `/etc/apt/apt.conf.d/52abstrax-auto-updates`. RHEL-family systems use `dnf-automatic` and `dnf-automatic-install.timer`, with Abstrax settings in `/etc/abstrax/dnf-automatic.conf`. Only security updates are applied, and the server never reboots by itself; check `server reboot-required`. `disable` turns Abstrax's setup off and leaves the distro configuration alone. `status` reports `enabled`, `last_run`, and `last_result` and changes nothing. It does not require root. Add `--json` for machine-readable output.
+
 ### Firewall rule IDs
 
 On UFW, `firewall rule list` gives each rule a stable `id` and a `number`. `id` is a short hash of the rule. `number` is its current position in `ufw status numbered` and can change when other rules are added or removed. Remove a rule with the stable id:
