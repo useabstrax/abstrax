@@ -101,6 +101,46 @@ func TestValidateMetadata(t *testing.T) {
 	}
 }
 
+func TestValidateMetadataCommandNames(t *testing.T) {
+	base := Metadata{
+		ProtocolVersion: ProtocolVersion,
+		Name:            "example",
+		DisplayName:     "Example",
+		Description:     "An example plugin",
+		Version:         "0.1.0",
+		RequiresAbstrax: ">=0.0.0",
+	}
+	for _, name := range []string{
+		"hello",
+		"self-update",
+		"file list",
+		"process history",
+		"remote add",
+	} {
+		meta := base
+		meta.Commands = []MetadataCommand{{Name: name, Description: "ok"}}
+		if err := ValidateMetadata(&meta, "example"); err != nil {
+			t.Fatalf("command name %q: unexpected error: %v", name, err)
+		}
+	}
+	for _, name := range []string{
+		"",
+		" ",
+		" file",
+		"file ",
+		"file  list",
+		"File",
+		"file_list",
+		"file!",
+	} {
+		meta := base
+		meta.Commands = []MetadataCommand{{Name: name, Description: "bad"}}
+		if err := ValidateMetadata(&meta, "example"); err == nil {
+			t.Fatalf("command name %q: expected error", name)
+		}
+	}
+}
+
 func TestValidateMetadataUnsupportedProtocol(t *testing.T) {
 	meta := &Metadata{
 		ProtocolVersion: 99,

@@ -63,11 +63,24 @@ func ValidateMetadata(meta *Metadata, expectedCommand string) error {
 		if strings.TrimSpace(c.Name) == "" {
 			return fmt.Errorf("%w: command name is required", ErrMalformedMetadata)
 		}
-		if !pluginCommandNameRe.MatchString(c.Name) {
+		if !validCommandName(c.Name) {
 			return fmt.Errorf("%w: invalid command name %q", ErrMalformedMetadata, c.Name)
 		}
 	}
 	return ValidateAbstraxConstraint(meta.RequiresAbstrax)
+}
+
+// validCommandName accepts one or more words separated by a single space.
+// Each word must match pluginCommandNameRe (lowercase letter, then lowercase
+// letters, digits, or dashes). Leading, trailing, or doubled spaces fail
+// because they produce an empty word that does not match the pattern.
+func validCommandName(name string) bool {
+	for _, word := range strings.Split(name, " ") {
+		if !pluginCommandNameRe.MatchString(word) {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateAbstraxConstraint checks whether the current Abstrax version satisfies a constraint.

@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Plugin command names with spaces** - Plugin install rejected grouped commands such as `file list` and `process history`. A command `name` may now be one or more words separated by a single space; each word still follows the existing lowercase / digits / dashes rule.
+
 ## [3.2.0] - 2026-11-03
 
 ### Added
