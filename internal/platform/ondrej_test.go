@@ -125,6 +125,50 @@ func TestEnsureOndrejUbuntuWritesLaunchpadList(t *testing.T) {
 	}
 }
 
+func TestEnsureOndrejResoluteUsesSury(t *testing.T) {
+	provider := debianProviderFor(t, "ubuntu", "resolute", "resolute")
+	files := map[string][]byte{}
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoOndrej, platform.RepoOptions{}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error { return nil },
+		Run: func(ctx context.Context, name string, args ...string) error {
+			if name == "bash" {
+				files["/usr/share/keyrings/debsuryorg-archive-keyring.gpg"] = []byte("key")
+			}
+			return nil
+		},
+		FileExists: func(path string) bool {
+			_, ok := files[path]
+			return ok
+		},
+		ReadFile: func(path string) ([]byte, error) {
+			data, ok := files[path]
+			if !ok {
+				return nil, os.ErrNotExist
+			}
+			return data, nil
+		},
+		WriteFile: func(path string, data []byte, perm os.FileMode) error {
+			files[path] = append([]byte(nil), data...)
+			return nil
+		},
+		RemoveFile: func(path string) error {
+			delete(files, path)
+			return nil
+		},
+		Glob: func(pattern string) ([]string, error) { return nil, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := string(files["/etc/apt/sources.list.d/abstrax-ondrej-php.list"])
+	if !strings.Contains(list, "packages.sury.org/php/") || !strings.Contains(list, " resolute ") {
+		t.Fatalf("list = %q", list)
+	}
+	if strings.Contains(list, "launchpadcontent.net") || strings.Contains(list, " noble ") {
+		t.Fatalf("resolute must not use the Launchpad noble fallback, list = %q", list)
+	}
+}
+
 func TestEnsureOndrejIdempotent(t *testing.T) {
 	provider := debianProviderFor(t, "debian", "trixie", "")
 	want := "# Managed by Abstrax (packages.sury.org/php)\ndeb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ trixie main\n"

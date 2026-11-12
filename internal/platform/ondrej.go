@@ -223,6 +223,14 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 		return err
 	}
 	launchpad := UsesOndrejLaunchpadPPA(provider)
+	if launchpad && usedFallback {
+		// ppa:ondrej/php does not publish this Ubuntu release. Resolute and
+		// newer are only on packages.sury.org. Pinning the PPA to noble makes
+		// apt-get update exit 100: the PPA's Release label now points at
+		// packages.sury.org, and apt refuses that change.
+		launchpad = false
+		suite = phpUbuntuCodename(provider)
+	}
 
 	if ondrejPHPRepoReady(enabler, suite, launchpad) {
 		if err := removeConflictingOndrejLists(enabler); err != nil {
@@ -237,11 +245,7 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 	}
 
 	if launchpad {
-		if usedFallback {
-			fmt.Printf("Ubuntu suite is not published on ppa:ondrej/php yet; using %s packages...\n", suite)
-		} else {
-			fmt.Printf("Configuring Ondřej PHP PPA (ppa:ondrej/php, suite %s)...\n", suite)
-		}
+		fmt.Printf("Configuring Ondřej PHP PPA (ppa:ondrej/php, suite %s)...\n", suite)
 		if err := ensureOndrejKeyringLaunchpad(ctx, enabler); err != nil {
 			return err
 		}
@@ -258,8 +262,18 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 	}
 
 	fmt.Println("Updating package lists after configuring Ondřej PHP repository...")
-	if err := enabler.Run(ctx, "apt-get", "update"); err != nil {
+	// --allow-releaseinfo-change accepts the PPA label change that otherwise
+	// makes apt-get update exit 100 ("Use https://packages.sury.org/php/ instead").
+	if err := enabler.Run(ctx, "apt-get", "update", "--allow-releaseinfo-change"); err != nil {
 		return fmt.Errorf("updating package lists: %w", err)
 	}
 	return nil
+}
+
+func phpUbuntuCodename(provider Provider) string {
+	codename := provider.Profile().UbuntuCodename
+	if codename == "" {
+		codename = provider.Profile().VersionCodename
+	}
+	return strings.ToLower(strings.TrimSpace(codename))
 }
