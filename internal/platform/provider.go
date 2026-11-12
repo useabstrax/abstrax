@@ -135,8 +135,9 @@ func (p *debianProvider) PHPFPMPoolDir(version string) string {
 func (p *debianProvider) SupportsMultiplePHPVersions() bool { return true }
 func (p *debianProvider) RequiresExternalRepoForPHP(version string) bool {
 	_ = version
-	// Multi-version PHP packages come from Ondřej Surý's PPA/DPA
-	// (ppa:ondrej/php on Ubuntu-like, packages.sury.org on Debian).
+	// Multi-version PHP packages come from Ondřej Surý
+	// (packages.sury.org on Debian and on Ubuntu releases published there,
+	// ppa:ondrej/php otherwise).
 	return true
 }
 func (p *debianProvider) ValidatePHPVersion(version string) error {

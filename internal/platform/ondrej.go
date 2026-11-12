@@ -12,31 +12,47 @@ const (
 	ondrejKeyringPath   = "/usr/share/keyrings/abstrax-ondrej-php.gpg"
 	ondrejListPath      = "/etc/apt/sources.list.d/abstrax-ondrej-php.list"
 	ondrejKeyID         = "4F4EA0AAE5267A6C" // Ondřej Surý Launchpad PPA signing key
-	ondrejFallbackSuite = "noble"            // Ubuntu 24.04 LTS — published on the PPA
+	ondrejFallbackSuite = "noble"            // reported when a Launchpad suite is unpublished
 
 	suryKeyringPath   = "/usr/share/keyrings/debsuryorg-archive-keyring.gpg"
 	suryKeyringDebURL = "https://packages.sury.org/debsuryorg-archive-keyring.deb"
 	suryPHPRepoURL    = "https://packages.sury.org/php/"
 )
 
-// ondrejPublishedSuites are Ubuntu codenames known to have Release files on
-// ppa:ondrej/php. Newer devel releases fall back to noble until published.
+// suryUbuntuSuites are Ubuntu codenames published on packages.sury.org/php.
+// Jammy, noble, and resolute use that repository. Focal and interim releases
+// that are absent there stay on ppa:ondrej/php.
+var suryUbuntuSuites = map[string]bool{
+	"jammy":    true, // Ubuntu 22.04
+	"noble":    true, // Ubuntu 24.04
+	"resolute": true, // Ubuntu 26.04
+}
+
+// ondrejPublishedSuites are Ubuntu codenames that are not on packages.sury.org
+// and still use ppa:ondrej/php. Releases in neither set fall through to
+// packages.sury.org with their own suite.
 var ondrejPublishedSuites = map[string]bool{
 	"focal":    true,
-	"jammy":    true,
-	"noble":    true,
 	"oracular": true,
 	"plucky":   true,
 }
 
 // UsesOndrejLaunchpadPPA reports whether the host should use ppa:ondrej/php
-// (Ubuntu and Ubuntu derivatives) rather than packages.sury.org (Debian).
+// rather than packages.sury.org. Debian always uses sury.org. Ubuntu and its
+// derivatives use sury.org when that suite is published, and the Launchpad PPA
+// otherwise.
 func UsesOndrejLaunchpadPPA(provider Provider) bool {
+	if !ubuntuDerivative(provider) {
+		return false
+	}
+	return !suryUbuntuSuites[phpUbuntuCodename(provider)]
+}
+
+func ubuntuDerivative(provider Provider) bool {
 	if provider == nil || !provider.Profile().IsDebianFamily() {
 		return false
 	}
-	id := strings.ToLower(provider.Profile().DistroID)
-	switch id {
+	switch strings.ToLower(provider.Profile().DistroID) {
 	case "ubuntu", "pop", "linuxmint":
 		return true
 	default:
@@ -49,16 +65,15 @@ func PHPAptSuite(provider Provider) (suite string, fallback bool, err error) {
 	if provider == nil {
 		return "", false, fmt.Errorf("platform provider is nil")
 	}
-	p := provider.Profile()
-	if UsesOndrejLaunchpadPPA(provider) {
-		codename := p.UbuntuCodename
-		if codename == "" {
-			codename = p.VersionCodename
+	if ubuntuDerivative(provider) {
+		codename := phpUbuntuCodename(provider)
+		if suryUbuntuSuites[codename] {
+			return codename, false, nil
 		}
 		suite, fallback = resolveOndrejUbuntuSuite(codename)
 		return suite, fallback, nil
 	}
-	codename := p.VersionCodename
+	codename := provider.Profile().VersionCodename
 	if codename == "" {
 		return "", false, fmt.Errorf("could not determine Debian suite from VERSION_CODENAME; ensure /etc/os-release is populated")
 	}
@@ -223,6 +238,13 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 		return err
 	}
 	launchpad := UsesOndrejLaunchpadPPA(provider)
+	if launchpad && usedFallback {
+		// This Ubuntu release is not on ppa:ondrej/php. Pinning the PPA to
+		// noble makes apt-get update exit 100: the PPA's Release label now
+		// points at packages.sury.org, and apt refuses that change.
+		launchpad = false
+		suite = phpUbuntuCodename(provider)
+	}
 
 	if ondrejPHPRepoReady(enabler, suite, launchpad) {
 		if err := removeConflictingOndrejLists(enabler); err != nil {
@@ -237,11 +259,7 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 	}
 
 	if launchpad {
-		if usedFallback {
-			fmt.Printf("Ubuntu suite is not published on ppa:ondrej/php yet; using %s packages...\n", suite)
-		} else {
-			fmt.Printf("Configuring Ondřej PHP PPA (ppa:ondrej/php, suite %s)...\n", suite)
-		}
+		fmt.Printf("Configuring Ondřej PHP PPA (ppa:ondrej/php, suite %s)...\n", suite)
 		if err := ensureOndrejKeyringLaunchpad(ctx, enabler); err != nil {
 			return err
 		}
@@ -258,8 +276,18 @@ func ensureOndrejRepo(ctx context.Context, provider Provider, opts RepoOptions, 
 	}
 
 	fmt.Println("Updating package lists after configuring Ondřej PHP repository...")
-	if err := enabler.Run(ctx, "apt-get", "update"); err != nil {
+	// --allow-releaseinfo-change accepts the PPA label change that otherwise
+	// makes apt-get update exit 100 ("Use https://packages.sury.org/php/ instead").
+	if err := enabler.Run(ctx, "apt-get", "update", "--allow-releaseinfo-change"); err != nil {
 		return fmt.Errorf("updating package lists: %w", err)
 	}
 	return nil
+}
+
+func phpUbuntuCodename(provider Provider) string {
+	codename := provider.Profile().UbuntuCodename
+	if codename == "" {
+		codename = provider.Profile().VersionCodename
+	}
+	return strings.ToLower(strings.TrimSpace(codename))
 }
