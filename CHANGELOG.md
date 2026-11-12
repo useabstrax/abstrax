@@ -4,6 +4,16 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-11-12
+
+### Changed
+
+- **PHP repository on Ubuntu** - Ubuntu 22.04 (jammy), 24.04 (noble), and 26.04 (resolute) install Ondřej Surý's PHP packages from `packages.sury.org` instead of `ppa:ondrej/php`. Ubuntu 20.04 (focal) and the interim releases that sury.org does not publish (oracular, plucky) stay on the Launchpad PPA. Linux Mint and Pop!_OS follow the Ubuntu codename. The next time Abstrax configures the PHP repository on a jammy or noble host, it rewrites an Abstrax-managed Launchpad source to `packages.sury.org`.
+
+### Fixed
+
+- **PHP install on newer Ubuntu** - Ubuntu releases that are not published on `ppa:ondrej/php`, including 26.04 (resolute), no longer pin the Launchpad PPA to noble. That pin made `apt-get update` exit 100 because the PPA's Release label now tells apt to use `packages.sury.org`. Updates of a Launchpad PPA that is still in use accept that label change instead of aborting.
+
 ## [3.2.1] - 2026-11-09
 
 ### Fixed
