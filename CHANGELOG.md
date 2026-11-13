@@ -4,6 +4,12 @@ All notable changes to Abstrax are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`self update --plugins`** - `abstrax self update --plugins` updates the CLI, then updates every installed registry or manifest plugin to the latest compatible version. Local plugins are skipped. A plugin already on that version is left in place. One plugin failure does not stop the others; if any fail, the command exits with an error after reporting the rest. `--dry-run` previews the CLI and plugin updates without changing either.
+
 ## [3.3.0] - 2026-11-12
 
 ### Changed
