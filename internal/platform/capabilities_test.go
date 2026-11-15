@@ -241,6 +241,24 @@ func TestCacheProviderNames(t *testing.T) {
 	if rocky10.RedisModuleStream() != "redis:remi-7.2" {
 		t.Fatalf("module stream = %q", rocky10.RedisModuleStream())
 	}
+	if rocky10.ValkeyPackage() != "valkey" || rocky10.ValkeyServiceName() != "valkey" {
+		t.Fatalf("rocky10 valkey = %s/%s", rocky10.ValkeyPackage(), rocky10.ValkeyServiceName())
+	}
+	if rocky10.ValkeyConfigPath() != "/etc/valkey/valkey.conf" {
+		t.Fatalf("valkey config = %q", rocky10.ValkeyConfigPath())
+	}
+	if rocky10.RequiresExternalRepoForPHP("8.3") {
+		t.Fatal("rocky 10 AppStream PHP 8.3 should not require Remi")
+	}
+	if !rocky10.RequiresExternalRepoForPHP("8.5") {
+		t.Fatal("rocky 10 PHP 8.5 should still require Remi")
+	}
+	if rocky10.PHPFPMServiceName("8.3") != "php-fpm" {
+		t.Fatalf("stock php-fpm service = %q", rocky10.PHPFPMServiceName("8.3"))
+	}
+	if rocky9.RequiresExternalRepoForPHP("8.3") != true {
+		t.Fatal("rocky 9 PHP 8.3 should still use Remi")
+	}
 }
 
 func TestEnsureRedisRepositoryRocky10(t *testing.T) {
@@ -352,6 +370,7 @@ func TestEnsureEPELRocky(t *testing.T) {
 			Family:       "rhel",
 			DistroID:     "rocky",
 			DistroName:   "Rocky Linux 9.5",
+			VersionID:    "9.5",
 			SupportLevel: platform.SupportOfficial,
 			WebUser:      "nginx",
 			WebGroup:     "nginx",

@@ -297,7 +297,8 @@ func looksLikeFilesystemPath(s string) bool {
 }
 
 func newPluginUpdateCmd() *cobra.Command {
-	return &cobra.Command{
+	var binaryPath string
+	cmd := &cobra.Command{
 		Use:   "update <name>",
 		Short: "Update an installed plugin",
 		Args:  cobra.ExactArgs(1),
@@ -305,14 +306,19 @@ func newPluginUpdateCmd() *cobra.Command {
 			if err := validate.PluginName(args[0]); err != nil {
 				return err
 			}
-			if err := requireRootAndSupported(); err != nil {
-				return err
+			if binaryPath == "" {
+				if err := requireRootAndSupported(); err != nil {
+					return err
+				}
 			}
 			svc, err := pluginService()
 			if err != nil {
 				return err
 			}
-			result, err := svc.Update(cmd.Context(), args[0])
+			result, err := svc.Update(cmd.Context(), plugin.UpdateOptions{
+				Name: args[0],
+				Path: binaryPath,
+			})
 			if err != nil {
 				return err
 			}
@@ -320,6 +326,8 @@ func newPluginUpdateCmd() *cobra.Command {
 			return printSimpleResult(actions.PluginUpdate, summary, result)
 		},
 	}
+	cmd.Flags().StringVar(&binaryPath, "path", "", "New local binary path when updating a plugin installed with --path")
+	return cmd
 }
 
 func newPluginRemoveCmd() *cobra.Command {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"abstrax/internal/platform"
 )
 
 func TestErrSupervisorMissingHint(t *testing.T) {
@@ -33,5 +35,31 @@ func TestInstallResultFields(t *testing.T) {
 	}
 	if result.Package == "" || result.Service == "" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestInstallEnsuresEPEL(t *testing.T) {
+	origInstalled := supervisorInstalled
+	origEPEL := ensureEPELFn
+	t.Cleanup(func() {
+		supervisorInstalled = origInstalled
+		ensureEPELFn = origEPEL
+	})
+
+	supervisorInstalled = func(string) bool { return false }
+	called := false
+	ensureEPELFn = func(context.Context, platform.Provider, platform.RepoOptions, platform.RepoEnabler) error {
+		called = true
+		return nil
+	}
+
+	svc := New(true, false)
+	_, err := svc.Install(context.Background(), InstallOptions{DryRun: true})
+	if err != nil {
+		// Package manager may still fail on this host after EPEL is ensured.
+		_ = err
+	}
+	if !called {
+		t.Fatal("expected EnsureEPELWithOptions to be called before installing supervisor")
 	}
 }

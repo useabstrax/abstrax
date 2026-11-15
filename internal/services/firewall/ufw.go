@@ -62,18 +62,22 @@ func parseUFWRuleLine(line string) (Rule, bool) {
 	fromField, fromV6 := stripUFWMarker(fromField, "(v6)")
 
 	to, port, proto := parseUFWTo(toField)
-	from := parseUFWFrom(fromField)
+	from, sourcePort, sourceProto := parseUFWFrom(fromField)
+	if proto == "" {
+		proto = sourceProto
+	}
 
 	rule := Rule{
-		Number:    m[1],
-		Action:    action,
-		Direction: direction,
-		Port:      port,
-		Protocol:  proto,
-		From:      from,
-		To:        to,
-		Comment:   comment,
-		IPv6:      toV6 || fromV6,
+		Number:     m[1],
+		Action:     action,
+		Direction:  direction,
+		Port:       port,
+		Protocol:   proto,
+		SourcePort: sourcePort,
+		From:       from,
+		To:         to,
+		Comment:    comment,
+		IPv6:       toV6 || fromV6,
 	}
 	rule.ID = ufwStableID(rule)
 	return rule, true
@@ -120,12 +124,21 @@ func parseUFWTo(field string) (addr, port, proto string) {
 	return "", field, ""
 }
 
-func parseUFWFrom(field string) string {
+// parseUFWFrom splits the From column. UFW prints a source port in that
+// column as "<addr> <port>/<proto>", for example "10.1.2.3 3306/tcp".
+func parseUFWFrom(field string) (addr, sourcePort, proto string) {
 	field = strings.TrimSpace(field)
 	if field == "" || strings.EqualFold(field, "anywhere") {
-		return ""
+		return "", "", ""
 	}
-	return field
+	parts := strings.Fields(field)
+	if len(parts) >= 2 {
+		last := parts[len(parts)-1]
+		if p, pr, ok := splitUFWPort(last); ok {
+			return strings.Join(parts[:len(parts)-1], " "), p, pr
+		}
+	}
+	return field, "", ""
 }
 
 func splitUFWPort(spec string) (port, proto string, ok bool) {
@@ -155,12 +168,24 @@ func ufwStableID(r Rule) string {
 	if dir == "" {
 		dir = "in"
 	}
+	// A source port used to be stored inside From ("10.1.2.3 3306/tcp") with
+	// an empty protocol. Keep that hash input so existing rule IDs still match.
+	from := r.From
+	proto := r.Protocol
+	if r.SourcePort != "" {
+		spec := r.SourcePort
+		if proto != "" && !strings.Contains(spec, "/") {
+			spec += "/" + strings.ToLower(proto)
+		}
+		from = strings.TrimSpace(from + " " + spec)
+		proto = ""
+	}
 	spec := strings.Join([]string{
 		strings.ToLower(r.Action),
 		dir,
 		r.Port,
-		strings.ToLower(r.Protocol),
-		strings.ToLower(r.From),
+		strings.ToLower(proto),
+		strings.ToLower(from),
 		strings.ToLower(r.To),
 		ipver,
 	}, "|")
@@ -210,6 +235,25 @@ func ufwDeleteArgs(r Rule) []string {
 		args = append(args, dir)
 	}
 
+	if r.SourcePort != "" {
+		if r.From != "" {
+			args = append(args, "from", r.From)
+		} else {
+			args = append(args, "from", "any")
+		}
+		args = append(args, "port", r.SourcePort)
+		if r.Protocol != "" {
+			args = append(args, "proto", r.Protocol)
+		}
+		if r.To != "" {
+			args = append(args, "to", r.To)
+		}
+		if r.Port != "" {
+			args = append(args, "port", r.Port)
+		}
+		return args
+	}
+
 	if r.From != "" || r.To != "" {
 		if r.From != "" {
 			args = append(args, "from", r.From)
@@ -255,10 +299,10 @@ func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOption
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
-		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", match.Number)
+		_, err = s.run(ctx, "ufw", "--force", "delete", match.Number)
 		return check, err
 	}
-	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(*match)...)
+	_, err = s.run(ctx, "ufw", ufwDeleteArgs(*match)...)
 	return check, err
 }
 

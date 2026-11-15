@@ -219,6 +219,9 @@ func TestStatusRunningReadsServer(t *testing.T) {
 	if st.Port == nil || *st.Port != 3306 || st.Socket != "/var/run/mysqld/mysqld.sock" {
 		t.Fatalf("endpoint = port %v socket %q", st.Port, st.Socket)
 	}
+	if st.Auth != "ok" {
+		t.Fatalf("auth = %q, want ok", st.Auth)
+	}
 
 	raw, err := json.Marshal(st)
 	if err != nil {
@@ -232,6 +235,7 @@ func TestStatusRunningReadsServer(t *testing.T) {
 		`"enabled":true`,
 		`"port":3306`,
 		`"/var/run/mysqld/mysqld.sock"`,
+		`"auth":"ok"`,
 	} {
 		if !strings.Contains(string(raw), fragment) {
 			t.Fatalf("json %s missing %s", raw, fragment)
@@ -269,5 +273,8 @@ func TestStatusConnectionFailureDoesNotError(t *testing.T) {
 	}
 	if st.Port == nil || *st.Port != 3307 || st.Socket != "/tmp/mysql.sock" {
 		t.Fatalf("endpoint = port %v socket %q", st.Port, st.Socket)
+	}
+	if st.Auth != "failed" {
+		t.Fatalf("auth = %q, want failed", st.Auth)
 	}
 }

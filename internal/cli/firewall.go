@@ -327,7 +327,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.To, "to", "", "Destination IP")
-	cmd.Flags().StringVar(&opts.Port, "port", "", "Specific port")
+	cmd.Flags().StringVar(&opts.Port, "port", "", "Destination port")
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp). Default is both when a port is set")
 	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
 
@@ -390,13 +390,13 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "TO"})
+			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "SRC", "TO"})
 			for _, r := range rules {
 				action := r.Action
 				if r.Pending {
 					action += " (not applied)"
 				}
-				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, action, strings.ToUpper(r.Direction), r.From, r.To})
+				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, action, strings.ToUpper(r.Direction), r.From, r.SourcePort, r.To})
 			}
 			t.Render()
 			return nil

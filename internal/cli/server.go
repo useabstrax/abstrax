@@ -310,7 +310,10 @@ func newServerRebootRequiredCmd() *cobra.Command {
 			}
 
 			summary := "No reboot required."
-			if status.Required {
+			switch {
+			case status.Required == nil:
+				summary = "Can't tell: needs-restarting is not installed."
+			case *status.Required:
 				summary = "Reboot required."
 			}
 

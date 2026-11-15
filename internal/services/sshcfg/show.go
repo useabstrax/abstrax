@@ -100,6 +100,9 @@ func (s *Service) showFromFiles() (*SSHConfig, error) {
 }
 
 func (s *Service) completeShow(cfg *SSHConfig) *SSHConfig {
+	if cfg.PermitRootLogin != "" {
+		cfg.PermitRootLogin = normalizePermitRootLogin(cfg.PermitRootLogin)
+	}
 	if cfg.Port == "" {
 		cfg.Port = sshDefault("port")
 	}

@@ -169,8 +169,40 @@ func (s *Service) StatusWithDefaults(ctx context.Context) (*Status, error) {
 	return status, nil
 }
 
+// run, runSilent, and runQuery execute ufw or firewall-cmd and attach the
+// program's own message to a failure. Stderr wins; stdout is used when stderr
+// is empty. Other commands keep the runner's error unchanged.
+func (s *Service) run(ctx context.Context, name string, args ...string) (executil.Result, error) {
+	res, err := s.runner.Run(ctx, name, args...)
+	return finishFirewallCommand(name, res, err)
+}
+
+func (s *Service) runSilent(ctx context.Context, name string, args ...string) (executil.Result, error) {
+	res, err := s.runner.RunSilent(ctx, name, args...)
+	return finishFirewallCommand(name, res, err)
+}
+
+func (s *Service) runQuery(ctx context.Context, name string, args ...string) (executil.Result, error) {
+	res, err := s.runner.RunQuery(ctx, name, args...)
+	return finishFirewallCommand(name, res, err)
+}
+
+func finishFirewallCommand(name string, res executil.Result, err error) (executil.Result, error) {
+	if err == nil || (name != "ufw" && name != "firewall-cmd") {
+		return res, err
+	}
+	msg := strings.TrimSpace(res.Stderr)
+	if msg == "" {
+		msg = strings.TrimSpace(res.Stdout)
+	}
+	if msg == "" {
+		return res, err
+	}
+	return res, fmt.Errorf("%s: %s", name, msg)
+}
+
 func (s *Service) ufwStatus(ctx context.Context) (*Status, error) {
-	res, err := s.runner.RunSilent(ctx, "ufw", "status", "numbered")
+	res, err := s.runSilent(ctx, "ufw", "status", "numbered")
 	if err != nil {
 		return nil, fmt.Errorf("ufw status: %w", err)
 	}
@@ -192,12 +224,12 @@ func (s *Service) ufwStatus(ctx context.Context) (*Status, error) {
 
 func (s *Service) firewalldStatus(ctx context.Context) (*Status, error) {
 	status := &Status{Backend: "firewalld"}
-	res, err := s.runner.RunSilent(ctx, "firewall-cmd", "--state")
+	res, err := s.runSilent(ctx, "firewall-cmd", "--state")
 	if err == nil && strings.Contains(strings.ToLower(res.Stdout), "running") {
 		status.Active = true
 	}
 
-	listRes, err := s.runner.RunSilent(ctx, "firewall-cmd", "--list-all")
+	listRes, err := s.runSilent(ctx, "firewall-cmd", "--list-all")
 	if err == nil {
 		status.Rules = parseFirewalldRules(listRes.Stdout)
 	}
@@ -242,12 +274,12 @@ func (s *Service) Enable(ctx context.Context, opts EnableOptions) (SSHProtectRes
 	}
 
 	if opts.AllowSSH {
-		if _, err := s.runner.Run(ctx, "ufw", "allow",
+		if _, err := s.run(ctx, "ufw", "allow",
 			fmt.Sprintf("%d/tcp", sshPort)); err != nil {
 			return protect, fmt.Errorf("allowing SSH port: %w", err)
 		}
 	}
-	_, err = s.runner.Run(ctx, "ufw", "--force", "enable")
+	_, err = s.run(ctx, "ufw", "--force", "enable")
 	return protect, err
 }
 
@@ -260,7 +292,7 @@ func (s *Service) Disable(ctx context.Context) error {
 		_, err := s.runner.Run(ctx, "systemctl", "disable", "--now", "firewalld")
 		return err
 	}
-	_, err := s.runner.Run(ctx, "ufw", "--force", "disable")
+	_, err := s.run(ctx, "ufw", "--force", "disable")
 	return err
 }
 
@@ -434,10 +466,10 @@ func (s *Service) firewalldRemoveService(ctx context.Context, service string) er
 	if service == "" {
 		return fmt.Errorf("service name is required")
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--remove-service="+service); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--remove-service="+service); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }
 
@@ -450,10 +482,10 @@ func (s *Service) firewalldRemovePort(ctx context.Context, port, proto string) e
 		proto = "tcp"
 	}
 	arg := fmt.Sprintf("--remove-port=%s/%s", port, proto)
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", arg); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", arg); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }
 
@@ -471,20 +503,26 @@ func (s *Service) allowIP(ctx context.Context, opts AllowOptions) error {
 	if s.backend == "firewalld" {
 		return s.firewalldAllowIP(ctx, opts)
 	}
+	// --port is the destination port. UFW treats a port that follows `from`
+	// with no `to` as the source port, which would allow that address in on
+	// every port as long as the connection came from --port.
 	args := []string{"allow", "from", opts.From}
-	if opts.To != "" {
-		args = append(args, "to", opts.To)
-	}
 	if opts.Port != "" {
-		args = append(args, "port", opts.Port)
+		to := opts.To
+		if to == "" {
+			to = "any"
+		}
+		args = append(args, "to", to, "port", opts.Port)
 		if opts.Protocol != "" {
 			args = append(args, "proto", opts.Protocol)
 		}
+	} else if opts.To != "" {
+		args = append(args, "to", opts.To)
 	}
 	if opts.Comment != "" {
 		args = append(args, "comment", opts.Comment)
 	}
-	_, err := s.runner.Run(ctx, "ufw", args...)
+	_, err := s.run(ctx, "ufw", args...)
 	return err
 }
 
@@ -499,7 +537,7 @@ func (s *Service) denyIP(ctx context.Context, opts AllowOptions) error {
 	if opts.Comment != "" {
 		args = append(args, "comment", opts.Comment)
 	}
-	_, err := s.runner.Run(ctx, "ufw", args...)
+	_, err := s.run(ctx, "ufw", args...)
 	return err
 }
 
@@ -514,16 +552,21 @@ func (s *Service) addRule(ctx context.Context, action string, opts AllowOptions)
 		return s.firewalldAllow(ctx, opts)
 	}
 
+	// UFW's short form accepts `3306/tcp`. The extended `from` form does not:
+	// it needs `to any port 3306 proto tcp`.
 	port := opts.Port
-	if opts.Protocol != "" {
+	if opts.From == "" && opts.Protocol != "" && port != "" {
 		port = fmt.Sprintf("%s/%s", port, opts.Protocol)
 	}
 
 	args := []string{action}
 	if opts.From != "" {
 		args = append(args, "from", opts.From)
-		if port != "" {
-			args = append(args, "to", "any", "port", port)
+		if opts.Port != "" {
+			args = append(args, "to", "any", "port", opts.Port)
+			if opts.Protocol != "" {
+				args = append(args, "proto", opts.Protocol)
+			}
 		}
 	} else if port != "" {
 		args = append(args, port)
@@ -535,7 +578,7 @@ func (s *Service) addRule(ctx context.Context, action string, opts AllowOptions)
 		args = append(args, "comment", opts.Comment)
 	}
 
-	_, err := s.runner.Run(ctx, "ufw", args...)
+	_, err := s.run(ctx, "ufw", args...)
 	return err
 }
 
@@ -566,19 +609,19 @@ func (s *Service) firewalldAllow(ctx context.Context, opts AllowOptions) error {
 }
 
 func (s *Service) firewalldAddService(ctx context.Context, service string) error {
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-service="+service); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--add-service="+service); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }
 
 func (s *Service) firewalldAllowPort(ctx context.Context, port, proto string) error {
 	arg := fmt.Sprintf("--add-port=%s/%s", port, proto)
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", arg); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", arg); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }
 

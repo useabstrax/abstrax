@@ -22,10 +22,12 @@ type Rule struct {
 	Direction string `json:"direction,omitempty"`
 	Port      string `json:"port,omitempty"`
 	Protocol  string `json:"protocol,omitempty"`
-	From      string `json:"from,omitempty"`
-	To        string `json:"to,omitempty"`
-	Comment   string `json:"comment,omitempty"`
-	IPv6      bool   `json:"ipv6,omitempty"`
+	// SourcePort is set when UFW recorded a source port (`from <addr> port <port>`).
+	SourcePort string `json:"source_port,omitempty"`
+	From       string `json:"from,omitempty"`
+	To         string `json:"to,omitempty"`
+	Comment    string `json:"comment,omitempty"`
+	IPv6       bool   `json:"ipv6,omitempty"`
 	// Pending is true when UFW is inactive and the rule is stored but not applied.
 	Pending bool     `json:"pending,omitempty"`
 	Kind    RuleKind `json:"kind,omitempty"`

@@ -531,7 +531,114 @@ exit 0
 	}
 }
 
-func TestLocalUpdateRejected(t *testing.T) {
+func TestLocalUpdateWithPath(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeLocalPlugin := func(path, version string) {
+		t.Helper()
+		script := fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"localupd","display_name":"Local","description":"Local","version":"%s","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`, version)
+		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	v1 := filepath.Join(sourceDir, "abstrax-localupd-v1")
+	writeLocalPlugin(v1, "1.0.0")
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	if _, err := svc.Install(context.Background(), InstallOptions{
+		Name:       "localupd",
+		BinaryPath: v1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	v2 := filepath.Join(sourceDir, "abstrax-localupd-v2")
+	writeLocalPlugin(v2, "2.0.0")
+	result, err := svc.Update(context.Background(), UpdateOptions{Name: "localupd", Path: v2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Version != "2.0.0" {
+		t.Fatalf("version = %q, want 2.0.0", result.Version)
+	}
+
+	linkPath := filepath.Join(svc.Paths().InstallDir, "abstrax-localupd")
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != v2 {
+		t.Fatalf("symlink target %q, want %q", target, v2)
+	}
+	rec, err := svc.Store().Load("localupd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Version != "2.0.0" || rec.SourcePath != v2 {
+		t.Fatalf("record = %+v", rec)
+	}
+}
+
+func TestLocalUpdateReusesSourcePath(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "source")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sourceBin := filepath.Join(sourceDir, "abstrax-localupd")
+	script := `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"localupd","display_name":"Local","description":"Local","version":"1.1.0","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewWithPaths(testPaths(dir), "http://127.0.0.1:1")
+	if _, err := svc.Install(context.Background(), InstallOptions{
+		Name:       "localupd",
+		BinaryPath: sourceBin,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Rewrite the same path with a new version, then update without --path.
+	script = `#!/bin/sh
+if [ "$1" = "plugin" ] && [ "$2" = "metadata" ]; then
+  cat <<'EOF'
+{"protocol_version":1,"name":"localupd","display_name":"Local","description":"Local","version":"1.2.0","requires_abstrax":">=0.0.0","commands":[]}
+EOF
+  exit 0
+fi
+exit 0
+`
+	if err := os.WriteFile(sourceBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.Update(context.Background(), UpdateOptions{Name: "localupd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Version != "1.2.0" {
+		t.Fatalf("version = %q, want 1.2.0", result.Version)
+	}
+}
+
+func TestLocalUpdateMissingPath(t *testing.T) {
 	dir := t.TempDir()
 	sourceDir := filepath.Join(dir, "source")
 	if err := os.MkdirAll(sourceDir, 0755); err != nil {
@@ -557,11 +664,14 @@ exit 0
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := svc.Update(context.Background(), "localupd")
-	if err == nil {
-		t.Fatal("expected update error for local plugin")
+	if err := os.Remove(sourceBin); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "cannot update local plugin") {
+	_, err := svc.Update(context.Background(), UpdateOptions{Name: "localupd"})
+	if err == nil {
+		t.Fatal("expected update error when source path is missing")
+	}
+	if !strings.Contains(err.Error(), "provide --path") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

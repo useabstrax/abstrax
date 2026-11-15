@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -172,6 +173,25 @@ func TestUFWDeleteArgs(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 
+	source := parseUFWRules("[ 9] Anywhere   ALLOW IN   10.1.2.3 3306/tcp   # MySQL")
+	if len(source) != 1 {
+		t.Fatal("expected a source-port rule")
+	}
+	if source[0].From != "10.1.2.3" || source[0].SourcePort != "3306" || source[0].Protocol != "tcp" || source[0].Port != "" {
+		t.Fatalf("parsed = %#v", source[0])
+	}
+	if source[0].Comment != "MySQL" {
+		t.Fatalf("comment = %q", source[0].Comment)
+	}
+	legacy := Rule{Action: "ALLOW", Direction: "in", From: "10.1.2.3 3306/tcp"}
+	if source[0].ID != ufwStableID(legacy) {
+		t.Fatalf("id %s, legacy %s", source[0].ID, ufwStableID(legacy))
+	}
+	got = strings.Join(ufwDeleteArgs(source[0]), " ")
+	if got != "--force delete allow from 10.1.2.3 port 3306 proto tcp" {
+		t.Fatalf("source port delete = %q", got)
+	}
+
 	simple := parseUFWRules("[ 1] 22/tcp ALLOW IN Anywhere")
 	got = strings.Join(ufwDeleteArgs(simple[0]), " ")
 	if got != "--force delete allow 22/tcp" {
@@ -263,22 +283,94 @@ func TestUFWRuleRemoveMissing(t *testing.T) {
 	}
 }
 
-func TestAllowIPCommentAndProtocol(t *testing.T) {
-	runner := executil.New(true, false)
-	svc := &Service{runner: runner, backend: "ufw"}
-	err := svc.allowIP(context.Background(), AllowOptions{
-		From:     "10.0.0.12",
-		Port:     "3306",
-		Protocol: "tcp",
-		Comment:  "mysql from app",
-	})
-	if err != nil {
-		t.Fatal(err)
+func TestAllowIPDestinationPort(t *testing.T) {
+	tests := []struct {
+		name string
+		opts AllowOptions
+		want string
+	}{
+		{
+			name: "port and protocol",
+			opts: AllowOptions{From: "10.1.2.3", Port: "3306", Protocol: "tcp"},
+			want: "ufw allow from 10.1.2.3 to any port 3306 proto tcp",
+		},
+		{
+			name: "port without protocol",
+			opts: AllowOptions{From: "10.1.2.3", Port: "3306"},
+			want: "ufw allow from 10.1.2.3 to any port 3306",
+		},
+		{
+			name: "port protocol and destination",
+			opts: AllowOptions{From: "10.1.2.3", To: "10.9.9.9", Port: "3306", Protocol: "tcp", Comment: "mysql from app"},
+			want: "ufw allow from 10.1.2.3 to 10.9.9.9 port 3306 proto tcp comment mysql from app",
+		},
+		{
+			name: "no port",
+			opts: AllowOptions{From: "10.1.2.3"},
+			want: "ufw allow from 10.1.2.3",
+		},
 	}
-	got := strings.Join(runner.Commands()[0], " ")
-	want := "ufw allow from 10.0.0.12 port 3306 proto tcp comment mysql from app"
-	if got != want {
-		t.Fatalf("got %q", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			svc := &Service{runner: runner, backend: "ufw"}
+			if err := svc.allowIP(context.Background(), tt.opts); err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(runner.Commands()[0], " ")
+			if got != tt.want {
+				t.Fatalf("got %q", got)
+			}
+		})
+	}
+}
+
+func TestFirewallCommandErrorIncludesOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		backend string
+		command string
+		stderr  string
+		stdout  string
+		want    string
+	}{
+		{
+			name:    "ufw stderr",
+			backend: "ufw",
+			command: "ufw",
+			stderr:  "ERROR: Bad port",
+			want:    "ufw: ERROR: Bad port",
+		},
+		{
+			name:    "ufw stdout when stderr is empty",
+			backend: "ufw",
+			command: "ufw",
+			stdout:  "ERROR: Bad source address",
+			want:    "ufw: ERROR: Bad source address",
+		},
+		{
+			name:    "firewall-cmd stderr",
+			backend: "firewalld",
+			command: "firewall-cmd",
+			stderr:  "Error: INVALID_PORT: 99999",
+			want:    "firewall-cmd: Error: INVALID_PORT: 99999",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			runner.SetCommandFunc(func(_ context.Context, name string, _ []string) (executil.Result, bool, error) {
+				if name != tt.command {
+					return executil.Result{}, false, nil
+				}
+				return executil.Result{Stdout: tt.stdout, Stderr: tt.stderr, ExitCode: 1}, true, errors.New("exit status 1")
+			})
+			svc := &Service{runner: runner, backend: tt.backend}
+			err := svc.addRule(context.Background(), "allow", AllowOptions{Port: "not-a-port"})
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("err = %v", err)
+			}
+		})
 	}
 }
 
@@ -367,5 +459,52 @@ func TestUFWInactiveRuleListAndRemove(t *testing.T) {
 	want := "ufw --force delete allow from 10.1.2.3 to any port 3306 proto tcp"
 	if deleteCmd != want {
 		t.Fatalf("got %q", deleteCmd)
+	}
+}
+
+func TestAddRuleFromAndProtocol(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		opts   AllowOptions
+		want   string
+	}{
+		{
+			name:   "allow from with protocol",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", From: "10.1.2.3", Protocol: "tcp"},
+			want:   "ufw allow from 10.1.2.3 to any port 3306 proto tcp",
+		},
+		{
+			name:   "deny from with protocol",
+			action: "deny",
+			opts:   AllowOptions{Port: "6381", From: "10.9.9.9", Protocol: "tcp"},
+			want:   "ufw deny from 10.9.9.9 to any port 6381 proto tcp",
+		},
+		{
+			name:   "allow from without protocol",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", From: "10.1.2.3"},
+			want:   "ufw allow from 10.1.2.3 to any port 3306",
+		},
+		{
+			name:   "short form keeps port/proto",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", Protocol: "tcp"},
+			want:   "ufw allow 3306/tcp",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			svc := &Service{runner: runner, backend: "ufw"}
+			if err := svc.addRule(context.Background(), tt.action, tt.opts); err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(runner.Commands()[0], " ")
+			if got != tt.want {
+				t.Fatalf("got %q", got)
+			}
+		})
 	}
 }
