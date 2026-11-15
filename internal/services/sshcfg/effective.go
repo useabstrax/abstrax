@@ -212,7 +212,7 @@ func (s *Service) verifyEffective(ctx context.Context, key, value string) error 
 	if err != nil {
 		return err
 	}
-	if strings.EqualFold(got, value) {
+	if sameSSHValue(key, got, value) {
 		return nil
 	}
 	if got == "" {
@@ -222,6 +222,27 @@ func (s *Service) verifyEffective(ctx context.Context, key, value string) error 
 		return fmt.Errorf("%s is still %s: %s sets it first", key, got, src)
 	}
 	return fmt.Errorf("%s is still %s", key, got)
+}
+
+// sameSSHValue compares sshd directive values. OpenSSH prints
+// without-password for the same setting as prohibit-password.
+func sameSSHValue(key, got, want string) bool {
+	if strings.EqualFold(got, want) {
+		return true
+	}
+	if normalizeKeyword(key) != "permitrootlogin" {
+		return false
+	}
+	return normalizePermitRootLogin(got) == normalizePermitRootLogin(want)
+}
+
+func normalizePermitRootLogin(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "without-password", "prohibit-password":
+		return "prohibit-password"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
 }
 
 func (s *Service) effectiveKeyword(ctx context.Context, key string) (string, error) {
