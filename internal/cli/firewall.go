@@ -327,7 +327,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.To, "to", "", "Destination IP")
-	cmd.Flags().StringVar(&opts.Port, "port", "", "Specific port")
+	cmd.Flags().StringVar(&opts.Port, "port", "", "Destination port")
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp). Default is both when a port is set")
 	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
 

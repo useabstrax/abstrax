@@ -263,22 +263,45 @@ func TestUFWRuleRemoveMissing(t *testing.T) {
 	}
 }
 
-func TestAllowIPCommentAndProtocol(t *testing.T) {
-	runner := executil.New(true, false)
-	svc := &Service{runner: runner, backend: "ufw"}
-	err := svc.allowIP(context.Background(), AllowOptions{
-		From:     "10.0.0.12",
-		Port:     "3306",
-		Protocol: "tcp",
-		Comment:  "mysql from app",
-	})
-	if err != nil {
-		t.Fatal(err)
+func TestAllowIPDestinationPort(t *testing.T) {
+	tests := []struct {
+		name string
+		opts AllowOptions
+		want string
+	}{
+		{
+			name: "port and protocol",
+			opts: AllowOptions{From: "10.1.2.3", Port: "3306", Protocol: "tcp"},
+			want: "ufw allow from 10.1.2.3 to any port 3306 proto tcp",
+		},
+		{
+			name: "port without protocol",
+			opts: AllowOptions{From: "10.1.2.3", Port: "3306"},
+			want: "ufw allow from 10.1.2.3 to any port 3306",
+		},
+		{
+			name: "port protocol and destination",
+			opts: AllowOptions{From: "10.1.2.3", To: "10.9.9.9", Port: "3306", Protocol: "tcp", Comment: "mysql from app"},
+			want: "ufw allow from 10.1.2.3 to 10.9.9.9 port 3306 proto tcp comment mysql from app",
+		},
+		{
+			name: "no port",
+			opts: AllowOptions{From: "10.1.2.3"},
+			want: "ufw allow from 10.1.2.3",
+		},
 	}
-	got := strings.Join(runner.Commands()[0], " ")
-	want := "ufw allow from 10.0.0.12 port 3306 proto tcp comment mysql from app"
-	if got != want {
-		t.Fatalf("got %q", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			svc := &Service{runner: runner, backend: "ufw"}
+			if err := svc.allowIP(context.Background(), tt.opts); err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(runner.Commands()[0], " ")
+			if got != tt.want {
+				t.Fatalf("got %q", got)
+			}
+		})
 	}
 }
 
