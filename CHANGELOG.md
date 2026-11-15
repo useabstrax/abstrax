@@ -54,6 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`user list` system accounts** - System vs regular users follow `UID_MIN` and `UID_MAX` from `/etc/login.defs` (defaults 1000 and 60000). UIDs outside that range, such as `nobody` (65534), are system accounts. Root stays outside the system filter, matching `user info`.
 - **`user list` locked** - Each listed user includes `locked` (and `expired` / `login_blocked`) from `passwd -S` and shadow expiry, the same fields as `user info`.
 
+### Fixed
+
+- **SELinux plugin binaries** - On SELinux-enabled hosts, plugin install and update copy the binary into place (instead of renaming from `/tmp`), add a persistent `bin_t` fcontext for the plugin directory, and run `restorecon`. That stops systemd services from failing with `203/EXEC` because the binary kept the `tmp_t` label.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
