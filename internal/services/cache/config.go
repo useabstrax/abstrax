@@ -24,14 +24,14 @@ type ConfigInfo struct {
 
 // ConfigOptions updates common cache settings.
 type ConfigOptions struct {
-	Driver          Driver
-	Port            int
-	Bind            string
-	Memory          string
-	MaxMemoryPolicy string
-	RequirePass     string
+	Driver           Driver
+	Port             int
+	Bind             string
+	Memory           string
+	MaxMemoryPolicy  string
+	RequirePass      string
 	ClearRequirePass bool
-	DryRun          bool
+	DryRun           bool
 }
 
 // Config returns the effective settings for a cache driver.
