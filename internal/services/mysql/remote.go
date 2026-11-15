@@ -65,16 +65,23 @@ func (s *Service) EnableRemote(ctx context.Context, opts RemoteEnableOptions) (*
 	return status, nil
 }
 
-// DisableRemote removes the Abstrax bind-address drop-in and restarts the database.
+// localBindAddress is the bind used when remote access is off.
+const localBindAddress = "127.0.0.1"
+
+// DisableRemote rewrites the Abstrax bind-address drop-in to 127.0.0.1 and restarts.
+// On RHEL-family MariaDB, removing the drop-in would listen on every interface again.
 // If the running bind address was not set by that file, nothing is changed.
-// If the service does not come back, the drop-in is restored and the service is restarted again.
+// If the service does not come back, the previous drop-in is restored.
 func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) (*RemoteStatus, error) {
 	path, err := s.remoteDropInPath()
 	if err != nil {
 		return nil, err
 	}
+	localBody := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
 	if opts.DryRun {
 		return &RemoteStatus{
+			Enabled:     false,
+			BindAddress: localBindAddress,
 			ManagedFile: path,
 			Port:        s.mysqlPort(),
 		}, nil
@@ -103,19 +110,27 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 				BindAddress: live,
 				ManagedFile: path,
 				Port:        s.mysqlPort(),
-				Note:        fmt.Sprintf("MySQL is already listening on %s. Abstrax has no remote drop-in to remove.", live),
+				Note:        fmt.Sprintf("MySQL is already listening on %s. Abstrax has no remote drop-in to change.", live),
 			}, nil
 		}
 		fileBind, ok := bindAddressInDropIn(string(previous))
 		if !ok || !sameBind(fileBind, live) {
 			return nil, fmt.Errorf("bind-address is %s and does not come from Abstrax's file %s; remote access was not turned off", live, path)
 		}
+		if !remoteAccessEnabled(live) {
+			return &RemoteStatus{
+				Enabled:     false,
+				BindAddress: live,
+				ManagedFile: path,
+				Port:        s.mysqlPort(),
+			}, nil
+		}
 	} else if !existed {
 		return nil, fmt.Errorf("Abstrax has no remote drop-in at %s, and the live bind address is unknown because the database is not accepting connections; remote access was not turned off", path)
 	}
 
-	if err := os.Remove(path); err != nil {
-		return nil, fmt.Errorf("removing %s: %w", path, err)
+	if err := writeRemoteDropIn(path, localBody); err != nil {
+		return nil, err
 	}
 	if err := s.restartAndWait(ctx); err != nil {
 		return nil, s.rollbackDisable(ctx, path, previous, err)
@@ -123,10 +138,10 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 
 	live, qerr := s.queryBindAddress(ctx)
 	if qerr != nil {
-		return nil, fmt.Errorf("removed %s and restarted the database, but the live bind address is unknown (%v); remote access was not confirmed off", path, qerr)
+		return nil, fmt.Errorf("wrote local bind-address and restarted the database, but the live bind address is unknown (%v); remote access was not confirmed off", qerr)
 	}
 	if remoteAccessEnabled(live) {
-		return nil, fmt.Errorf("removed %s and restarted the database, but bind-address is still %s and does not come from Abstrax's file; remote access was not turned off", path, live)
+		return nil, fmt.Errorf("wrote local bind-address and restarted the database, but bind-address is still %s; remote access was not turned off", live)
 	}
 	return &RemoteStatus{
 		Enabled:     false,
@@ -134,6 +149,23 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 		ManagedFile: path,
 		Port:        s.mysqlPort(),
 	}, nil
+}
+
+// ensureLocalBindConfig writes Abstrax's bind-address drop-in to 127.0.0.1 when
+// no Abstrax drop-in exists yet. Used during install so RHEL MariaDB does not
+// listen on every interface before mysql remote enable.
+func (s *Service) ensureLocalBindConfig() error {
+	path, err := s.remoteDropInPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	body := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	return writeRemoteDropIn(path, body)
 }
 
 // RemoteStatus reports the bind address the running server is using.

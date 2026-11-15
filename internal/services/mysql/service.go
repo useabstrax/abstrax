@@ -131,6 +131,12 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return nil, fmt.Errorf("installing %s: %w", provider.DatabaseDisplayName(), err)
 	}
 
+	// Pin bind-address to loopback before the first start. RHEL MariaDB otherwise
+	// listens on 0.0.0.0 until mysql remote enable.
+	if err := s.ensureLocalBindConfig(); err != nil {
+		return nil, fmt.Errorf("configuring local-only bind-address: %w", err)
+	}
+
 	serviceName := provider.DatabaseServiceName()
 	if detected, err := s.detectServiceName(ctx); err == nil {
 		serviceName = detected
