@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`firewall allow-ip --port`** - `--port` is the destination port. `allow-ip 10.1.2.3 --port 3306 --protocol tcp` runs `ufw allow from 10.1.2.3 to any port 3306 proto tcp`, so that address can reach 3306 and is not allowed in on every port. `--to` still sets the destination address. firewalld already opens the destination port with a rich rule.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

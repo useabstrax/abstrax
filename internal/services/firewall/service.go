@@ -461,15 +461,21 @@ func (s *Service) allowIP(ctx context.Context, opts AllowOptions) error {
 	if s.backend == "firewalld" {
 		return s.firewalldAllowIP(ctx, opts)
 	}
+	// --port is the destination port. UFW treats a port that follows `from`
+	// with no `to` as the source port, which would allow that address in on
+	// every port as long as the connection came from --port.
 	args := []string{"allow", "from", opts.From}
-	if opts.To != "" {
-		args = append(args, "to", opts.To)
-	}
 	if opts.Port != "" {
-		args = append(args, "port", opts.Port)
+		to := opts.To
+		if to == "" {
+			to = "any"
+		}
+		args = append(args, "to", to, "port", opts.Port)
 		if opts.Protocol != "" {
 			args = append(args, "proto", opts.Protocol)
 		}
+	} else if opts.To != "" {
+		args = append(args, "to", opts.To)
 	}
 	if opts.Comment != "" {
 		args = append(args, "comment", opts.Comment)
