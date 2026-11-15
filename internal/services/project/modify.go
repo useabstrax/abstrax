@@ -89,7 +89,14 @@ func (s *Service) modifyPath(ctx context.Context, state *State, opts ModifyOptio
 	if err != nil {
 		return err
 	}
+	oldPath := state.Path
 	state.Path = validated.ProjectPath
+	if oldPath != "" && oldPath != state.Path {
+		_ = removeProjectSELinuxLabels(oldPath)
+	}
+	if _, err := applyProjectSELinuxLabels(state.Path); err != nil {
+		return fmt.Errorf("labelling project path for SELinux: %w", err)
+	}
 	if state.OwnershipMode == OwnershipIsolated {
 		state.ApprovedRoot = validated.ApprovedRoot
 	}
