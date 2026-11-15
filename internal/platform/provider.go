@@ -72,12 +72,15 @@ type Provider interface {
 	FirewallPackage() string
 	FirewallServiceName() string
 
-	// Cache (Redis / Memcached)
+	// Cache (Redis / Valkey / Memcached)
 	RedisPackage() string
 	RedisServiceName() string
 	RedisConfigPath() string
 	RequiresExternalRepoForRedis() bool
 	RedisModuleStream() string
+	ValkeyPackage() string
+	ValkeyServiceName() string
+	ValkeyConfigPath() string
 	MemcachedPackage() string
 	MemcachedServiceName() string
 	MemcachedConfigPath() string
@@ -263,6 +266,9 @@ func (p *debianProvider) RedisServiceName() string           { return "redis-ser
 func (p *debianProvider) RedisConfigPath() string            { return "/etc/redis/redis.conf" }
 func (p *debianProvider) RequiresExternalRepoForRedis() bool { return false }
 func (p *debianProvider) RedisModuleStream() string          { return "" }
+func (p *debianProvider) ValkeyPackage() string              { return "valkey" }
+func (p *debianProvider) ValkeyServiceName() string          { return "valkey" }
+func (p *debianProvider) ValkeyConfigPath() string           { return "/etc/valkey/valkey.conf" }
 func (p *debianProvider) MemcachedPackage() string           { return "memcached" }
 func (p *debianProvider) MemcachedServiceName() string       { return "memcached" }
 func (p *debianProvider) MemcachedConfigPath() string        { return "/etc/memcached.conf" }
@@ -427,17 +433,25 @@ func (p *rhelProvider) RedisModuleStream() string {
 	// Remi modular stream for Redis on EL10+ (AppStream ships Valkey instead).
 	return "redis:remi-7.2"
 }
+func (p *rhelProvider) ValkeyPackage() string     { return "valkey" }
+func (p *rhelProvider) ValkeyServiceName() string { return "valkey" }
+func (p *rhelProvider) ValkeyConfigPath() string  { return "/etc/valkey/valkey.conf" }
 func (p *rhelProvider) MemcachedPackage() string     { return "memcached" }
 func (p *rhelProvider) MemcachedServiceName() string { return "memcached" }
 func (p *rhelProvider) MemcachedConfigPath() string  { return "/etc/sysconfig/memcached" }
 
 func newRHELProvider(profile Profile) Provider {
+	stockPHP := ""
+	if maj, _, ok := parseVersionID(profile.VersionID); ok && maj >= 10 {
+		stockPHP = rhel.StockPHPVersion
+	}
 	return &rhelProvider{
 		profile: profile,
 		provider: rhel.NewProvider(rhel.ProviderOptions{
 			WebUser:            profile.WebUser,
 			WebGroup:           profile.WebGroup,
 			DefaultProjectRoot: profile.DefaultProjectRoot,
+			StockPHPVersion:    stockPHP,
 		}),
 	}
 }

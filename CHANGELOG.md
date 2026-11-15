@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`cache install valkey`** - Installs AppStream Valkey (Redis-compatible) with the same status and config handling as Redis. On Rocky/Alma 10+, `cache install redis` without `--enable-required-repos` falls back to Valkey and says so; pass `--enable-required-repos` to install Redis from Remi.
+
+### Changed
+
+- **PHP 8.3 on EL10** - AlmaLinux/Rocky/RHEL 10 install PHP 8.3 from AppStream (`php-fpm`) without Remi. Other PHP versions still use Remi SCL and still need `--enable-required-repos`.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

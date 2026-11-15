@@ -18,6 +18,8 @@ func applyDriverConfig(provider platform.Provider, opts InstallOptions) error {
 	switch opts.Driver {
 	case DriverRedis:
 		return applyRedisConfig(provider.RedisConfigPath(), opts)
+	case DriverValkey:
+		return applyRedisConfig(provider.ValkeyConfigPath(), opts)
 	case DriverMemcached:
 		return applyMemcachedConfig(provider.MemcachedConfigPath(), opts)
 	default:
