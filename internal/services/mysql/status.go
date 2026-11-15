@@ -31,6 +31,9 @@ type Status struct {
 	Enabled   *bool   `json:"enabled,omitempty"`
 	Port      *int    `json:"port,omitempty"`
 	Socket    string  `json:"socket,omitempty"`
+	// Auth is ok when Abstrax can log in, and failed when the saved root
+	// password is missing or rejected. It is omitted when the server is not running.
+	Auth string `json:"auth,omitempty"`
 }
 
 // ParseServerVersion extracts the engine and a clean version from SELECT VERSION()
@@ -141,10 +144,14 @@ func (s *Service) databaseServiceStatus(ctx context.Context, name string) (*svcm
 }
 
 func (s *Service) readRunningServer(ctx context.Context, st *Status) {
-	if raw, err := s.query(ctx, "SELECT VERSION()"); err == nil {
+	raw, err := s.query(ctx, "SELECT VERSION()")
+	if err != nil {
+		st.Auth = "failed"
+	} else {
+		st.Auth = "ok"
 		applyServerVersion(st, raw)
 	}
-	raw, err := s.query(ctx, "SELECT @@port, @@socket")
+	raw, err = s.query(ctx, "SELECT @@port, @@socket")
 	if err != nil {
 		return
 	}
