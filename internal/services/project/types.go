@@ -132,8 +132,11 @@ type State struct {
 	// Port and WebRoot are the listen port and document root override the vhost
 	// was created with. A zero Port means 80. An empty WebRoot means the project
 	// path (or its public directory).
-	Port          int              `json:"port,omitempty"`
-	WebRoot       string           `json:"web_root,omitempty"`
+	Port    int    `json:"port,omitempty"`
+	WebRoot string `json:"web_root,omitempty"`
+	// DefaultServer is true when this project's vhost holds listen …
+	// default_server and answers on the server IP (a domainless --nginx project).
+	DefaultServer bool             `json:"default_server,omitempty"`
 	SharedLogs    bool             `json:"shared_logs,omitempty"`
 	AccessLogPath string           `json:"access_log_path,omitempty"`
 	ErrorLogPath  string           `json:"error_log_path,omitempty"`
