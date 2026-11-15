@@ -255,9 +255,9 @@ func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOption
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
-		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", match.Number)
+		_, err = s.run(ctx, "ufw", "--force", "delete", match.Number)
 		return check, err
 	}
-	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(*match)...)
+	_, err = s.run(ctx, "ufw", ufwDeleteArgs(*match)...)
 	return check, err
 }

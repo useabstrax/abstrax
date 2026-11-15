@@ -44,10 +44,10 @@ func (s *Service) ensureClientSSHAllow(ctx context.Context) (SSHProtectResult, e
 			return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
 		}
 		rich := firewalldRichRule(family, clientIP, strconv.Itoa(sshPort), "tcp", "accept")
-		if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
+		if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rich); err != nil {
 			return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
 		}
-		if _, err := s.runner.Run(ctx, "firewall-cmd", "--reload"); err != nil {
+		if _, err := s.run(ctx, "firewall-cmd", "--reload"); err != nil {
 			return result, fmt.Errorf("reloading firewalld: %w", err)
 		}
 		result.Added = true
@@ -59,7 +59,7 @@ func (s *Service) ensureClientSSHAllow(ctx context.Context) (SSHProtectResult, e
 		"port", strconv.Itoa(sshPort), "proto", "tcp",
 		"comment", sshProtectComment,
 	}
-	if _, err := s.runner.Run(ctx, "ufw", args...); err != nil {
+	if _, err := s.run(ctx, "ufw", args...); err != nil {
 		return result, fmt.Errorf("allowing SSH from %s: %w", clientIP, err)
 	}
 

@@ -237,11 +237,11 @@ func (s *Service) firewalldDeny(ctx context.Context, opts AllowOptions) error {
 
 func (s *Service) addRichRules(ctx context.Context, rules []string) error {
 	for _, rule := range rules {
-		if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rule); err != nil {
+		if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--add-rich-rule="+rule); err != nil {
 			return err
 		}
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }
 
@@ -250,9 +250,9 @@ func (s *Service) firewalldRemoveRichRule(ctx context.Context, rule string) erro
 	if rule == "" {
 		return fmt.Errorf("rich rule is required")
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--remove-rich-rule="+rule); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--remove-rich-rule="+rule); err != nil {
 		return err
 	}
-	_, err := s.runner.Run(ctx, "firewall-cmd", "--reload")
+	_, err := s.run(ctx, "firewall-cmd", "--reload")
 	return err
 }

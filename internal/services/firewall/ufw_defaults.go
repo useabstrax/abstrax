@@ -45,7 +45,7 @@ func (s *Service) ufwDefaultFilePath() string {
 }
 
 func (s *Service) ufwDefaults(ctx context.Context) (*Defaults, error) {
-	res, err := s.runner.RunQuery(ctx, "ufw", "status", "verbose")
+	res, err := s.runQuery(ctx, "ufw", "status", "verbose")
 	if err != nil {
 		return nil, fmt.Errorf("ufw status: %w", err)
 	}
@@ -243,7 +243,7 @@ func (s *Service) ufwSetPing(ctx context.Context, mode string) error {
 		for _, e := range edits {
 			fmt.Printf("[dry-run] would set echo-request to %s in %s\n", target, e.path)
 		}
-		_, err := s.runner.Run(ctx, "ufw", "reload")
+		_, err := s.run(ctx, "ufw", "reload")
 		return err
 	}
 
@@ -253,7 +253,7 @@ func (s *Service) ufwSetPing(ctx context.Context, mode string) error {
 			return err
 		}
 	}
-	if _, err := s.runner.Run(ctx, "ufw", "reload"); err != nil {
+	if _, err := s.run(ctx, "ufw", "reload"); err != nil {
 		restoreEdits(edits)
 		return fmt.Errorf("ufw reload: %w", err)
 	}
