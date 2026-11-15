@@ -65,16 +65,23 @@ func (s *Service) EnableRemote(ctx context.Context, opts RemoteEnableOptions) (*
 	return status, nil
 }
 
-// DisableRemote removes the Abstrax bind-address drop-in and restarts the database.
-// If the running bind address was not set by that file, nothing is changed.
-// If the service does not come back, the drop-in is restored and the service is restarted again.
+// localBindAddress is used when remote access is turned off.
+const localBindAddress = "127.0.0.1"
+
+// DisableRemote writes bind-address = 127.0.0.1 in Abstrax's drop-in and restarts.
+// Removing the file on RHEL MariaDB would listen on every interface again.
+// When MariaDB has no bind-address set (empty / all interfaces) and no Abstrax
+// drop-in yet, disable still writes the local-only drop-in.
 func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) (*RemoteStatus, error) {
 	path, err := s.remoteDropInPath()
 	if err != nil {
 		return nil, err
 	}
+	localBody := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
 	if opts.DryRun {
 		return &RemoteStatus{
+			Enabled:     false,
+			BindAddress: localBindAddress,
 			ManagedFile: path,
 			Port:        s.mysqlPort(),
 		}, nil
@@ -95,27 +102,36 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 			return nil, err
 		}
 		if !existed {
-			if remoteAccessEnabled(live) {
+			if !remoteAccessEnabled(live) {
+				return &RemoteStatus{
+					Enabled:     false,
+					BindAddress: live,
+					ManagedFile: path,
+					Port:        s.mysqlPort(),
+					Note:        fmt.Sprintf("MySQL is already listening on %s.", live),
+				}, nil
+			}
+			// Distro default is all interfaces (common on RHEL MariaDB). Write local bind.
+		} else {
+			fileBind, ok := bindAddressInDropIn(string(previous))
+			if !ok || !sameBind(fileBind, live) {
 				return nil, fmt.Errorf("bind-address is %s and does not come from Abstrax's file %s; remote access was not turned off", live, path)
 			}
-			return &RemoteStatus{
-				Enabled:     false,
-				BindAddress: live,
-				ManagedFile: path,
-				Port:        s.mysqlPort(),
-				Note:        fmt.Sprintf("MySQL is already listening on %s. Abstrax has no remote drop-in to remove.", live),
-			}, nil
-		}
-		fileBind, ok := bindAddressInDropIn(string(previous))
-		if !ok || !sameBind(fileBind, live) {
-			return nil, fmt.Errorf("bind-address is %s and does not come from Abstrax's file %s; remote access was not turned off", live, path)
+			if !remoteAccessEnabled(live) {
+				return &RemoteStatus{
+					Enabled:     false,
+					BindAddress: live,
+					ManagedFile: path,
+					Port:        s.mysqlPort(),
+				}, nil
+			}
 		}
 	} else if !existed {
 		return nil, fmt.Errorf("Abstrax has no remote drop-in at %s, and the live bind address is unknown because the database is not accepting connections; remote access was not turned off", path)
 	}
 
-	if err := os.Remove(path); err != nil {
-		return nil, fmt.Errorf("removing %s: %w", path, err)
+	if err := writeRemoteDropIn(path, localBody); err != nil {
+		return nil, err
 	}
 	if err := s.restartAndWait(ctx); err != nil {
 		return nil, s.rollbackDisable(ctx, path, previous, err)
@@ -123,10 +139,10 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 
 	live, qerr := s.queryBindAddress(ctx)
 	if qerr != nil {
-		return nil, fmt.Errorf("removed %s and restarted the database, but the live bind address is unknown (%v); remote access was not confirmed off", path, qerr)
+		return nil, fmt.Errorf("wrote local bind-address and restarted the database, but the live bind address is unknown (%v); remote access was not confirmed off", qerr)
 	}
 	if remoteAccessEnabled(live) {
-		return nil, fmt.Errorf("removed %s and restarted the database, but bind-address is still %s and does not come from Abstrax's file; remote access was not turned off", path, live)
+		return nil, fmt.Errorf("wrote local bind-address and restarted the database, but bind-address is still %s; remote access was not turned off", live)
 	}
 	return &RemoteStatus{
 		Enabled:     false,
@@ -397,6 +413,17 @@ func parseBindAddress(out string) (string, error) {
 		if line == "" || strings.HasPrefix(line, "+") {
 			continue
 		}
+		// Prefer tab-separated VALUES so an empty bind_address is preserved.
+		if strings.Contains(line, "\t") {
+			parts := strings.Split(line, "\t")
+			if len(parts) >= 1 && strings.EqualFold(strings.TrimSpace(parts[0]), "bind_address") {
+				if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
+					// MariaDB reports an empty value when unset; that means every interface.
+					return "0.0.0.0", nil
+				}
+				return strings.TrimSpace(parts[1]), nil
+			}
+		}
 		fields := strings.Fields(line)
 		var vals []string
 		for _, field := range fields {
@@ -405,8 +432,11 @@ func parseBindAddress(out string) (string, error) {
 			}
 			vals = append(vals, field)
 		}
-		if len(vals) < 2 || !strings.EqualFold(vals[0], "bind_address") {
+		if len(vals) < 1 || !strings.EqualFold(vals[0], "bind_address") {
 			continue
+		}
+		if len(vals) == 1 {
+			return "0.0.0.0", nil
 		}
 		return vals[1], nil
 	}
@@ -415,8 +445,12 @@ func parseBindAddress(out string) (string, error) {
 
 func remoteAccessEnabled(bind string) bool {
 	bind = strings.TrimSpace(bind)
-	if bind == "" || bind == "unknown" {
+	if bind == "unknown" {
 		return false
+	}
+	// Empty bind_address (MariaDB when unset) means listen on every interface.
+	if bind == "" {
+		return true
 	}
 	for _, part := range strings.Split(bind, ",") {
 		part = strings.TrimSpace(part)
