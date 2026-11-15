@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Firewall rules with a source port** - `firewall rule list` splits a UFW From column such as `10.1.2.3 3306/tcp` into the address, `source_port`, and protocol. `firewall rule remove` deletes that rule with `ufw delete allow from <addr> port <port> proto <protocol>` instead of passing the whole column as the address. Existing rule IDs are unchanged.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

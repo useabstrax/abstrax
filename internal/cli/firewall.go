@@ -390,9 +390,9 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "TO"})
+			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "SRC", "TO"})
 			for _, r := range rules {
-				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, r.Action, strings.ToUpper(r.Direction), r.From, r.To})
+				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, r.Action, strings.ToUpper(r.Direction), r.From, r.SourcePort, r.To})
 			}
 			t.Render()
 			return nil
