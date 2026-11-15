@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`server reboot-required`** - When `needs-restarting` is missing on RHEL-family systems, `required` is `null` (not `false`) with a note, and the summary says the check could not run.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
