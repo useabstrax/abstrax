@@ -504,16 +504,21 @@ func (s *Service) addRule(ctx context.Context, action string, opts AllowOptions)
 		return s.firewalldAllow(ctx, opts)
 	}
 
+	// UFW's short form accepts `3306/tcp`. The extended `from` form does not:
+	// it needs `to any port 3306 proto tcp`.
 	port := opts.Port
-	if opts.Protocol != "" {
+	if opts.From == "" && opts.Protocol != "" && port != "" {
 		port = fmt.Sprintf("%s/%s", port, opts.Protocol)
 	}
 
 	args := []string{action}
 	if opts.From != "" {
 		args = append(args, "from", opts.From)
-		if port != "" {
-			args = append(args, "to", "any", "port", port)
+		if opts.Port != "" {
+			args = append(args, "to", "any", "port", opts.Port)
+			if opts.Protocol != "" {
+				args = append(args, "proto", opts.Protocol)
+			}
 		}
 	} else if port != "" {
 		args = append(args, port)
