@@ -73,12 +73,12 @@ func (s *Service) SetDefaults(ctx context.Context, opts DefaultsSetOptions) (*De
 		}
 	} else {
 		if incoming != "" {
-			if _, err := s.runner.Run(ctx, "ufw", "default", incoming, "incoming"); err != nil {
+			if _, err := s.run(ctx, "ufw", "default", incoming, "incoming"); err != nil {
 				return nil, fmt.Errorf("ufw default %s incoming: %w", incoming, err)
 			}
 		}
 		if outgoing != "" {
-			if _, err := s.runner.Run(ctx, "ufw", "default", outgoing, "outgoing"); err != nil {
+			if _, err := s.run(ctx, "ufw", "default", outgoing, "outgoing"); err != nil {
 				return nil, fmt.Errorf("ufw default %s outgoing: %w", outgoing, err)
 			}
 		}
@@ -132,7 +132,7 @@ func normalizePolicy(kind, value string) (string, error) {
 // firewalld
 
 func (s *Service) firewalldDefaultZone(ctx context.Context) (string, error) {
-	res, err := s.runner.RunQuery(ctx, "firewall-cmd", "--get-default-zone")
+	res, err := s.runQuery(ctx, "firewall-cmd", "--get-default-zone")
 	if err != nil {
 		return "", fmt.Errorf("firewall-cmd --get-default-zone: %w", err)
 	}
@@ -148,7 +148,7 @@ func (s *Service) firewalldDefaults(ctx context.Context) (*Defaults, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.runner.RunQuery(ctx, "firewall-cmd", "--permanent", "--zone="+zone, "--get-target")
+	res, err := s.runQuery(ctx, "firewall-cmd", "--permanent", "--zone="+zone, "--get-target")
 	if err != nil {
 		return nil, fmt.Errorf("firewall-cmd --get-target: %w", err)
 	}
@@ -204,10 +204,10 @@ func (s *Service) firewalldSetIncoming(ctx context.Context, policy string) error
 	if err != nil {
 		return err
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--zone="+zone, "--set-target="+target); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--zone="+zone, "--set-target="+target); err != nil {
 		return fmt.Errorf("setting zone target: %w", err)
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--reload"); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--reload"); err != nil {
 		return fmt.Errorf("reloading firewalld: %w", err)
 	}
 	return nil
@@ -215,7 +215,7 @@ func (s *Service) firewalldSetIncoming(ctx context.Context, policy string) error
 
 // firewalldPing reports whether echo-request is blocked in the zone.
 func (s *Service) firewalldPing(ctx context.Context, zone string) string {
-	res, _ := s.runner.RunQuery(ctx, "firewall-cmd", "--zone="+zone, "--query-icmp-block=echo-request")
+	res, _ := s.runQuery(ctx, "firewall-cmd", "--zone="+zone, "--query-icmp-block=echo-request")
 	// firewall-cmd exits 1 for "no", so read the answer before the error.
 	switch strings.ToLower(strings.TrimSpace(res.Stdout)) {
 	case "yes":
@@ -237,10 +237,10 @@ func (s *Service) firewalldSetPing(ctx context.Context, mode string) error {
 	if mode == PingAllow {
 		flag = "--remove-icmp-block=echo-request"
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--permanent", "--zone="+zone, flag); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--permanent", "--zone="+zone, flag); err != nil {
 		return fmt.Errorf("setting icmp block: %w", err)
 	}
-	if _, err := s.runner.Run(ctx, "firewall-cmd", "--reload"); err != nil {
+	if _, err := s.run(ctx, "firewall-cmd", "--reload"); err != nil {
 		return fmt.Errorf("reloading firewalld: %w", err)
 	}
 	return nil

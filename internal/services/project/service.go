@@ -206,10 +206,26 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		}
 	} else if state.Runtime == RuntimePHP {
 		report("php_pool", fmt.Sprintf("Using shared PHP %s FPM socket", state.PHPVersion))
+		pool, err := s.ensureSharedPHPPool(ctx, state.PHPVersion, id)
+		if err != nil {
+			rb.undo(ctx)
+			return nil, fmt.Errorf("ensuring shared php-fpm pool: %w", err)
+		}
+		if pool != nil {
+			// Socket only: leave PHPPoolName empty so project remove keeps the
+			// shared pool for other projects on this PHP version.
+			state.PHPSocketPath = pool.SocketPath
+		}
 	}
 
-	vhostOpts := vhostOptionsFromAdd(opts, state, validated)
 	if opts.WebServer == WebServerNginx && !opts.NoVhost {
+		claimed, err := s.claimDefaultServer(state)
+		if err != nil {
+			rb.undo(ctx)
+			return nil, err
+		}
+		_ = claimed
+		vhostOpts := vhostOptionsFromAdd(opts, state, validated)
 		report("nginx_vhost", "Creating nginx virtual host")
 		vhostPath, err := s.createNginxVhost(ctx, vhostOpts)
 		if err != nil {
@@ -218,6 +234,12 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		}
 		state.VhostPath = vhostPath
 		rb.trackVhost(vhostPath)
+		if state.DefaultServer {
+			if err := s.syncWebIPDefault(ctx, true); err != nil {
+				rb.undo(ctx)
+				return nil, fmt.Errorf("updating web IP default_server: %w", err)
+			}
+		}
 	}
 
 	report("state", "Saving project state")
@@ -258,7 +280,9 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 
 	id := IdentityFromState(state)
 
+	releasedDefault := false
 	if state.VhostPath != "" && opts.RemoveVhost {
+		releasedDefault = releaseDefaultServer(state)
 		_ = s.disableVhostFile(state.VhostPath)
 		_ = os.Remove(state.VhostPath)
 		_ = os.Remove(disabledVhostPath(state.VhostPath))
@@ -282,7 +306,13 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 
 	_ = removeProjectSELinuxLabels(state.Path)
 
-	return s.deleteState(opts.Name)
+	if err := s.deleteState(opts.Name); err != nil {
+		return err
+	}
+	if releasedDefault {
+		_ = s.syncWebIPDefault(ctx, false)
+	}
+	return nil
 }
 
 // Modify updates project configuration.
@@ -296,8 +326,25 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 	}
 
 	before := state.vhostConfig()
+	wasDefault := state.DefaultServer
 	if err := s.applyModify(ctx, state, opts); err != nil {
 		return nil, err
+	}
+
+	releasedDefault := false
+	if wasDefault && len(state.Domains) > 0 {
+		releasedDefault = releaseDefaultServer(state)
+	} else if state.VhostPath != "" && len(state.Domains) == 0 {
+		other, err := s.findDefaultServerProject(state.Name)
+		if err != nil {
+			return nil, err
+		}
+		if other != nil && !state.DefaultServer {
+			return nil, errDomainlessVhostBlocked(state.Name, other.Name)
+		}
+		if _, err := s.claimDefaultServer(state); err != nil {
+			return nil, err
+		}
 	}
 
 	if modifyTouchesRuntime(state, opts) {
@@ -320,6 +367,9 @@ func (s *Service) Modify(ctx context.Context, opts ModifyOptions) (*State, error
 
 	if err := s.saveState(state); err != nil {
 		return nil, err
+	}
+	if releasedDefault || state.DefaultServer {
+		_ = s.syncWebIPDefault(ctx, state.DefaultServer)
 	}
 	s.applyLogPaths(state)
 	return state, nil
@@ -694,11 +744,17 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("# Managed by Abstrax\n")
 
+	def := ""
+	if opts.DefaultServer {
+		def = " default_server"
+	}
+
 	// Plain HTTP server. With SSL and RedirectHTTP it only redirects; the
 	// location block (not a server-level return) leaves room for certbot's
 	// temporary challenge location during renewal.
 	sb.WriteString("server {\n")
-	sb.WriteString(fmt.Sprintf("    listen %d;\n", listenPort))
+	sb.WriteString(fmt.Sprintf("    listen %d%s;\n", listenPort, def))
+	sb.WriteString(fmt.Sprintf("    listen [::]:%d%s;\n", listenPort, def))
 	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
 	if opts.SSL != nil && opts.SSL.RedirectHTTP {
 		sb.WriteString(logLines)
@@ -716,7 +772,8 @@ func buildNginxConfig(opts vhostConfig) (string, error) {
 
 	if opts.SSL != nil {
 		sb.WriteString("\nserver {\n")
-		sb.WriteString("    listen 443 ssl;\n")
+		sb.WriteString(fmt.Sprintf("    listen 443%s ssl;\n", def))
+		sb.WriteString(fmt.Sprintf("    listen [::]:443%s ssl;\n", def))
 		sb.WriteString(fmt.Sprintf("    server_name %s;\n", domains))
 		writeTLSDirectives(&sb, opts)
 		if err := writeServerBody(&sb, opts, root, logLines); err != nil {

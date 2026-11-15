@@ -14,7 +14,9 @@ var systemMySQLUsers = map[string]struct{}{
 	"mysql.infoschema": {},
 	"debian-sys-maint": {},
 	"mariadb.sys":      {},
-	"root":             {},
+	// MariaDB 10.4+ creates mysql@localhost (unix_socket) for the server itself.
+	"mysql": {},
+	"root":  {},
 }
 
 func isSystemMySQLUser(name string) bool {

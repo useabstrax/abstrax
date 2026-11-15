@@ -76,6 +76,31 @@ func TestEnsureRepositoryEPELRocky(t *testing.T) {
 	}
 }
 
+func TestEnsureRepositoryEPELAlma10PinsMinorReleasever(t *testing.T) {
+	provider := rhelProviderForVersion(t, "almalinux", "AlmaLinux 10.2", "10.2", platform.SupportOfficial)
+	var runs []string
+	err := platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
+		Install: func(ctx context.Context, name string) error { return nil },
+		Run: func(ctx context.Context, name string, args ...string) error {
+			runs = append(runs, name+" "+strings.Join(args, " "))
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, run := range runs {
+		if strings.Contains(run, "config-manager") && strings.Contains(run, "epel.metalink=") && strings.Contains(run, "epel-10.2") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected EPEL metalink pin to 10.2, runs = %#v", runs)
+	}
+}
+
 func TestEnsureRepositoryEPELRHELRequiresFlag(t *testing.T) {
 	provider := rhelProviderFor(t, "rhel", "Red Hat Enterprise Linux 9.5", platform.SupportCompatible)
 	err := platform.EnsureRepository(context.Background(), provider, platform.RepoEPEL, platform.RepoOptions{}, platform.RepoEnabler{
