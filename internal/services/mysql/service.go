@@ -303,7 +303,7 @@ func localAppHosts() []string {
 }
 
 func usesLocalAppHosts(host string) bool {
-	return host == "" || host == "localhost"
+	return host == "" || host == "localhost" || host == "127.0.0.1"
 }
 
 // UserAdd creates a MySQL user.
@@ -549,7 +549,9 @@ func (s *Service) Revoke(ctx context.Context, user, database, host string) error
 }
 
 func (s *Service) grantTargetHosts(ctx context.Context, user, host string) ([]string, error) {
-	if host != "" {
+	// Empty host, localhost, and 127.0.0.1 all mean the local app pair, matching
+	// user add / user password. Any other explicit host is that account only.
+	if host != "" && !usesLocalAppHosts(host) {
 		return []string{host}, nil
 	}
 

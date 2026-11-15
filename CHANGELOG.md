@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`mysql grant` / `mysql revoke` local hosts** - `--host localhost` and `--host 127.0.0.1` now update both local accounts, the same way `mysql user add` and `mysql user password` do. Leaving `--host` out still targets the local pair.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
