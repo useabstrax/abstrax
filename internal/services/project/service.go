@@ -206,6 +206,16 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 		}
 	} else if state.Runtime == RuntimePHP {
 		report("php_pool", fmt.Sprintf("Using shared PHP %s FPM socket", state.PHPVersion))
+		pool, err := s.ensureSharedPHPPool(ctx, state.PHPVersion, id)
+		if err != nil {
+			rb.undo(ctx)
+			return nil, fmt.Errorf("ensuring shared php-fpm pool: %w", err)
+		}
+		if pool != nil {
+			// Socket only: leave PHPPoolName empty so project remove keeps the
+			// shared pool for other projects on this PHP version.
+			state.PHPSocketPath = pool.SocketPath
+		}
 	}
 
 	vhostOpts := vhostOptionsFromAdd(opts, state, validated)
