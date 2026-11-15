@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestSystemMySQLUsersIncludesMariaDBMysql(t *testing.T) {
+	if !isSystemMySQLUser("mysql") {
+		t.Fatal("expected mysql to be a system user on MariaDB")
+	}
+	if !isSystemMySQLUser("mariadb.sys") {
+		t.Fatal("expected mariadb.sys to remain a system user")
+	}
+}
+
 func TestParseGrantFixtures(t *testing.T) {
 	lines := []string{
 		"GRANT USAGE ON *.* TO `app`@`localhost`",

@@ -16,7 +16,7 @@ import (
 func NewCacheCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cache",
-		Short: "Manage cache services (Redis, Memcached)",
+		Short: "Manage cache services (Redis, Valkey, Memcached)",
 	}
 
 	cmd.AddCommand(newCacheInstallCmd())
@@ -35,7 +35,7 @@ func newCacheInstallCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "install <driver>",
-		Short: "Install a cache driver (redis|memcached)",
+		Short: "Install a cache driver (redis|valkey|memcached)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Driver = cache.Driver(args[0])
@@ -45,9 +45,9 @@ func newCacheInstallCmd() *cobra.Command {
 				return err
 			}
 
-			if opts.Driver == cache.DriverRedis && opts.Bind == "0.0.0.0" {
+			if (opts.Driver == cache.DriverRedis || opts.Driver == cache.DriverValkey) && opts.Bind == "0.0.0.0" {
 				ok, err := confirm.Ask(
-					"WARNING: Binding Redis to 0.0.0.0 exposes it to all interfaces. Continue?",
+					fmt.Sprintf("WARNING: Binding %s to 0.0.0.0 exposes it to all interfaces. Continue?", opts.Driver),
 					globals.Flags.Yes,
 				)
 				if err != nil {
@@ -59,12 +59,13 @@ func newCacheInstallCmd() *cobra.Command {
 			}
 
 			svc := cache.New(opts.DryRun, globals.Flags.Verbose)
-			if err := svc.Install(cmd.Context(), opts); err != nil {
+			installed, err := svc.Install(cmd.Context(), opts)
+			if err != nil {
 				return err
 			}
 
 			return printSimpleResult(actions.CacheInstall,
-				fmt.Sprintf("%s installed.", opts.Driver), nil)
+				fmt.Sprintf("%s installed.", installed), nil)
 		},
 	}
 

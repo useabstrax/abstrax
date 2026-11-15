@@ -10,10 +10,15 @@ import (
 	"strings"
 
 	executil "abstrax/internal/exec"
+	"abstrax/internal/globals"
 	"abstrax/internal/platform"
 	"abstrax/internal/services/pkgmanager"
 	"abstrax/internal/services/svcmanager"
 )
+
+// ensureEPELFn installs EPEL when Supervisor comes from that repo.
+// Tests replace it.
+var ensureEPELFn = platform.EnsureEPELWithOptions
 
 // Service manages daemons via Supervisor.
 type Service struct {
@@ -70,12 +75,36 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*InstallRes
 		Package: s.pkgName,
 		Service: s.svcName,
 	}
-	if executil.Exists("supervisorctl") {
+	if supervisorInstalled("supervisorctl") {
 		result.AlreadyInstalled = true
 		return result, nil
 	}
 
 	fmt.Printf("Installing %s...\n", s.pkgName)
+	provider := platform.Resolve()
+	repoOpts := platform.RepoOptions{
+		EnableRequiredRepos: globals.Flags.EnableRequiredRepos,
+		Yes:                 globals.Flags.Yes,
+		DryRun:              opts.DryRun,
+		Verbose:             globals.Flags.Verbose,
+	}
+	enabler := platform.DefaultRepoEnabler(
+		func(ctx context.Context, name string) error {
+			mgr, _, err := pkgmanager.NewFromPlatform(opts.DryRun, false)
+			if err != nil {
+				return err
+			}
+			return mgr.Install(ctx, pkgmanager.InstallOptions{Name: name, DryRun: opts.DryRun})
+		},
+		func(ctx context.Context, name string, args ...string) error {
+			_, err := s.runner.Run(ctx, name, args...)
+			return err
+		},
+	)
+	// Supervisor is packaged in EPEL on RHEL-family systems (same as certbot).
+	if err := ensureEPELFn(ctx, provider, repoOpts, enabler); err != nil {
+		return nil, err
+	}
 	mgr, _, err := pkgmanager.NewFromPlatform(opts.DryRun, false)
 	if err != nil {
 		return nil, err

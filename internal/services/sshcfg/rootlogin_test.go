@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executil "abstrax/internal/exec"
 )
 
 func TestEnableRootLogin(t *testing.T) {
@@ -43,6 +45,35 @@ func TestEnableRootLogin(t *testing.T) {
 				t.Fatal("sshd_config was edited even though the drop-in is read first")
 			}
 		})
+	}
+}
+
+func TestSameSSHValueWithoutPassword(t *testing.T) {
+	if !sameSSHValue("PermitRootLogin", "without-password", "prohibit-password") {
+		t.Fatal("without-password should match prohibit-password")
+	}
+	if !sameSSHValue("PermitRootLogin", "prohibit-password", "prohibit-password") {
+		t.Fatal("identical values should match")
+	}
+	if sameSSHValue("PermitRootLogin", "yes", "prohibit-password") {
+		t.Fatal("yes should not match prohibit-password")
+	}
+}
+
+func TestEnableRootLoginKeysOnlyAcceptsWithoutPassword(t *testing.T) {
+	dir := t.TempDir()
+	svc := newDirectiveService(t, dir)
+	include := filepath.Join(dir, "sshd_config.d", "*.conf")
+	writeFile(t, svc.mainConfigPath, "Include "+include+"\n")
+	svc.runner.SetCommandFunc(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
+		if name == "sshd" && len(args) > 0 && args[0] == "-T" {
+			return executil.Result{Stdout: "permitrootlogin without-password\n"}, true, nil
+		}
+		return executil.Result{}, true, nil
+	})
+
+	if err := svc.EnableRootLogin(context.Background(), EnableRootLoginOptions{KeysOnly: true}); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -108,6 +108,9 @@ var commandPaths = map[string][]string{
 	WebTest:    {"web", "test"},
 	WebReload:  {"web", "reload"},
 	WebRestart: {"web", "restart"},
+	WebIPShow:  {"web", "ip", "show"},
+	WebIPSet:   {"web", "ip", "set"},
+	WebIPClear: {"web", "ip", "clear"},
 
 	SSLInstall: {"ssl", "install"},
 	SSLAdd:     {"ssl", "add"},

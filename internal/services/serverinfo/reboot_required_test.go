@@ -44,7 +44,7 @@ func TestReadDebianRebootRequired(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := RebootStatus{
-		Required: true,
+		Required: boolPtr(true),
 		Packages: []string{"linux-image-5.15.0-91-generic", "libc6"},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -62,7 +62,7 @@ func TestReadDebianRebootNotRequired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := RebootStatus{Required: false, Packages: []string{}}
+	want := RebootStatus{Required: boolPtr(false), Packages: []string{}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}
@@ -82,7 +82,7 @@ func TestReadDebianRebootRequiredWithoutPackageList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Required || len(got.Packages) != 0 {
+	if got.Required == nil || !*got.Required || len(got.Packages) != 0 {
 		t.Fatalf("got %#v", got)
 	}
 }
@@ -99,7 +99,7 @@ func TestReadRHELRebootRequired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := RebootStatus{Required: true, Packages: []string{"kernel", "glibc", "systemd"}}
+	want := RebootStatus{Required: boolPtr(true), Packages: []string{"kernel", "glibc", "systemd"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}
@@ -115,7 +115,7 @@ func TestReadRHELRebootNotRequired(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := RebootStatus{Required: false, Packages: []string{}}
+	want := RebootStatus{Required: boolPtr(false), Packages: []string{}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}
@@ -131,14 +131,14 @@ func TestReadRHELRebootNeedsRestartingMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := RebootStatus{
-		Required: false,
+		Required: nil,
 		Packages: []string{},
 		Note:     "needs-restarting is not installed",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}
-	assertRebootJSON(t, got, `{"required":false,"packages":[],"note":"needs-restarting is not installed"}`)
+	assertRebootJSON(t, got, `{"required":null,"packages":[],"note":"needs-restarting is not installed"}`)
 }
 
 func TestReadRHELRebootOtherError(t *testing.T) {

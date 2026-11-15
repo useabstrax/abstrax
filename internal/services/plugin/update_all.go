@@ -105,7 +105,7 @@ func (s *Service) UpdateAll(ctx context.Context, dryRun bool) (*UpdateAllResult,
 			continue
 		}
 
-		updated, err := s.Update(ctx, rec.Name)
+		updated, err := s.Update(ctx, UpdateOptions{Name: rec.Name})
 		if err != nil {
 			out.Failed = append(out.Failed, PluginUpdateItem{
 				Name:    rec.Name,

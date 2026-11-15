@@ -13,8 +13,10 @@ import (
 const needsRestartingMissing = "needs-restarting is not installed"
 
 // RebootStatus reports whether the system should be rebooted.
+// Required is null when the check could not run (for example needs-restarting
+// is missing on RHEL).
 type RebootStatus struct {
-	Required bool     `json:"required"`
+	Required *bool    `json:"required"`
 	Packages []string `json:"packages"`
 	Note     string   `json:"note,omitempty"`
 }
@@ -57,8 +59,8 @@ func ReadDebianReboot(paths RebootFiles) (RebootStatus, error) {
 }
 
 // ReadRHELReboot runs needs-restarting -r.
-// Exit code 1 means a reboot is required. A missing binary is not a failure:
-// Required is false and Note explains that needs-restarting is not installed.
+// Exit code 1 means a reboot is required. A missing binary returns Required
+// null with a note, not false.
 func ReadRHELReboot(ctx context.Context, runner *executil.Runner) (RebootStatus, error) {
 	if runner == nil {
 		runner = executil.New(false, false)
@@ -66,9 +68,7 @@ func ReadRHELReboot(ctx context.Context, runner *executil.Runner) (RebootStatus,
 	res, err := runner.RunQuery(ctx, "needs-restarting", "-r")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			status := emptyReboot(false)
-			status.Note = needsRestartingMissing
-			return status, nil
+			return unknownReboot(), nil
 		}
 		if res.ExitCode == 1 {
 			status := emptyReboot(true)
@@ -81,7 +81,19 @@ func ReadRHELReboot(ctx context.Context, runner *executil.Runner) (RebootStatus,
 }
 
 func emptyReboot(required bool) RebootStatus {
-	return RebootStatus{Required: required, Packages: []string{}}
+	return RebootStatus{Required: boolPtr(required), Packages: []string{}}
+}
+
+func unknownReboot() RebootStatus {
+	return RebootStatus{
+		Required: nil,
+		Packages: []string{},
+		Note:     needsRestartingMissing,
+	}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 func readRebootPackages(path string) ([]string, error) {
