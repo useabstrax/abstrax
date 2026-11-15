@@ -433,9 +433,9 @@ func (p *rhelProvider) RedisModuleStream() string {
 	// Remi modular stream for Redis on EL10+ (AppStream ships Valkey instead).
 	return "redis:remi-7.2"
 }
-func (p *rhelProvider) ValkeyPackage() string     { return "valkey" }
-func (p *rhelProvider) ValkeyServiceName() string { return "valkey" }
-func (p *rhelProvider) ValkeyConfigPath() string  { return "/etc/valkey/valkey.conf" }
+func (p *rhelProvider) ValkeyPackage() string        { return "valkey" }
+func (p *rhelProvider) ValkeyServiceName() string    { return "valkey" }
+func (p *rhelProvider) ValkeyConfigPath() string     { return "/etc/valkey/valkey.conf" }
 func (p *rhelProvider) MemcachedPackage() string     { return "memcached" }
 func (p *rhelProvider) MemcachedServiceName() string { return "memcached" }
 func (p *rhelProvider) MemcachedConfigPath() string  { return "/etc/sysconfig/memcached" }
