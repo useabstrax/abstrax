@@ -352,6 +352,7 @@ func TestEnsureEPELRocky(t *testing.T) {
 			Family:       "rhel",
 			DistroID:     "rocky",
 			DistroName:   "Rocky Linux 9.5",
+			VersionID:    "9.5",
 			SupportLevel: platform.SupportOfficial,
 			WebUser:      "nginx",
 			WebGroup:     "nginx",
