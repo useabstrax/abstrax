@@ -14,6 +14,11 @@ import (
 const (
 	maxUnixSocketPathLen = 104
 	phpPoolPrefix        = "abstrax-"
+	// sharedPHPPoolName is the Abstrax-managed pool used by shared-web-user
+	// PHP projects on RHEL-family systems (Remi's default www pool only
+	// allows apache to connect, while nginx runs as nginx).
+	sharedPHPPoolName   = "abstrax-web"
+	sharedPHPPoolSuffix = "web"
 )
 
 // PHPPoolConfig describes a generated PHP-FPM pool.
@@ -97,27 +102,8 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 		return nil, fmt.Errorf("php-fpm pool config %q already exists", conf.ConfigPath)
 	}
 
-	content := renderPHPPool(conf, id)
-	if err := os.MkdirAll(filepath.Dir(conf.ConfigPath), 0755); err != nil {
+	if err := s.writeAndActivatePHPPool(ctx, conf, id, state.PHPVersion); err != nil {
 		return nil, err
-	}
-	if err := os.WriteFile(conf.ConfigPath, []byte(content), 0644); err != nil {
-		return nil, fmt.Errorf("writing php-fpm pool: %w", err)
-	}
-
-	fpmBin := platformProvider.PHPFPMBinary(normalizePHPVersion(state.PHPVersion))
-	if res, err := s.runner.RunSilent(ctx, fpmBin, "--test"); err != nil || res.ExitCode != 0 {
-		_ = os.Remove(conf.ConfigPath)
-		msg := res.Stderr
-		if msg == "" {
-			msg = res.Stdout
-		}
-		return nil, fmt.Errorf("php-fpm configuration test failed: %s", msg)
-	}
-
-	if err := s.reloadPHPFPM(ctx, state.PHPVersion); err != nil {
-		_ = os.Remove(conf.ConfigPath)
-		return nil, fmt.Errorf("reloading php-fpm: %w", err)
 	}
 
 	state.PHPPoolName = conf.PoolName
@@ -125,8 +111,74 @@ func (s *Service) createPHPPool(ctx context.Context, state *State, id RuntimeIde
 	return &conf, nil
 }
 
+// needsManagedSharedPHPPool reports whether shared-web-user PHP projects need an
+// Abstrax-managed pool instead of the distro default www socket.
+func needsManagedSharedPHPPool() bool {
+	return platformProvider.Profile().IsRHELFamily()
+}
+
+// sharedPHPPoolPaths returns the per-PHP-version Abstrax shared pool paths.
+func sharedPHPPoolPaths(phpVersion string) PHPPoolConfig {
+	v := normalizePHPVersion(phpVersion)
+	return PHPPoolConfig{
+		PoolName:   sharedPHPPoolName,
+		ConfigPath: filepath.Join(platformProvider.PHPFPMPoolDir(v), sharedPHPPoolName+".conf"),
+		SocketPath: platformProvider.PHPFPMProjectSocket(v, sharedPHPPoolSuffix),
+	}
+}
+
+// ensureSharedPHPPool creates the Abstrax-managed shared web pool for a PHP
+// version when missing. Remi's www.conf is left alone. The pool is shared
+// across projects, so project remove does not delete it.
+func (s *Service) ensureSharedPHPPool(ctx context.Context, phpVersion string, id RuntimeIdentity) (*PHPPoolConfig, error) {
+	if !needsManagedSharedPHPPool() {
+		return nil, nil
+	}
+	conf := sharedPHPPoolPaths(phpVersion)
+	if _, err := os.Stat(conf.ConfigPath); err == nil {
+		return &conf, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	if err := s.writeAndActivatePHPPool(ctx, conf, id, phpVersion); err != nil {
+		return nil, err
+	}
+	return &conf, nil
+}
+
+func (s *Service) writeAndActivatePHPPool(ctx context.Context, conf PHPPoolConfig, id RuntimeIdentity, phpVersion string) error {
+	content := renderPHPPool(conf, id)
+	if err := os.MkdirAll(filepath.Dir(conf.ConfigPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(conf.ConfigPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("writing php-fpm pool: %w", err)
+	}
+
+	fpmBin := platformProvider.PHPFPMBinary(normalizePHPVersion(phpVersion))
+	if res, err := s.runner.RunSilent(ctx, fpmBin, "--test"); err != nil || res.ExitCode != 0 {
+		_ = os.Remove(conf.ConfigPath)
+		msg := res.Stderr
+		if msg == "" {
+			msg = res.Stdout
+		}
+		return fmt.Errorf("php-fpm configuration test failed: %s", msg)
+	}
+
+	if err := s.reloadPHPFPM(ctx, phpVersion); err != nil {
+		_ = os.Remove(conf.ConfigPath)
+		return fmt.Errorf("reloading php-fpm: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) removePHPPool(ctx context.Context, state *State) error {
 	if state.PHPPoolName == "" {
+		return nil
+	}
+	// Never remove the shared abstrax-web pool; other projects may still use it.
+	if state.PHPPoolName == sharedPHPPoolName {
 		return nil
 	}
 	_ = os.Remove(state.PHPPoolPath())
@@ -151,7 +203,14 @@ func phpSocketForState(state *State) string {
 	if state.PHPVersion == "" {
 		return ""
 	}
-	return platformProvider.PHPFPMDefaultSocket(normalizePHPVersion(state.PHPVersion))
+	v := normalizePHPVersion(state.PHPVersion)
+	if needsManagedSharedPHPPool() && state.PHPPoolName == "" {
+		mode := state.OwnershipMode
+		if mode == "" || mode == OwnershipShared {
+			return sharedPHPPoolPaths(v).SocketPath
+		}
+	}
+	return platformProvider.PHPFPMDefaultSocket(v)
 }
 
 func (s *Service) reloadPHPFPM(ctx context.Context, phpVersion string) error {

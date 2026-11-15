@@ -5,6 +5,7 @@ type Driver string
 
 const (
 	DriverRedis     Driver = "redis"
+	DriverValkey    Driver = "valkey"
 	DriverMemcached Driver = "memcached"
 )
 

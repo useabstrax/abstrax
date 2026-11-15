@@ -64,6 +64,8 @@ func (s *Service) SetRuntime(ctx context.Context, opts SetRuntimeOptions) (*Stat
 	createPool := isolated && next.Runtime == RuntimePHP && versionChanged
 	removeOldPool := isolated && state.PHPPoolName != "" &&
 		(next.Runtime != RuntimePHP || next.PHPVersion != normalizePHPVersion(state.PHPVersion))
+	ensureSharedPool := !isolated && next.Runtime == RuntimePHP && needsManagedSharedPHPPool() &&
+		(versionChanged || next.PHPSocketPath == "")
 
 	var createdPool *State
 	var restoreVhost func(context.Context)
@@ -82,6 +84,14 @@ func (s *Service) SetRuntime(ctx context.Context, opts SetRuntimeOptions) (*Stat
 		}
 		pool := *next
 		createdPool = &pool
+	} else if ensureSharedPool {
+		conf, err := s.ensureSharedPHPPool(ctx, next.PHPVersion, id)
+		if err != nil {
+			return nil, fmt.Errorf("ensuring shared php-fpm pool: %w", err)
+		}
+		if conf != nil {
+			next.PHPSocketPath = conf.SocketPath
+		}
 	}
 
 	// Projects set up before Abstrax stored SSL metadata keep their HTTPS

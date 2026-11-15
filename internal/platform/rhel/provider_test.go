@@ -96,3 +96,43 @@ func TestPHPPackageNamesAllSupportedVersions(t *testing.T) {
 		}
 	}
 }
+
+func TestStockPHPOnEL10(t *testing.T) {
+	p := rhel.NewProvider(rhel.ProviderOptions{StockPHPVersion: rhel.StockPHPVersion})
+
+	if p.RequiresExternalRepoForPHP("8.3") {
+		t.Fatal("AppStream PHP 8.3 should not require Remi")
+	}
+	if !p.RequiresExternalRepoForPHP("8.5") {
+		t.Fatal("Remi PHP 8.5 should still require Remi")
+	}
+	if err := p.ValidatePHPVersion("8.3"); err != nil {
+		t.Fatal(err)
+	}
+	if p.PHPFPMServiceName("8.3") != "php-fpm" {
+		t.Fatalf("stock service = %q", p.PHPFPMServiceName("8.3"))
+	}
+	if p.PHPCLIBinary("8.3") != "php" {
+		t.Fatalf("stock cli = %q", p.PHPCLIBinary("8.3"))
+	}
+	if p.PHPFPMPoolDir("8.3") != "/etc/php-fpm.d" {
+		t.Fatalf("stock pool dir = %q", p.PHPFPMPoolDir("8.3"))
+	}
+	if p.PHPFPMDefaultSocket("8.3") != "/run/php-fpm/www.sock" {
+		t.Fatalf("stock socket = %q", p.PHPFPMDefaultSocket("8.3"))
+	}
+	pkgs := p.PHPPackageNames("8.3", []string{"mysql", "pcntl", "xml"})
+	want := []string{"php-fpm", "php-cli", "php-mysqlnd", "php-xml"}
+	if len(pkgs) != len(want) {
+		t.Fatalf("got %v, want %v", pkgs, want)
+	}
+	for i := range want {
+		if pkgs[i] != want[i] {
+			t.Fatalf("package %d = %q, want %q", i, pkgs[i], want[i])
+		}
+	}
+	// Remi paths still used for non-stock versions.
+	if p.PHPFPMServiceName("8.5") != "php85-php-fpm" {
+		t.Fatalf("remi service = %q", p.PHPFPMServiceName("8.5"))
+	}
+}

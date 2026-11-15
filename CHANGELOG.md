@@ -5,10 +5,24 @@ All notable changes to Abstrax are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **`web ip show|set|clear`** - Configure what the bare server IP returns when no project holds `default_server`. `web ip set --return 404|403|444` writes an Abstrax-managed nginx block (`abstrax-ip.conf`) with `return <code>` on port 80 and `ssl_reject_handshake on` on 443. When a domainless `--nginx` project owns the IP, that block drops `default_server` and takes it back when the project gains a domain or is removed. `web ip clear` removes the block. Registered as `web.ip.show`, `web.ip.set`, and `web.ip.clear`.
+
+- **`cache install valkey`** - Installs AppStream Valkey (Redis-compatible) with the same status and config handling as Redis. On Rocky/Alma 10+, `cache install redis` without `--enable-required-repos` falls back to Valkey and says so; pass `--enable-required-repos` to install Redis from Remi.
+
+### Changed
+
+- **`project add` defaults to no vhost** - Creating a project no longer writes an nginx vhost unless `--nginx` is passed. `--nginx` defaults to false. `--nginx` with `--domains` writes a named vhost. `--nginx` without domains claims `listen … default_server` so the project answers on the server IP when no other project already does; a second domainless `--nginx` project is still created, and the output explains it will not answer on the IP. `project modify --add-domain` on the IP default project drops `default_server`. `--ssl` requires `--nginx`. `--nginx` and `--no-vhost` together are an error. Callers that need a vhost must pass `--nginx` (including the ServerAuth console project-add payload).
+
+- **PHP 8.3 on EL10** - AlmaLinux/Rocky/RHEL 10 install PHP 8.3 from AppStream (`php-fpm`) without Remi. Other PHP versions still use Remi SCL and still need `--enable-required-repos`.
 
 ### Fixed
 
 - **`firewall allow-ip --port`** - `--port` is the destination port. `allow-ip 10.1.2.3 --port 3306 --protocol tcp` runs `ufw allow from 10.1.2.3 to any port 3306 proto tcp`, so that address can reach 3306 and is not allowed in on every port. `--to` still sets the destination address. firewalld already opens the destination port with a rich rule.
+
+- **RHEL shared PHP projects 502** - Shared-web-user PHP projects on Rocky/Alma/RHEL no longer use Remi's default `www` pool (which only allows `apache` to connect while nginx runs as `nginx`). Abstrax creates a per-PHP-version `abstrax-web` pool running as the shared web user and points the vhost at that socket. Remi's `www.conf` is left alone, and `project remove` keeps the shared pool for other projects. Debian/Ubuntu behaviour is unchanged.
+
 
 ## [3.4.0] - 2026-11-13
 
