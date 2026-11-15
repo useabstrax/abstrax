@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`mysql install` bind address** - Install writes Abstrax's bind-address drop-in to `127.0.0.1` before the first start, so RHEL-family MariaDB is local-only until `mysql remote enable`. `mysql remote disable` rewrites that drop-in to `127.0.0.1` instead of removing it, which would listen on every interface again.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
