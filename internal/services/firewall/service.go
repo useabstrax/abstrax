@@ -177,6 +177,16 @@ func (s *Service) ufwStatus(ctx context.Context) (*Status, error) {
 	status := &Status{Backend: "ufw"}
 	status.Active = strings.Contains(res.Stdout, "Status: active")
 	status.Rules = parseUFWRules(res.Stdout)
+	// `ufw status numbered` prints no rules while UFW is off. The rules are
+	// still stored; `ufw show added` lists them, and their IDs match the
+	// rules `status numbered` will show once UFW is enabled.
+	if !status.Active && len(status.Rules) == 0 && strings.Contains(res.Stdout, "Status: inactive") {
+		added, err := s.runner.RunSilent(ctx, "ufw", "show", "added")
+		if err != nil {
+			return nil, fmt.Errorf("ufw show added: %w", err)
+		}
+		status.Rules = parseUFWAdded(added.Stdout)
+	}
 	return status, nil
 }
 

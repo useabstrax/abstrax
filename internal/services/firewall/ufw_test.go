@@ -298,3 +298,74 @@ func TestDenyIPComment(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestParseUFWAddedMatchesNumberedIDs(t *testing.T) {
+	numbered := "" +
+		"[ 1] 22/tcp ALLOW IN Anywhere\n" +
+		"[ 2] 3306/tcp ALLOW IN 10.1.2.3 # mysql\n" +
+		"[ 3] 80 ALLOW IN Anywhere\n"
+	added := "" +
+		"Added user rules (see 'ufw status' for running firewall):\n" +
+		"ufw allow 22/tcp\n" +
+		"ufw allow from 10.1.2.3 to any port 3306 proto tcp comment 'mysql'\n" +
+		"ufw allow 80\n"
+	got := parseUFWAdded(added)
+	want := parseUFWRules(numbered)
+	if len(got) != len(want) {
+		t.Fatalf("len %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if !got[i].Pending {
+			t.Fatalf("rule %d not pending", i)
+		}
+		if got[i].ID != want[i].ID {
+			t.Fatalf("rule %d id %s, want %s (got %#v want %#v)", i, got[i].ID, want[i].ID, got[i], want[i])
+		}
+		if got[i].Comment != "" && i == 1 && got[i].Comment != "mysql" {
+			t.Fatalf("comment %q", got[i].Comment)
+		}
+	}
+}
+
+func TestUFWInactiveRuleListAndRemove(t *testing.T) {
+	added := "Added user rules (see 'ufw status' for running firewall):\n" +
+		"ufw allow 22/tcp\n" +
+		"ufw allow from 10.1.2.3 to any port 3306 proto tcp\n"
+	runner := executil.New(true, false)
+	runner.SetCommandFunc(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
+		if name != "ufw" || len(args) == 0 {
+			return executil.Result{}, false, nil
+		}
+		if args[0] == "status" {
+			return executil.Result{Stdout: "Status: inactive\n"}, true, nil
+		}
+		if args[0] == "show" && len(args) > 1 && args[1] == "added" {
+			return executil.Result{Stdout: added}, true, nil
+		}
+		return executil.Result{}, false, nil
+	})
+	svc := &Service{runner: runner, backend: "ufw", sshPort: func() (int, error) { return 22, nil }}
+	rules, err := svc.RuleList(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 2 || !rules[0].Pending || !rules[1].Pending {
+		t.Fatalf("rules = %#v", rules)
+	}
+	if rules[1].Port != "3306" || rules[1].From != "10.1.2.3" || rules[1].Protocol != "tcp" {
+		t.Fatalf("mysql rule = %#v", rules[1])
+	}
+	if _, err := svc.RuleRemove(context.Background(), rules[1].ID, GuardOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	var deleteCmd string
+	for _, cmd := range runner.Commands() {
+		if len(cmd) > 2 && cmd[1] == "--force" && cmd[2] == "delete" {
+			deleteCmd = strings.Join(cmd, " ")
+		}
+	}
+	want := "ufw --force delete allow from 10.1.2.3 to any port 3306 proto tcp"
+	if deleteCmd != want {
+		t.Fatalf("got %q", deleteCmd)
+	}
+}
