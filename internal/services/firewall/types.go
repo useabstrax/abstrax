@@ -16,7 +16,10 @@ const (
 // current list position. Number can change when other rules are inserted or
 // deleted.
 type Rule struct {
-	ID        string `json:"id"`
+	ID string `json:"id"`
+	// Group is shared by the IPv4 and IPv6 copies of one UFW rule.
+	// firewall rule remove accepts a group as well as an id.
+	Group     string `json:"group,omitempty"`
 	Number    string `json:"number,omitempty"`
 	Action    string `json:"action"`
 	Direction string `json:"direction,omitempty"`

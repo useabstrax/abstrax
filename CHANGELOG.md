@@ -82,6 +82,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Firewall rules while UFW is inactive** - `firewall rule list` and `firewall status` read stored rules from `ufw show added` when UFW is off, instead of returning no rules. Each rule is marked `pending` because it is not applied yet. The rule ID matches the ID `ufw status numbered` will use once UFW is enabled, so `firewall rule remove <id>` works while UFW is inactive.
 
+### Added
+
+- **`firewall deny --comment`** - `firewall deny <port> --comment` stores a comment the same way `firewall allow` does. On UFW the comment is passed to `ufw`. Example: `firewall deny 6379 --comment redis`.
+
+### Changed
+
+- **Firewall rule groups** - On UFW, the IPv4 and IPv6 copies of one rule share a `group` value in `firewall rule list`. `firewall rule remove` accepts that group, or either copy's id, and deletes both copies with one `ufw delete`. Removing by rule number still removes only that position.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
