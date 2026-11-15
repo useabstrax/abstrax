@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -56,6 +57,44 @@ func TestMySQLHost(t *testing.T) {
 	for _, host := range bad {
 		if err := validate.MySQLHost(host); err == nil {
 			t.Fatalf("expected error for %q", host)
+		}
+	}
+}
+
+func TestGrantLocalhostTouchesTwin(t *testing.T) {
+	for _, host := range []string{"localhost", "127.0.0.1", ""} {
+		svc := &Service{
+			captureSQL: true,
+			queryFn: func(_ context.Context, sql string) (string, error) {
+				if strings.Contains(sql, "SELECT Host FROM mysql.user") {
+					return "Host\n127.0.0.1\nlocalhost\n", nil
+				}
+				return "", fmt.Errorf("unexpected query %s", sql)
+			},
+		}
+		if err := svc.Grant(context.Background(), "app", "shop", host, "SELECT"); err != nil {
+			t.Fatalf("host %q: %v", host, err)
+		}
+		want := []string{
+			"GRANT SELECT ON `shop`.* TO 'app'@'localhost'",
+			"GRANT SELECT ON `shop`.* TO 'app'@'127.0.0.1'",
+			"FLUSH PRIVILEGES",
+		}
+		if strings.Join(svc.sqlLog, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("host %q sql =\n%s", host, strings.Join(svc.sqlLog, "\n"))
+		}
+
+		svc.sqlLog = nil
+		if err := svc.Revoke(context.Background(), "app", "shop", host); err != nil {
+			t.Fatalf("revoke host %q: %v", host, err)
+		}
+		want = []string{
+			"REVOKE ALL PRIVILEGES ON `shop`.* FROM 'app'@'localhost'",
+			"REVOKE ALL PRIVILEGES ON `shop`.* FROM 'app'@'127.0.0.1'",
+			"FLUSH PRIVILEGES",
+		}
+		if strings.Join(svc.sqlLog, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("revoke host %q sql =\n%s", host, strings.Join(svc.sqlLog, "\n"))
 		}
 	}
 }

@@ -79,7 +79,7 @@ func newRuntimeFixture(t *testing.T) *runtimeFixture {
 		case name == "nginx":
 			f.events = append(f.events, "nginx-reload")
 			return executil.Result{}, true, nil
-		case strings.HasPrefix(name, "php-fpm"):
+		case strings.Contains(name, "php-fpm"):
 			return executil.Result{}, true, nil
 		default:
 			f.t.Fatalf("unexpected command: %s", joined)
@@ -384,15 +384,31 @@ func TestSetRuntimeSharedModeLeavesPoolsAlone(t *testing.T) {
 		t.Fatalf("ruby->php: %v", err)
 	}
 	st = f.stored("demo")
-	if st.Runtime != RuntimePHP || st.PHPVersion != DefaultPHPVersion || st.RubyVersion != "" || st.PHPPoolName != "" || st.PHPSocketPath != "" {
+	if st.Runtime != RuntimePHP || st.PHPVersion != DefaultPHPVersion || st.RubyVersion != "" || st.PHPPoolName != "" {
 		t.Fatalf("state wrong: %#v", st)
 	}
-	if strings.Contains(strings.Join(f.events, ","), "fpm-reload") {
-		t.Fatalf("shared mode must not touch pools, events=%v", f.events)
-	}
-	want := platformProvider.PHPFPMDefaultSocket(DefaultPHPVersion)
-	if !strings.Contains(f.vhost(), "fastcgi_pass unix:"+want+";") {
-		t.Fatalf("shared vhost should use default socket %s:\n%s", want, f.vhost())
+	if needsManagedSharedPHPPool() {
+		wantSock := sharedPHPPoolPaths(DefaultPHPVersion).SocketPath
+		if st.PHPSocketPath != wantSock {
+			t.Fatalf("shared RHEL socket = %q, want %q", st.PHPSocketPath, wantSock)
+		}
+		if !strings.Contains(strings.Join(f.events, ","), "fpm-reload") {
+			t.Fatalf("shared RHEL mode should ensure pool, events=%v", f.events)
+		}
+		if !strings.Contains(f.vhost(), "fastcgi_pass unix:"+wantSock+";") {
+			t.Fatalf("shared vhost should use managed socket %s:\n%s", wantSock, f.vhost())
+		}
+	} else {
+		if st.PHPSocketPath != "" {
+			t.Fatalf("debian shared mode should leave socket unset, got %#v", st)
+		}
+		if strings.Contains(strings.Join(f.events, ","), "fpm-reload") {
+			t.Fatalf("shared mode must not touch pools, events=%v", f.events)
+		}
+		want := platformProvider.PHPFPMDefaultSocket(DefaultPHPVersion)
+		if !strings.Contains(f.vhost(), "fastcgi_pass unix:"+want+";") {
+			t.Fatalf("shared vhost should use default socket %s:\n%s", want, f.vhost())
+		}
 	}
 }
 

@@ -62,18 +62,22 @@ func parseUFWRuleLine(line string) (Rule, bool) {
 	fromField, fromV6 := stripUFWMarker(fromField, "(v6)")
 
 	to, port, proto := parseUFWTo(toField)
-	from := parseUFWFrom(fromField)
+	from, sourcePort, sourceProto := parseUFWFrom(fromField)
+	if proto == "" {
+		proto = sourceProto
+	}
 
 	rule := Rule{
-		Number:    m[1],
-		Action:    action,
-		Direction: direction,
-		Port:      port,
-		Protocol:  proto,
-		From:      from,
-		To:        to,
-		Comment:   comment,
-		IPv6:      toV6 || fromV6,
+		Number:     m[1],
+		Action:     action,
+		Direction:  direction,
+		Port:       port,
+		Protocol:   proto,
+		SourcePort: sourcePort,
+		From:       from,
+		To:         to,
+		Comment:    comment,
+		IPv6:       toV6 || fromV6,
 	}
 	rule.ID = ufwStableID(rule)
 	rule.Group = ufwGroupID(rule)
@@ -129,12 +133,21 @@ func parseUFWTo(field string) (addr, port, proto string) {
 	return "", field, ""
 }
 
-func parseUFWFrom(field string) string {
+// parseUFWFrom splits the From column. UFW prints a source port in that
+// column as "<addr> <port>/<proto>", for example "10.1.2.3 3306/tcp".
+func parseUFWFrom(field string) (addr, sourcePort, proto string) {
 	field = strings.TrimSpace(field)
 	if field == "" || strings.EqualFold(field, "anywhere") {
-		return ""
+		return "", "", ""
 	}
-	return field
+	parts := strings.Fields(field)
+	if len(parts) >= 2 {
+		last := parts[len(parts)-1]
+		if p, pr, ok := splitUFWPort(last); ok {
+			return strings.Join(parts[:len(parts)-1], " "), p, pr
+		}
+	}
+	return field, "", ""
 }
 
 func splitUFWPort(spec string) (port, proto string, ok bool) {
@@ -164,12 +177,24 @@ func ufwStableID(r Rule) string {
 	if dir == "" {
 		dir = "in"
 	}
+	// A source port used to be stored inside From ("10.1.2.3 3306/tcp") with
+	// an empty protocol. Keep that hash input so existing rule IDs still match.
+	from := r.From
+	proto := r.Protocol
+	if r.SourcePort != "" {
+		spec := r.SourcePort
+		if proto != "" && !strings.Contains(spec, "/") {
+			spec += "/" + strings.ToLower(proto)
+		}
+		from = strings.TrimSpace(from + " " + spec)
+		proto = ""
+	}
 	spec := strings.Join([]string{
 		strings.ToLower(r.Action),
 		dir,
 		r.Port,
-		strings.ToLower(r.Protocol),
-		strings.ToLower(r.From),
+		strings.ToLower(proto),
+		strings.ToLower(from),
 		strings.ToLower(r.To),
 		ipver,
 	}, "|")
@@ -219,6 +244,25 @@ func ufwDeleteArgs(r Rule) []string {
 		args = append(args, dir)
 	}
 
+	if r.SourcePort != "" {
+		if r.From != "" {
+			args = append(args, "from", r.From)
+		} else {
+			args = append(args, "from", "any")
+		}
+		args = append(args, "port", r.SourcePort)
+		if r.Protocol != "" {
+			args = append(args, "proto", r.Protocol)
+		}
+		if r.To != "" {
+			args = append(args, "to", r.To)
+		}
+		if r.Port != "" {
+			args = append(args, "port", r.Port)
+		}
+		return args
+	}
+
 	if r.From != "" || r.To != "" {
 		if r.From != "" {
 			args = append(args, "from", r.From)
@@ -264,7 +308,7 @@ func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOption
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
-		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", matches[0].Number)
+		_, err = s.run(ctx, "ufw", "--force", "delete", matches[0].Number)
 		return check, err
 	}
 	// One UFW delete removes the IPv4 rule and its IPv6 copy. Deleting the
@@ -276,7 +320,7 @@ func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOption
 			break
 		}
 	}
-	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(primary)...)
+	_, err = s.run(ctx, "ufw", ufwDeleteArgs(primary)...)
 	return check, err
 }
 
@@ -327,4 +371,207 @@ func withoutRuleIDs(rules, drop []Rule) []Rule {
 		}
 	}
 	return out
+}
+
+// parseUFWAdded reads `ufw show added`. Each rule is marked pending because
+// UFW is not applying it yet. IDs use the same hash as `ufw status numbered`.
+func parseUFWAdded(output string) []Rule {
+	var rules []Rule
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "ufw ") {
+			continue
+		}
+		rule, ok := parseUFWAddedLine(line)
+		if !ok {
+			continue
+		}
+		rule.Pending = true
+		rule.ID = ufwStableID(rule)
+		rule.Group = ufwGroupID(rule)
+		rules = append(rules, rule)
+	}
+	return rules
+}
+
+func parseUFWAddedLine(line string) (Rule, bool) {
+	tokens := tokenizeUFW(strings.TrimSpace(strings.TrimPrefix(line, "ufw")))
+	i := 0
+	for i < len(tokens) {
+		switch strings.ToLower(tokens[i]) {
+		case "route", "prepend", "--force", "--dry-run":
+			i++
+		case "insert":
+			i++
+			if i < len(tokens) {
+				i++
+			}
+		default:
+			goto action
+		}
+	}
+action:
+	if i >= len(tokens) {
+		return Rule{}, false
+	}
+	action := strings.ToLower(tokens[i])
+	switch action {
+	case "allow", "deny", "reject", "limit":
+		i++
+	default:
+		return Rule{}, false
+	}
+
+	rule := Rule{Action: strings.ToUpper(action), Direction: "in"}
+	if i < len(tokens) {
+		switch strings.ToLower(tokens[i]) {
+		case "in", "out", "fwd":
+			rule.Direction = strings.ToLower(tokens[i])
+			i++
+		}
+	}
+	if i < len(tokens) && (tokens[i] == "log" || tokens[i] == "log-all") {
+		i++
+	}
+	if i < len(tokens) && strings.EqualFold(tokens[i], "on") {
+		i++
+		if i < len(tokens) {
+			i++
+		}
+	}
+
+	keywords := map[string]bool{
+		"from": true, "to": true, "port": true, "proto": true, "comment": true,
+	}
+	if i < len(tokens) && !keywords[strings.ToLower(tokens[i])] {
+		spec := tokens[i]
+		i++
+		if p, pr, ok := splitUFWPort(spec); ok {
+			rule.Port, rule.Protocol = p, pr
+		} else {
+			// Application profile. status numbered stores the name in Port.
+			rule.Port = spec
+		}
+	}
+
+	sawTo := false
+	sawSourcePort := false
+	for i < len(tokens) {
+		switch strings.ToLower(tokens[i]) {
+		case "from":
+			i++
+			if i < len(tokens) {
+				if !strings.EqualFold(tokens[i], "any") {
+					rule.From = tokens[i]
+				}
+				i++
+			}
+		case "to":
+			sawTo = true
+			i++
+			if i < len(tokens) {
+				if !strings.EqualFold(tokens[i], "any") {
+					rule.To = tokens[i]
+				}
+				i++
+			}
+		case "port":
+			i++
+			if i < len(tokens) {
+				spec := tokens[i]
+				i++
+				if p, pr, ok := splitUFWPort(spec); ok {
+					rule.Port = p
+					if pr != "" {
+						rule.Protocol = pr
+					}
+				} else {
+					rule.Port = spec
+				}
+				if !sawTo && rule.From != "" {
+					sawSourcePort = true
+				}
+			}
+		case "proto":
+			i++
+			if i < len(tokens) {
+				rule.Protocol = strings.ToLower(tokens[i])
+				i++
+			}
+		case "comment":
+			i++
+			if i < len(tokens) {
+				rule.Comment = strings.Join(tokens[i:], " ")
+			}
+			i = len(tokens)
+		default:
+			i++
+		}
+	}
+
+	// `from <addr> port <port>` is a source port. status numbered keeps that
+	// in the From column (`10.1.2.3 3306/tcp`) and leaves Port empty.
+	if sawSourcePort {
+		spec := rule.Port
+		if rule.Protocol != "" && spec != "" && !strings.Contains(spec, "/") {
+			spec += "/" + rule.Protocol
+		}
+		if spec != "" {
+			rule.From = strings.TrimSpace(rule.From + " " + spec)
+		}
+		rule.Port = ""
+		rule.Protocol = ""
+	}
+	if ufwAddrIsIPv6(rule.From) || ufwAddrIsIPv6(rule.To) {
+		rule.IPv6 = true
+	}
+	return rule, true
+}
+
+func tokenizeUFW(s string) []string {
+	var tokens []string
+	var b strings.Builder
+	var quote rune
+	flush := func() {
+		if b.Len() == 0 {
+			return
+		}
+		tokens = append(tokens, b.String())
+		b.Reset()
+	}
+	for _, r := range s {
+		switch {
+		case quote != 0:
+			if r == quote {
+				tokens = append(tokens, b.String())
+				b.Reset()
+				quote = 0
+				continue
+			}
+			b.WriteRune(r)
+		case r == '\'' || r == '"':
+			flush()
+			quote = r
+		case r == ' ' || r == '\t':
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return tokens
+}
+
+func ufwAddrIsIPv6(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return false
+	}
+	// A source-port From column is "<addr> <port>/<proto>".
+	addr = strings.Fields(addr)[0]
+	if ip := net.ParseIP(addr); ip != nil {
+		return ip.To4() == nil
+	}
+	ip, _, err := net.ParseCIDR(addr)
+	return err == nil && ip.To4() == nil
 }

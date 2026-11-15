@@ -49,8 +49,8 @@ func (s *Service) UserPassword(ctx context.Context, opts UserPasswordOptions) (*
 }
 
 // resolveAccountHosts returns the accounts a password change or drop should touch.
-// An empty host means every host the user exists on. localhost means the local
-// app pair (localhost and 127.0.0.1). Any other host is that account only.
+// An empty host means every host the user exists on. localhost and 127.0.0.1 mean
+// the local app pair. Any other host is that account only.
 // If the user does not exist on any matching host, no statement is run.
 func (s *Service) resolveAccountHosts(ctx context.Context, name, host string) ([]string, error) {
 	if host != "" {

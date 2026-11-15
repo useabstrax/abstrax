@@ -301,7 +301,7 @@ func TestDisableRemoteRefusesMismatchedDropIn(t *testing.T) {
 	}
 }
 
-func TestDisableRemoteRemovesMatchingDropIn(t *testing.T) {
+func TestDisableRemoteRewritesToLocalBind(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, remoteDropInName)
 	if err := os.WriteFile(path, []byte(remoteDropInContents("0.0.0.0", platform.DatabaseMariaDB)), 0644); err != nil {
@@ -324,8 +324,44 @@ func TestDisableRemoteRemovesMatchingDropIn(t *testing.T) {
 	if st.Enabled || st.BindAddress != "127.0.0.1" {
 		t.Fatalf("status = %+v", st)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("drop-in still present: %v", err)
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	if string(got) != want {
+		t.Fatalf("drop-in =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestEnsureLocalBindConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := remoteTestService(dir, nil, nil)
+	if err := svc.ensureLocalBindConfig(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, remoteDropInName)
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	if string(got) != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// Existing file is left alone.
+	if err := os.WriteFile(path, []byte("custom"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ensureLocalBindConfig(); err != nil {
+		t.Fatal(err)
+	}
+	got, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "custom" {
+		t.Fatalf("existing file overwritten: %q", got)
 	}
 }
 
