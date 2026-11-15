@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **SELinux plugin binaries** - On SELinux-enabled hosts, plugin install and update copy the binary into place (instead of renaming from `/tmp`), add a persistent `bin_t` fcontext for the plugin directory, and run `restorecon`. That stops systemd services from failing with `203/EXEC` because the binary kept the `tmp_t` label.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

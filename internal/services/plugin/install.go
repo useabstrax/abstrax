@@ -242,6 +242,9 @@ func (s *Service) installFromPath(ctx context.Context, opts InstallOptions) (*In
 	if err := atomicSymlink(sourcePath, destPath); err != nil {
 		return nil, err
 	}
+	if err := s.ensurePluginSELinuxLabels(destPath); err != nil {
+		return nil, err
+	}
 
 	now := time.Now().UTC()
 	rec := &InstallRecord{
@@ -319,6 +322,9 @@ func (s *Service) installBinary(ctx context.Context, opts installBinaryOpts) (*I
 		return nil, fmt.Errorf("creating plugin directory: %w", err)
 	}
 	if err := atomicInstall(binaryPath, destPath); err != nil {
+		return nil, err
+	}
+	if err := s.ensurePluginSELinuxLabels(destPath); err != nil {
 		return nil, err
 	}
 
@@ -630,8 +636,12 @@ func atomicInstall(src, dest string) error {
 		return err
 	}
 
-	if err := os.Rename(src, dest); err == nil {
-		return nil
+	// On SELinux hosts, prefer a copy into the destination directory so the
+	// binary does not keep the tmp_t label from /tmp across a rename.
+	if !preferCopyInstall() {
+		if err := os.Rename(src, dest); err == nil {
+			return nil
+		}
 	}
 
 	destDir := filepath.Dir(dest)
@@ -660,6 +670,7 @@ func atomicInstall(src, dest string) error {
 		os.Remove(tmpDest)
 		return fmt.Errorf("installing plugin to %s: %w", dest, err)
 	}
+	_ = os.Remove(src)
 	return nil
 }
 
