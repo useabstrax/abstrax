@@ -42,6 +42,7 @@ type Service struct {
 	readyFn     func(ctx context.Context) error
 	serverUpFn  func(ctx context.Context) (bool, error)
 	remoteDirFn func() (string, error)
+	memTotalFn  func() (int, error)
 }
 
 // New creates a Service.
@@ -103,6 +104,13 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return dryRunPasswordResult(), nil
 	}
 
+	// Write the small-server drop-in before the package starts mysqld. A host
+	// with 1 GiB of memory or less otherwise OOM-loops on the default buffer pool.
+	smallServer, err := s.ensureSmallServerConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	mgr, _, err := pkgmanager.NewFromPlatform(false, false)
 	if err != nil {
 		return nil, err
@@ -123,6 +131,12 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return nil, fmt.Errorf("installing %s: %w", provider.DatabaseDisplayName(), err)
 	}
 
+	// Pin bind-address to loopback before the first start. RHEL MariaDB otherwise
+	// listens on 0.0.0.0 until mysql remote enable.
+	if err := s.ensureLocalBindConfig(); err != nil {
+		return nil, fmt.Errorf("configuring local-only bind-address: %w", err)
+	}
+
 	serviceName := provider.DatabaseServiceName()
 	if detected, err := s.detectServiceName(ctx); err == nil {
 		serviceName = detected
@@ -132,6 +146,11 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 	}
 	if err := svcMgr.Start(ctx, serviceName); err != nil {
 		return nil, err
+	}
+	if smallServer {
+		if err := svcMgr.Restart(ctx, serviceName); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.waitForReady(ctx, 120*time.Second); err != nil {
@@ -303,7 +322,7 @@ func localAppHosts() []string {
 }
 
 func usesLocalAppHosts(host string) bool {
-	return host == "" || host == "localhost"
+	return host == "" || host == "localhost" || host == "127.0.0.1"
 }
 
 // UserAdd creates a MySQL user.
@@ -549,7 +568,9 @@ func (s *Service) Revoke(ctx context.Context, user, database, host string) error
 }
 
 func (s *Service) grantTargetHosts(ctx context.Context, user, host string) ([]string, error) {
-	if host != "" {
+	// Empty host, localhost, and 127.0.0.1 all mean the local app pair, matching
+	// user add / user password. Any other explicit host is that account only.
+	if host != "" && !usesLocalAppHosts(host) {
 		return []string{host}, nil
 	}
 

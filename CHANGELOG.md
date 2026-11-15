@@ -5,6 +5,90 @@ All notable changes to Abstrax are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+
+- **`web ip show|set|clear`** - Configure what the bare server IP returns when no project holds `default_server`. `web ip set --return 404|403|444` writes an Abstrax-managed nginx block (`abstrax-ip.conf`) with `return <code>` on port 80 and `ssl_reject_handshake on` on 443. When a domainless `--nginx` project owns the IP, that block drops `default_server` and takes it back when the project gains a domain or is removed. `web ip clear` removes the block. Registered as `web.ip.show`, `web.ip.set`, and `web.ip.clear`.
+
+- **`cache install valkey`** - Installs AppStream Valkey (Redis-compatible) with the same status and config handling as Redis. On Rocky/Alma 10+, `cache install redis` without `--enable-required-repos` falls back to Valkey and says so; pass `--enable-required-repos` to install Redis from Remi.
+
+### Changed
+
+- **`project add` defaults to no vhost** - Creating a project no longer writes an nginx vhost unless `--nginx` is passed. `--nginx` defaults to false. `--nginx` with `--domains` writes a named vhost. `--nginx` without domains claims `listen … default_server` so the project answers on the server IP when no other project already does; a second domainless `--nginx` project is still created, and the output explains it will not answer on the IP. `project modify --add-domain` on the IP default project drops `default_server`. `--ssl` requires `--nginx`. `--nginx` and `--no-vhost` together are an error. Callers that need a vhost must pass `--nginx` (including the ServerAuth console project-add payload).
+
+- **PHP 8.3 on EL10** - AlmaLinux/Rocky/RHEL 10 install PHP 8.3 from AppStream (`php-fpm`) without Remi. Other PHP versions still use Remi SCL and still need `--enable-required-repos`.
+
+### Fixed
+
+- **`firewall allow-ip --port`** - `--port` is the destination port. `allow-ip 10.1.2.3 --port 3306 --protocol tcp` runs `ufw allow from 10.1.2.3 to any port 3306 proto tcp`, so that address can reach 3306 and is not allowed in on every port. `--to` still sets the destination address. firewalld already opens the destination port with a rich rule.
+
+- **RHEL shared PHP projects 502** - Shared-web-user PHP projects on Rocky/Alma/RHEL no longer use Remi's default `www` pool (which only allows `apache` to connect while nginx runs as `nginx`). Abstrax creates a per-PHP-version `abstrax-web` pool running as the shared web user and points the vhost at that socket. Remi's `www.conf` is left alone, and `project remove` keeps the shared pool for other projects. Debian/Ubuntu behaviour is unchanged.
+
+
+### Fixed
+
+- **`firewall allow` and `firewall deny` with `--from` and `--protocol`** - UFW's extended syntax no longer gets `port 3306/tcp`, which it rejects. With `--from`, the command is `ufw allow|deny from <ip> to any port <port> proto <protocol>`. The short form without `--from` still uses `<port>/<protocol>`.
+
+### Fixed
+
+- **Firewall command errors** - When `ufw` or `firewall-cmd` refuses a command, the error includes that program's message (`ufw: ERROR: Bad port`) instead of only `exit status 1`. Stderr is used when it has text; otherwise stdout is used.
+
+### Fixed
+
+- **Firewall rules with a source port** - `firewall rule list` splits a UFW From column such as `10.1.2.3 3306/tcp` into the address, `source_port`, and protocol. `firewall rule remove` deletes that rule with `ufw delete allow from <addr> port <port> proto <protocol>` instead of passing the whole column as the address. Existing rule IDs are unchanged.
+
+### Fixed
+
+- **`mysql install` on small servers** - Hosts with 1 GiB of memory or less get an Abstrax drop-in that sets `innodb_buffer_pool_size=64M`, turns off `performance_schema`, and lowers `max_connections` before the package starts mysqld. That stops the OOM restart loop that left root login broken on 1 GB machines.
+- **`mysql status` auth** - When the server is running, status includes `auth`: `ok` if Abstrax can log in with the saved root password, and `failed` if that password is missing or rejected.
+
+### Fixed
+
+- **`mysql grant` / `mysql revoke` local hosts** - `--host localhost` and `--host 127.0.0.1` now update both local accounts, the same way `mysql user add` and `mysql user password` do. Leaving `--host` out still targets the local pair.
+
+### Added
+
+- **`plugin update --path`** - Local plugins installed with `--path` can be updated in place. `plugin update <name> --path <binary>` re-points the install symlink at the new binary and refreshes metadata. Without `--path`, update reuses the recorded source path when that file still exists.
+
+### Fixed
+
+- **`user list` system accounts** - System vs regular users follow `UID_MIN` and `UID_MAX` from `/etc/login.defs` (defaults 1000 and 60000). UIDs outside that range, such as `nobody` (65534), are system accounts. Root stays outside the system filter, matching `user info`.
+- **`user list` locked** - Each listed user includes `locked` (and `expired` / `login_blocked`) from `passwd -S` and shadow expiry, the same fields as `user info`.
+
+### Fixed
+
+- **SELinux plugin binaries** - On SELinux-enabled hosts, plugin install and update copy the binary into place (instead of renaming from `/tmp`), add a persistent `bin_t` fcontext for the plugin directory, and run `restorecon`. That stops systemd services from failing with `203/EXEC` because the binary kept the `tmp_t` label.
+
+### Fixed
+
+- **`daemon install` on Rocky/Alma** - Enables EPEL before installing Supervisor (honouring `--enable-required-repos` on RHEL/Oracle), the same way `ssl install` does, so `supervisor` can be found on a fresh AlmaLinux or Rocky host.
+
+### Fixed
+
+- **`mysql install` bind address** - Install writes Abstrax's bind-address drop-in to `127.0.0.1` before the first start, so RHEL-family MariaDB is local-only until `mysql remote enable`. `mysql remote disable` rewrites that drop-in to `127.0.0.1` instead of removing it, which would listen on every interface again.
+
+### Fixed
+
+- **`ssh config enable-root-login --keys-only`** - Treats OpenSSH's `without-password` (from `sshd -T`) as the same as `prohibit-password`, so the post-change check no longer reports a false failure. `ssh config show` reports `prohibit-password` consistently.
+
+### Fixed
+
+- **`server reboot-required`** - When `needs-restarting` is missing on RHEL-family systems, `required` is `null` (not `false`) with a note, and the summary says the check could not run.
+
+### Fixed
+
+- **EPEL on EL10** - When enabling EPEL on AlmaLinux/Rocky/RHEL 10.x, Abstrax pins the EPEL metalink to the OS minor version (for example `epel-10.2` on AlmaLinux 10.2). That stops `ssl install` from pulling EPEL packages built for a newer minor that need AppStream libraries the host does not have.
+
+### Fixed
+
+- **Firewall rules while UFW is inactive** - `firewall rule list` and `firewall status` read stored rules from `ufw show added` when UFW is off, instead of returning no rules. Each rule is marked `pending` because it is not applied yet. The rule ID matches the ID `ufw status numbered` will use once UFW is enabled, so `firewall rule remove <id>` works while UFW is inactive.
+
+### Added
+
+- **`firewall deny --comment`** - `firewall deny <port> --comment` stores a comment the same way `firewall allow` does. On UFW the comment is passed to `ufw`. Example: `firewall deny 6379 --comment redis`.
+
+### Changed
+
+- **Firewall rule groups** - On UFW, the IPv4 and IPv6 copies of one rule share a `group` value in `firewall rule list`. `firewall rule remove` accepts that group, or either copy's id, and deletes both copies with one `ufw delete`. Removing by rule number still removes only that position.
 
 ### Fixed
 

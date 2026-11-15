@@ -72,6 +72,9 @@ const localBindAddress = "127.0.0.1"
 // Removing the file on RHEL MariaDB would listen on every interface again.
 // When MariaDB has no bind-address set (empty / all interfaces) and no Abstrax
 // drop-in yet, disable still writes the local-only drop-in.
+// If the running bind address was not set by Abstrax's drop-in, nothing is changed
+// (except the empty-bind MariaDB case above). If the service does not come back,
+// the previous drop-in is restored.
 func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) (*RemoteStatus, error) {
 	path, err := s.remoteDropInPath()
 	if err != nil {
@@ -150,6 +153,23 @@ func (s *Service) DisableRemote(ctx context.Context, opts RemoteDisableOptions) 
 		ManagedFile: path,
 		Port:        s.mysqlPort(),
 	}, nil
+}
+
+// ensureLocalBindConfig writes Abstrax's bind-address drop-in to 127.0.0.1 when
+// no Abstrax drop-in exists yet. Used during install so RHEL MariaDB does not
+// listen on every interface before mysql remote enable.
+func (s *Service) ensureLocalBindConfig() error {
+	path, err := s.remoteDropInPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	body := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	return writeRemoteDropIn(path, body)
 }
 
 // RemoteStatus reports the bind address the running server is using.

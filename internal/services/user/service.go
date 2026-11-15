@@ -383,6 +383,8 @@ func (s *Service) Info(ctx context.Context, username string) (*UserInfo, error) 
 		}
 	}
 
+	uids := loadUIDRange()
+
 	// Get home and shell from getent.
 	if ent, err := s.runner.RunSilent(ctx, "getent", "passwd", username); err == nil {
 		parts := strings.Split(ent.Stdout, ":")
@@ -393,7 +395,7 @@ func (s *Service) Info(ctx context.Context, username string) (*UserInfo, error) 
 			info.Comment = parts[4]
 			info.Home = parts[5]
 			info.Shell = parts[6]
-			info.IsSystem = uid < 1000 && uid != 0
+			info.IsSystem = isSystemUID(uid, uids)
 		}
 	}
 
@@ -410,6 +412,7 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]UserInfo, error
 	}
 
 	logins := s.loadLastLogins(ctx)
+	uids := loadUIDRange()
 
 	var users []UserInfo
 	for _, line := range strings.Split(res.Stdout, "\n") {
@@ -418,7 +421,7 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]UserInfo, error
 			continue
 		}
 		uid, _ := strconv.Atoi(parts[2])
-		isSystem := uid < 1000
+		isSystem := isSystemUID(uid, uids)
 
 		if opts.Regular && isSystem {
 			continue
