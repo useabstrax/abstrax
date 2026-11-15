@@ -249,13 +249,22 @@ func (s *Service) Add(ctx context.Context, opts AddOptions) (*State, error) {
 	}
 	s.applyLogPaths(state)
 
+	labelledNote, labelErr := applyProjectSELinuxLabels(state.Path)
+	if labelErr != nil {
+		fmt.Printf("Security note: SELinux labelling failed: %v\n", labelErr)
+	}
+
 	if opts.Progress == nil {
-		for _, warning := range CheckSecurityWarnings(state.Path) {
+		for _, warning := range CheckSecurityWarnings(state.Path, labelledNote) {
 			fmt.Println(formatWarnings([]SecurityWarning{warning}))
 		}
-		if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "project paths, nginx config, or PHP-FPM settings"); note != "" {
-			fmt.Println("Security note: " + note)
+		if labelledNote == "" {
+			if note := platform.SELinuxWarning(s.provider.Profile().SELinuxStatus, "project paths, nginx config, or PHP-FPM settings"); note != "" {
+				fmt.Println("Security note: " + note)
+			}
 		}
+	} else if labelledNote != "" {
+		report("selinux", labelledNote)
 	}
 
 	report("complete", "Project created successfully")
@@ -294,6 +303,8 @@ func (s *Service) Remove(ctx context.Context, opts RemoveOptions) error {
 			return err
 		}
 	}
+
+	_ = removeProjectSELinuxLabels(state.Path)
 
 	if err := s.deleteState(opts.Name); err != nil {
 		return err

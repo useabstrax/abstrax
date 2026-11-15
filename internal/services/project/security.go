@@ -14,15 +14,21 @@ type SecurityWarning struct {
 }
 
 // CheckSecurityWarnings returns actionable warnings for SELinux/AppArmor when relevant.
-func CheckSecurityWarnings(projectPath string) []SecurityWarning {
+// When SELinux labels were applied successfully, pass labelledNote so the message
+// describes what Abstrax did instead of only warning.
+func CheckSecurityWarnings(projectPath string, labelledNote string) []SecurityWarning {
 	var warnings []SecurityWarning
-	if selinuxEnforcing() {
-		msg := "SELinux is enforcing"
-		if strings.HasPrefix(projectPath, "/home/") {
-			msg += " and the project is under /home"
+	if selinuxEnforcing() || (labelledNote == "" && selinuxEnabledFn()) {
+		if labelledNote != "" {
+			warnings = append(warnings, SecurityWarning{Message: labelledNote})
+		} else if selinuxEnforcing() {
+			msg := "SELinux is enforcing"
+			if strings.HasPrefix(projectPath, "/home/") {
+				msg += " and the project is under /home"
+			}
+			msg += "; file context labelling failed or was skipped. Abstrax will not disable SELinux automatically"
+			warnings = append(warnings, SecurityWarning{Message: msg})
 		}
-		msg += "; you may need to adjust file contexts (for example semanage fcontext and restorecon) if nginx or PHP-FPM cannot access the site. Abstrax will not disable SELinux automatically"
-		warnings = append(warnings, SecurityWarning{Message: msg})
 	}
 	if appArmorEnabled() {
 		warnings = append(warnings, SecurityWarning{

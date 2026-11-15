@@ -100,6 +100,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`cache status` installed and version** - Each driver reports `installed` and `version` (null when unknown), matching `mysql status`. The table also shows port and bind when they can be read from the config file.
 - **`cache config`** - Shows the effective settings for redis or memcached (`path`, `port`, `bind`, and for Redis `maxmemory`, `maxmemory_policy`, and whether `requirepass` is set). Flags `--port`, `--bind`, `--memory`, `--maxmemory-policy`, `--requirepass`, and `--clear-requirepass` update those settings and restart the service.
 
+### Fixed
+
+- **SELinux project paths** - On SELinux-enabled hosts, `project add` and `project modify --path` set persistent `httpd_sys_content_t` on the project directory (and `httpd_sys_rw_content_t` on `storage`, `bootstrap/cache`, and `wp-content/uploads`), then run `restorecon`. `project remove` deletes those fcontext rules. Home-directory projects no longer return 403 until contexts are fixed by hand.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
