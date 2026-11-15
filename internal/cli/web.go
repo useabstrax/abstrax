@@ -86,8 +86,85 @@ func NewWebCmd() *cobra.Command {
 	reloadCmd.Flags().StringVar(&backend, "nginx", "nginx", "Use nginx")
 	restartCmd.Flags().StringVar(&backend, "nginx", "nginx", "Use nginx")
 
-	cmd.AddCommand(newWebInstallCmd(), testCmd, reloadCmd, restartCmd)
+	cmd.AddCommand(newWebInstallCmd(), newWebIPCmd(), testCmd, reloadCmd, restartCmd)
 	return cmd
+}
+
+func newWebIPCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ip",
+		Short: "Configure what the server IP returns when no project is the default site",
+	}
+	cmd.AddCommand(newWebIPShowCmd(), newWebIPSetCmd(), newWebIPClearCmd())
+	return cmd
+}
+
+func newWebIPShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show",
+		Short: "Show the configured response for the server IP",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc := web.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			status, err := svc.ShowIP(cmd.Context())
+			if err != nil {
+				return err
+			}
+			p := printer()
+			r := output.Success(actions.WebIPShow, status.Note, status)
+			if machineOutput() {
+				emitResult(r)
+				return nil
+			}
+			p.Line("%s", status.Note)
+			if status.Configured {
+				p.Line("  Return:  %d", status.Return)
+				p.Line("  Active:  %v", status.Active)
+				p.Line("  Path:    %s", status.Path)
+			}
+			return nil
+		},
+	}
+}
+
+func newWebIPSetCmd() *cobra.Command {
+	var code int
+	cmd := &cobra.Command{
+		Use:   "set",
+		Short: "Set the response for requests to the server IP",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			if !cmd.Flags().Changed("return") {
+				return fmt.Errorf("--return is required (404, 403, or 444)")
+			}
+			svc := web.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.SetIP(cmd.Context(), code); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.WebIPSet,
+				fmt.Sprintf("Server IP response set to %d.", code), map[string]int{"return": code})
+		},
+	}
+	cmd.Flags().IntVar(&code, "return", 0, "HTTP status to return (404, 403, or 444)")
+	return cmd
+}
+
+func newWebIPClearCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clear",
+		Short: "Remove the managed server IP response",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRootAndSupported(); err != nil {
+				return err
+			}
+			svc := web.New(globals.Flags.DryRun, globals.Flags.Verbose)
+			if err := svc.ClearIP(cmd.Context()); err != nil {
+				return err
+			}
+			return printSimpleResult(actions.WebIPClear, "Server IP response cleared.", nil)
+		},
+	}
 }
 
 func newWebInstallCmd() *cobra.Command {

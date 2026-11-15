@@ -107,13 +107,10 @@ func validatePublicDir(projectPath, publicDir string) error {
 }
 
 // modifyDomains applies domains, add-domain, and remove-domain in that order.
-// Emptying the list is refused when the project has a vhost, because nginx
-// would then be written with server_name _ and answer for every host.
+// Emptying the list on a vhost is allowed when the project can take
+// default_server (or already holds it); Modify enforces that after this runs.
 func modifyDomains(state *State, opts ModifyOptions) error {
-	touched := false
-
 	if opts.Changed["domains"] {
-		touched = true
 		domains := make([]string, 0, len(opts.Domains))
 		for _, d := range opts.Domains {
 			d = strings.TrimSpace(d)
@@ -131,7 +128,6 @@ func modifyDomains(state *State, opts ModifyOptions) error {
 	}
 
 	if opts.Changed["add-domain"] {
-		touched = true
 		d := strings.TrimSpace(opts.AddDomain)
 		if err := validate.Domain(d); err != nil {
 			return err
@@ -142,7 +138,6 @@ func modifyDomains(state *State, opts ModifyOptions) error {
 	}
 
 	if opts.Changed["remove-domain"] {
-		touched = true
 		d := strings.TrimSpace(opts.RemoveDomain)
 		if d == "" {
 			return fmt.Errorf("domain cannot be empty")
@@ -152,9 +147,6 @@ func modifyDomains(state *State, opts ModifyOptions) error {
 		})
 	}
 
-	if touched && len(state.Domains) == 0 && state.VhostPath != "" {
-		return fmt.Errorf("cannot remove every domain from project %q: its nginx vhost would use server_name _ and answer for all hosts; set at least one domain, or remove the vhost first", state.Name)
-	}
 	return nil
 }
 
@@ -219,5 +211,5 @@ func vhostConfigEqual(a, b vhostConfig) bool {
 		a.PublicDir == b.PublicDir && a.WebRoot == b.WebRoot &&
 		a.ProxyPort == b.ProxyPort && a.NodePort == b.NodePort &&
 		a.PHPSocket == b.PHPSocket && a.LogDir == b.LogDir &&
-		a.SharedLogs == b.SharedLogs
+		a.SharedLogs == b.SharedLogs && a.DefaultServer == b.DefaultServer
 }

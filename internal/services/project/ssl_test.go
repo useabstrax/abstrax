@@ -25,8 +25,10 @@ func TestBuildNginxConfigWithSSLRedirect(t *testing.T) {
 	}
 	for _, want := range []string{
 		"listen 80;",
+		"listen [::]:80;",
 		"return 301 https://$host$request_uri;",
 		"listen 443 ssl;",
+		"listen [::]:443 ssl;",
 		"ssl_certificate /etc/letsencrypt/live/abstrax-example/fullchain.pem;",
 		"ssl_certificate_key /etc/letsencrypt/live/abstrax-example/privkey.pem;",
 		"ssl_protocols TLSv1.2 TLSv1.3;",
