@@ -42,6 +42,7 @@ type Service struct {
 	readyFn     func(ctx context.Context) error
 	serverUpFn  func(ctx context.Context) (bool, error)
 	remoteDirFn func() (string, error)
+	memTotalFn  func() (int, error)
 }
 
 // New creates a Service.
@@ -103,6 +104,13 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 		return dryRunPasswordResult(), nil
 	}
 
+	// Write the small-server drop-in before the package starts mysqld. A host
+	// with 1 GiB of memory or less otherwise OOM-loops on the default buffer pool.
+	smallServer, err := s.ensureSmallServerConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	mgr, _, err := pkgmanager.NewFromPlatform(false, false)
 	if err != nil {
 		return nil, err
@@ -132,6 +140,11 @@ func (s *Service) Install(ctx context.Context, opts InstallOptions) (*RootPasswo
 	}
 	if err := svcMgr.Start(ctx, serviceName); err != nil {
 		return nil, err
+	}
+	if smallServer {
+		if err := svcMgr.Restart(ctx, serviceName); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.waitForReady(ctx, 120*time.Second); err != nil {
