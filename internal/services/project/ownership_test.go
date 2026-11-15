@@ -381,6 +381,9 @@ func TestBuildNginxConfigSharedDefaultSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	socket := platformProvider.PHPFPMDefaultSocket("8.5")
+	if needsManagedSharedPHPPool() {
+		socket = sharedPHPPoolPaths("8.5").SocketPath
+	}
 	if !strings.Contains(conf, "fastcgi_pass unix:"+socket+";") {
 		t.Fatalf("config = %s", conf)
 	}

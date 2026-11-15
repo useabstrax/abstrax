@@ -291,6 +291,7 @@ func newFirewallDenyCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp)")
 	cmd.Flags().StringVar(&opts.From, "from", "", "Deny only from this IP or CIDR")
+	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "Deny the port even if it would block SSH")
 	return cmd
 }
@@ -327,7 +328,7 @@ func newFirewallAllowIPCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.To, "to", "", "Destination IP")
-	cmd.Flags().StringVar(&opts.Port, "port", "", "Specific port")
+	cmd.Flags().StringVar(&opts.Port, "port", "", "Destination port")
 	cmd.Flags().StringVar(&opts.Protocol, "protocol", "", "Protocol (tcp|udp). Default is both when a port is set")
 	cmd.Flags().StringVar(&opts.Comment, "comment", "", "Rule comment")
 
@@ -390,9 +391,13 @@ func newFirewallRuleListCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"ID", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "TO"})
+			t := output.NewTable([]string{"ID", "GROUP", "NUM", "PORT", "PROTOCOL", "ACTION", "DIR", "FROM", "SRC", "TO"})
 			for _, r := range rules {
-				t.Append([]string{r.ID, r.Number, r.Port, r.Protocol, r.Action, strings.ToUpper(r.Direction), r.From, r.To})
+				action := r.Action
+				if r.Pending {
+					action += " (not applied)"
+				}
+				t.Append([]string{r.ID, r.Group, r.Number, r.Port, r.Protocol, action, strings.ToUpper(r.Direction), r.From, r.SourcePort, r.To})
 			}
 			t.Render()
 			return nil
@@ -404,12 +409,14 @@ func newFirewallRuleRemoveCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "remove <id>",
-		Short: "Remove a firewall rule by list ID",
-		Long: `Remove a firewall rule by the ID shown in "abstrax firewall rule list".
+		Short: "Remove a firewall rule by list ID or group",
+		Long: `Remove a firewall rule by the ID or group shown in "abstrax firewall rule list".
 
-On UFW, id is a stable hash of the rule. number is the current position in
-"ufw status numbered" and can change when other rules are added or removed.
-A numeric id still works, with a warning.
+On UFW, id is a stable hash of one rule and group is shared by its IPv4 and
+IPv6 copies. Removing either id or the group deletes both copies.
+number is the current position in "ufw status numbered" and can change when
+other rules are added or removed. A numeric id still removes only that position,
+with a warning.
 
 On firewalld, IDs are Abstrax-assigned entries that map to a service or port.
 

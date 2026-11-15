@@ -16,18 +16,25 @@ const (
 // current list position. Number can change when other rules are inserted or
 // deleted.
 type Rule struct {
-	ID        string   `json:"id"`
-	Number    string   `json:"number,omitempty"`
-	Action    string   `json:"action"`
-	Direction string   `json:"direction,omitempty"`
-	Port      string   `json:"port,omitempty"`
-	Protocol  string   `json:"protocol,omitempty"`
-	From      string   `json:"from,omitempty"`
-	To        string   `json:"to,omitempty"`
-	Comment   string   `json:"comment,omitempty"`
-	IPv6      bool     `json:"ipv6,omitempty"`
-	Kind      RuleKind `json:"kind,omitempty"`
-	Target    string   `json:"target,omitempty"`
+	ID string `json:"id"`
+	// Group is shared by the IPv4 and IPv6 copies of one UFW rule.
+	// firewall rule remove accepts a group as well as an id.
+	Group     string `json:"group,omitempty"`
+	Number    string `json:"number,omitempty"`
+	Action    string `json:"action"`
+	Direction string `json:"direction,omitempty"`
+	Port      string `json:"port,omitempty"`
+	Protocol  string `json:"protocol,omitempty"`
+	// SourcePort is set when UFW recorded a source port (`from <addr> port <port>`).
+	SourcePort string `json:"source_port,omitempty"`
+	From       string `json:"from,omitempty"`
+	To         string `json:"to,omitempty"`
+	Comment    string `json:"comment,omitempty"`
+	IPv6       bool   `json:"ipv6,omitempty"`
+	// Pending is true when UFW is inactive and the rule is stored but not applied.
+	Pending bool     `json:"pending,omitempty"`
+	Kind    RuleKind `json:"kind,omitempty"`
+	Target  string   `json:"target,omitempty"`
 }
 
 // AllowOptions holds options for allow/deny commands.

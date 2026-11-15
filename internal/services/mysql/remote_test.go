@@ -243,26 +243,40 @@ func TestDisableRemoteDryRunWritesNothing(t *testing.T) {
 	}
 }
 
-func TestDisableRemoteRefusesForeignBind(t *testing.T) {
+func TestDisableRemoteWritesLocalWhenDistroDefault(t *testing.T) {
 	dir := t.TempDir()
+	path := filepath.Join(dir, remoteDropInName)
 	restarts := 0
+	calls := 0
 	svc := remoteTestService(dir, func(context.Context, string) error {
 		restarts++
 		return nil
 	}, func(context.Context) error { return nil })
 	svc.serverUpFn = func(context.Context) (bool, error) { return true, nil }
 	svc.queryFn = func(context.Context, string) (string, error) {
-		return "bind_address\t0.0.0.0\n", nil
+		calls++
+		if calls == 1 {
+			return "bind_address\t\n", nil // MariaDB empty = all interfaces
+		}
+		return "bind_address\t127.0.0.1\n", nil
 	}
-	_, err := svc.DisableRemote(context.Background(), RemoteDisableOptions{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !strings.Contains(err.Error(), "does not come from") || !strings.Contains(err.Error(), "was not turned off") {
+	st, err := svc.DisableRemote(context.Background(), RemoteDisableOptions{})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if restarts != 0 {
+	if st.Enabled || st.BindAddress != "127.0.0.1" {
+		t.Fatalf("status = %+v", st)
+	}
+	if restarts != 1 {
 		t.Fatalf("restarts = %d", restarts)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	if string(got) != want {
+		t.Fatalf("drop-in =\n%s\nwant\n%s", got, want)
 	}
 }
 
@@ -301,7 +315,7 @@ func TestDisableRemoteRefusesMismatchedDropIn(t *testing.T) {
 	}
 }
 
-func TestDisableRemoteRemovesMatchingDropIn(t *testing.T) {
+func TestDisableRemoteRewritesToLocalBind(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, remoteDropInName)
 	if err := os.WriteFile(path, []byte(remoteDropInContents("0.0.0.0", platform.DatabaseMariaDB)), 0644); err != nil {
@@ -324,8 +338,57 @@ func TestDisableRemoteRemovesMatchingDropIn(t *testing.T) {
 	if st.Enabled || st.BindAddress != "127.0.0.1" {
 		t.Fatalf("status = %+v", st)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("drop-in still present: %v", err)
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	if string(got) != want {
+		t.Fatalf("drop-in =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestParseBindAddressEmptyMariaDB(t *testing.T) {
+	bind, err := parseBindAddress("Variable_name\tValue\nbind_address\t\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bind != "0.0.0.0" {
+		t.Fatalf("bind = %q", bind)
+	}
+	if !remoteAccessEnabled(bind) {
+		t.Fatal("empty/all-interfaces bind should enable remote")
+	}
+}
+
+func TestEnsureLocalBindConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := remoteTestService(dir, nil, nil)
+	if err := svc.ensureLocalBindConfig(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, remoteDropInName)
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := remoteDropInContents(localBindAddress, databaseProvider().DatabaseEngine())
+	if string(got) != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// Existing file is left alone.
+	if err := os.WriteFile(path, []byte("custom"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ensureLocalBindConfig(); err != nil {
+		t.Fatal(err)
+	}
+	got, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "custom" {
+		t.Fatalf("existing file overwritten: %q", got)
 	}
 }
 
@@ -340,6 +403,7 @@ func TestRemoteStatusBindAddress(t *testing.T) {
 		{"loopback", "bind_address\t127.0.0.1\n", false, "127.0.0.1"},
 		{"ipv6 loopback", "bind_address\t::1\n", false, "::1"},
 		{"all interfaces", "Variable_name\tValue\nbind_address\t0.0.0.0\n", true, "0.0.0.0"},
+		{"empty mariadb", "Variable_name\tValue\nbind_address\t\n", true, "0.0.0.0"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

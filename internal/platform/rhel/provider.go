@@ -13,6 +13,10 @@ var phpVersionRE = regexp.MustCompile(`^([0-9]+)\.([0-9]+)$`)
 // SupportedRemiPHPVersions lists PHP versions Abstrax installs via Remi SCL.
 var SupportedRemiPHPVersions = []string{"8.1", "8.2", "8.3", "8.4", "8.5"}
 
+// StockPHPVersion is the AppStream PHP version on Enterprise Linux 10+.
+// When set on the provider, that version installs from AppStream without Remi.
+const StockPHPVersion = "8.3"
+
 func normalizePHPVersion(version string) (string, error) {
 	v := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(version), "php"))
 	v = strings.TrimSpace(v)
@@ -110,6 +114,7 @@ type Provider struct {
 	webUser            string
 	webGroup           string
 	defaultProjectRoot string
+	stockPHPVersion    string
 	paths              Paths
 }
 
@@ -118,6 +123,9 @@ type ProviderOptions struct {
 	WebUser            string
 	WebGroup           string
 	DefaultProjectRoot string
+	// StockPHPVersion, when set (for example "8.3" on EL10), installs that
+	// version from AppStream without Remi. Other versions still use Remi SCL.
+	StockPHPVersion string
 }
 
 // NewProvider creates a RHEL-family provider.
@@ -138,6 +146,7 @@ func NewProvider(opts ProviderOptions) *Provider {
 		webUser:            webUser,
 		webGroup:           webGroup,
 		defaultProjectRoot: projectRoot,
+		stockPHPVersion:    strings.TrimSpace(opts.StockPHPVersion),
 		paths:              DefaultPaths(),
 	}
 }
@@ -148,7 +157,21 @@ func (p *Provider) WebGroup() string                  { return p.webGroup }
 func (p *Provider) DefaultProjectRoot() string        { return p.defaultProjectRoot }
 func (p *Provider) SupportsMultiplePHPVersions() bool { return true }
 
+func (p *Provider) usesStockPHP(version string) bool {
+	if p.stockPHPVersion == "" {
+		return false
+	}
+	v, err := normalizePHPVersion(version)
+	if err != nil {
+		return false
+	}
+	return v == p.stockPHPVersion
+}
+
 func (p *Provider) RequiresExternalRepoForPHP(version string) bool {
+	if p.usesStockPHP(version) {
+		return false
+	}
 	return supportsRemiPHPVersion(version)
 }
 
@@ -156,6 +179,9 @@ func (p *Provider) ValidatePHPVersion(version string) error {
 	v, err := normalizePHPVersion(version)
 	if err != nil {
 		return err
+	}
+	if p.usesStockPHP(v) {
+		return nil
 	}
 	if !supportsRemiPHPVersion(v) {
 		return fmt.Errorf("PHP %s is not supported on RHEL-family systems via Remi; supported versions: %s",
@@ -165,6 +191,9 @@ func (p *Provider) ValidatePHPVersion(version string) error {
 }
 
 func (p *Provider) PHPFPMServiceName(version string) string {
+	if p.usesStockPHP(version) {
+		return "php-fpm"
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return "php-fpm"
@@ -173,6 +202,9 @@ func (p *Provider) PHPFPMServiceName(version string) string {
 }
 
 func (p *Provider) PHPFPMBinary(version string) string {
+	if p.usesStockPHP(version) {
+		return "php-fpm"
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return "php-fpm"
@@ -181,6 +213,9 @@ func (p *Provider) PHPFPMBinary(version string) string {
 }
 
 func (p *Provider) PHPCLIBinary(version string) string {
+	if p.usesStockPHP(version) {
+		return "php"
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return "php"
@@ -189,6 +224,9 @@ func (p *Provider) PHPCLIBinary(version string) string {
 }
 
 func (p *Provider) PHPFPMPoolDir(version string) string {
+	if p.usesStockPHP(version) {
+		return p.paths.PHPFPMPoolDir
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return p.paths.PHPFPMPoolDir
@@ -201,6 +239,9 @@ func (p *Provider) PHPFPMDefaultPoolConfig(version string) string {
 }
 
 func (p *Provider) PHPFPMDefaultSocket(version string) string {
+	if p.usesStockPHP(version) {
+		return filepath.Join(p.paths.PHPSocketDir, "www.sock")
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return filepath.Join(p.paths.PHPSocketDir, "www.sock")
@@ -209,6 +250,9 @@ func (p *Provider) PHPFPMDefaultSocket(version string) string {
 }
 
 func (p *Provider) PHPFPMProjectSocket(version, poolSuffix string) string {
+	if p.usesStockPHP(version) {
+		return filepath.Join(p.paths.PHPSocketDir, poolSuffix+".sock")
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return filepath.Join(p.paths.PHPSocketDir, poolSuffix+".sock")
@@ -217,6 +261,9 @@ func (p *Provider) PHPFPMProjectSocket(version, poolSuffix string) string {
 }
 
 func (p *Provider) PHPPackageNames(version string, extensions []string) []string {
+	if p.usesStockPHP(version) {
+		return stockPHPPackageNames(extensions)
+	}
 	mod, err := remiModule(version)
 	if err != nil {
 		return nil
@@ -237,6 +284,24 @@ func (p *Provider) PHPPackageNames(version string, extensions []string) []string
 			name = "pdo"
 		}
 		pkgs = append(pkgs, mod+"-php-"+name)
+	}
+	return pkgs
+}
+
+func stockPHPPackageNames(extensions []string) []string {
+	pkgs := []string{"php-fpm", "php-cli"}
+	for _, ext := range extensions {
+		if PHPBundledWithCLI[ext] {
+			continue
+		}
+		name := ext
+		switch ext {
+		case "mysql":
+			name = "mysqlnd"
+		case "sqlite3":
+			name = "pdo"
+		}
+		pkgs = append(pkgs, "php-"+name)
 	}
 	return pkgs
 }

@@ -125,40 +125,65 @@ func TestModifyDomainsWithBlankEntriesClears(t *testing.T) {
 	}
 }
 
-func TestModifyClearDomainsRefusedWithVhost(t *testing.T) {
+func TestModifyClearDomainsClaimsDefaultServer(t *testing.T) {
 	f := newModifyFixture(t, State{
 		Domains: []string{"example.com"},
 		Runtime: RuntimeStatic,
 	}, true)
 
-	_, err := f.svc.Modify(context.Background(), ModifyOptions{
+	got, err := f.svc.Modify(context.Background(), ModifyOptions{
 		Name:    "example",
 		Changed: map[string]bool{"domains": true},
 	})
-	if err == nil || !strings.Contains(err.Error(), "server_name _") {
-		t.Fatalf("err = %v", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(f.stored(t), "example.com") {
-		t.Fatalf("domains were cleared:\n%s", f.stored(t))
+	if len(got.Domains) != 0 || !got.DefaultServer {
+		t.Fatalf("got %#v", got)
 	}
-	if f.vhost(t) != staleVhost {
-		t.Fatalf("vhost was rewritten:\n%s", f.vhost(t))
+	if !strings.Contains(f.vhost(t), "default_server") {
+		t.Fatalf("vhost missing default_server:\n%s", f.vhost(t))
 	}
 }
 
-func TestModifyRemoveLastDomainRefusedWithVhost(t *testing.T) {
+func TestModifyRemoveLastDomainClaimsDefaultServer(t *testing.T) {
 	f := newModifyFixture(t, State{
 		Domains: []string{"example.com"},
 		Runtime: RuntimeStatic,
 	}, true)
 
-	_, err := f.svc.Modify(context.Background(), ModifyOptions{
+	got, err := f.svc.Modify(context.Background(), ModifyOptions{
 		Name:         "example",
 		RemoveDomain: "example.com",
 		Changed:      map[string]bool{"remove-domain": true},
 	})
-	if err == nil || !strings.Contains(err.Error(), "server_name _") {
-		t.Fatalf("err = %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Domains) != 0 || !got.DefaultServer {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestModifyAddDomainReleasesDefaultServer(t *testing.T) {
+	f := newModifyFixture(t, State{
+		Runtime:       RuntimeStatic,
+		DefaultServer: true,
+	}, true)
+
+	got, err := f.svc.Modify(context.Background(), ModifyOptions{
+		Name:      "example",
+		AddDomain: "example.com",
+		Changed:   map[string]bool{"add-domain": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DefaultServer || len(got.Domains) != 1 {
+		t.Fatalf("got %#v", got)
+	}
+	if strings.Contains(f.vhost(t), "default_server") {
+		t.Fatalf("vhost still has default_server:\n%s", f.vhost(t))
 	}
 }
 
