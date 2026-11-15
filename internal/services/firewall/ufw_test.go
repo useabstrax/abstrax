@@ -321,3 +321,50 @@ func TestDenyIPComment(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestAddRuleFromAndProtocol(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		opts   AllowOptions
+		want   string
+	}{
+		{
+			name:   "allow from with protocol",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", From: "10.1.2.3", Protocol: "tcp"},
+			want:   "ufw allow from 10.1.2.3 to any port 3306 proto tcp",
+		},
+		{
+			name:   "deny from with protocol",
+			action: "deny",
+			opts:   AllowOptions{Port: "6381", From: "10.9.9.9", Protocol: "tcp"},
+			want:   "ufw deny from 10.9.9.9 to any port 6381 proto tcp",
+		},
+		{
+			name:   "allow from without protocol",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", From: "10.1.2.3"},
+			want:   "ufw allow from 10.1.2.3 to any port 3306",
+		},
+		{
+			name:   "short form keeps port/proto",
+			action: "allow",
+			opts:   AllowOptions{Port: "3306", Protocol: "tcp"},
+			want:   "ufw allow 3306/tcp",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			svc := &Service{runner: runner, backend: "ufw"}
+			if err := svc.addRule(context.Background(), tt.action, tt.opts); err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(runner.Commands()[0], " ")
+			if got != tt.want {
+				t.Fatalf("got %q", got)
+			}
+		})
+	}
+}

@@ -24,6 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **RHEL shared PHP projects 502** - Shared-web-user PHP projects on Rocky/Alma/RHEL no longer use Remi's default `www` pool (which only allows `apache` to connect while nginx runs as `nginx`). Abstrax creates a per-PHP-version `abstrax-web` pool running as the shared web user and points the vhost at that socket. Remi's `www.conf` is left alone, and `project remove` keeps the shared pool for other projects. Debian/Ubuntu behaviour is unchanged.
 
 
+### Fixed
+
+- **`firewall allow` and `firewall deny` with `--from` and `--protocol`** - UFW's extended syntax no longer gets `port 3306/tcp`, which it rejects. With `--from`, the command is `ufw allow|deny from <ip> to any port <port> proto <protocol>`. The short form without `--from` still uses `<port>/<protocol>`.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
