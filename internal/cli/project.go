@@ -42,7 +42,7 @@ func NewProjectCmd() *cobra.Command {
 
 func newProjectAddCmd() *cobra.Command {
 	opts := project.AddOptions{
-		WebServer:    project.WebServerNginx,
+		WebServer:    project.WebServerNone,
 		RedirectHTTP: true,
 	}
 	var domainsStr string
@@ -80,23 +80,29 @@ func newProjectAddCmd() *cobra.Command {
 				opts.Path = project.DefaultSharedBase + "/" + opts.Name
 			}
 
+			if nginxFlag && opts.NoVhost {
+				return fmt.Errorf("--nginx and --no-vhost cannot be used together")
+			}
 			if apacheFlag {
 				opts.WebServer = project.WebServerApache
 			} else if nginxFlag {
 				opts.WebServer = project.WebServerNginx
+			} else {
+				opts.WebServer = project.WebServerNone
 			}
 
 			if domainsStr != "" {
 				opts.Domains = strings.Split(domainsStr, ",")
-				for _, d := range opts.Domains {
-					if err := validate.Domain(strings.TrimSpace(d)); err != nil {
+				for i, d := range opts.Domains {
+					opts.Domains[i] = strings.TrimSpace(d)
+					if err := validate.Domain(opts.Domains[i]); err != nil {
 						return err
 					}
 				}
 			}
 
 			if opts.SSL {
-				if err := validateProjectSSLOptions(opts); err != nil {
+				if err := validateProjectSSLOptions(opts, nginxFlag); err != nil {
 					return err
 				}
 			}
@@ -148,6 +154,9 @@ func newProjectAddCmd() *cobra.Command {
 			if state.SSLEnabled {
 				p.Line("  SSL:        enabled")
 			}
+			for _, note := range project.DefaultServerMessages(state, state.DefaultServer) {
+				p.Line("  Note:       %s", note)
+			}
 			if example := project.DaemonAddExampleFor(state); example != nil {
 				p.Line("")
 				p.Line("  Nginx proxies to 127.0.0.1:%d. Start your app with a managed daemon, for example:", example.Port)
@@ -160,9 +169,9 @@ func newProjectAddCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Path, "path", "", "Project root path")
-	cmd.Flags().BoolVar(&nginxFlag, "nginx", true, "Use nginx (default)")
+	cmd.Flags().BoolVar(&nginxFlag, "nginx", false, "Create an nginx virtual host")
 	cmd.Flags().BoolVar(&apacheFlag, "apache", false, "Use Apache (not yet implemented)")
-	cmd.Flags().BoolVar(&opts.NoVhost, "no-vhost", false, "Do not create a virtual host")
+	cmd.Flags().BoolVar(&opts.NoVhost, "no-vhost", false, "Do not create a virtual host (accepted for compatibility; default is no vhost)")
 	cmd.Flags().BoolVar(&opts.SharedLogs, "shared-logs", false, "Use the server-wide nginx logs instead of per-project log files")
 	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names")
 	cmd.Flags().IntVar(&opts.Port, "port", 80, "HTTP port")
@@ -207,7 +216,10 @@ func newProjectAddCmd() *cobra.Command {
 	return cmd
 }
 
-func validateProjectSSLOptions(opts project.AddOptions) error {
+func validateProjectSSLOptions(opts project.AddOptions, nginxFlag bool) error {
+	if !nginxFlag {
+		return fmt.Errorf("--ssl requires --nginx")
+	}
 	if len(opts.Domains) == 0 {
 		return fmt.Errorf("--domains is required when using --ssl")
 	}
@@ -218,7 +230,7 @@ func validateProjectSSLOptions(opts project.AddOptions) error {
 		return fmt.Errorf("--ssl requires a virtual host; do not use --no-vhost")
 	}
 	if opts.WebServer != project.WebServerNginx {
-		return fmt.Errorf("--ssl requires nginx")
+		return fmt.Errorf("--ssl requires --nginx")
 	}
 	return nil
 }
@@ -344,7 +356,7 @@ func newProjectModifyCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.Path, "path", "", "Project root path; updates the stored path only and does not move files")
 	cmd.Flags().StringVar(&domainsStr, "domains", "", "Comma-separated domain names (empty clears them)")
-	cmd.Flags().BoolVar(&clearDomains, "clear-domains", false, "Remove every domain (refused when the project has an nginx vhost)")
+	cmd.Flags().BoolVar(&clearDomains, "clear-domains", false, "Remove every domain (domainless vhosts answer on the server IP when no other project is the default)")
 	cmd.Flags().StringVar(&opts.AddDomain, "add-domain", "", "Add a domain")
 	cmd.Flags().StringVar(&opts.RemoveDomain, "remove-domain", "", "Remove a domain")
 	cmd.Flags().StringVar(&opts.PHPVersion, "php-version", "", "PHP version (empty clears it; the active runtime falls back to the default)")

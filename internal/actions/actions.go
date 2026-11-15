@@ -98,6 +98,9 @@ const (
 	WebTest    = "web.test"
 	WebReload  = "web.reload"
 	WebRestart = "web.restart"
+	WebIPShow  = "web.ip.show"
+	WebIPSet   = "web.ip.set"
+	WebIPClear = "web.ip.clear"
 
 	// SSL actions.
 	SSLInstall = "ssl.install"

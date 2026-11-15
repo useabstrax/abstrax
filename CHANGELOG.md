@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`project add` defaults to no vhost** - Creating a project no longer writes an nginx vhost unless `--nginx` is passed. `--nginx` defaults to false. `--nginx` with `--domains` writes a named vhost. `--nginx` without domains claims `listen … default_server` so the project answers on the server IP when no other project already does; a second domainless `--nginx` project is still created, and the output explains it will not answer on the IP. `project modify --add-domain` on the IP default project drops `default_server`. `--ssl` requires `--nginx`. `--nginx` and `--no-vhost` together are an error. Callers that need a vhost must pass `--nginx` (including the ServerAuth console project-add payload).
+
+### Added
+
+- **`web ip show|set|clear`** - Configure what the bare server IP returns when no project holds `default_server`. `web ip set --return 404|403|444` writes an Abstrax-managed nginx block (`abstrax-ip.conf`) with `return <code>` on port 80 and `ssl_reject_handshake on` on 443. When a domainless `--nginx` project owns the IP, that block drops `default_server` and takes it back when the project gains a domain or is removed. `web ip clear` removes the block. Registered as `web.ip.show`, `web.ip.set`, and `web.ip.clear`.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

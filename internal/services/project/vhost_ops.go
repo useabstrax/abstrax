@@ -56,6 +56,9 @@ func (s *Service) AddVhost(ctx context.Context, opts AddVhostOptions) (*State, e
 		state.WebRoot = webRoot
 	}
 	state.WebServer = WebServerNginx
+	if _, err := s.claimDefaultServer(state); err != nil {
+		return nil, err
+	}
 
 	vhostPath, err := s.createNginxVhost(ctx, state.vhostConfig())
 	if err != nil {
@@ -68,6 +71,9 @@ func (s *Service) AddVhost(ctx context.Context, opts AddVhostOptions) (*State, e
 	if err := s.saveState(state); err != nil {
 		_ = s.deleteVhostFiles(ctx, vhostPath)
 		return nil, fmt.Errorf("saving project state: %w", err)
+	}
+	if state.DefaultServer {
+		_ = s.syncWebIPDefault(ctx, true)
 	}
 	s.applyLogPaths(state)
 	return state, nil
@@ -84,6 +90,7 @@ func (s *Service) RemoveVhost(ctx context.Context, name string) (*State, error) 
 		return nil, fmt.Errorf("project %q has no vhost", name)
 	}
 
+	released := releaseDefaultServer(state)
 	if err := s.deleteVhostFiles(ctx, state.VhostPath); err != nil {
 		return nil, fmt.Errorf("removing vhost: %w", err)
 	}
@@ -94,6 +101,9 @@ func (s *Service) RemoveVhost(ctx context.Context, name string) (*State, error) 
 	state.UpdatedAt = time.Now()
 	if err := s.saveState(state); err != nil {
 		return nil, fmt.Errorf("saving project state: %w", err)
+	}
+	if released {
+		_ = s.syncWebIPDefault(ctx, false)
 	}
 	s.applyLogPaths(state)
 	return state, nil
