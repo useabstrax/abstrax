@@ -173,6 +173,25 @@ func TestUFWDeleteArgs(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 
+	source := parseUFWRules("[ 9] Anywhere   ALLOW IN   10.1.2.3 3306/tcp   # MySQL")
+	if len(source) != 1 {
+		t.Fatal("expected a source-port rule")
+	}
+	if source[0].From != "10.1.2.3" || source[0].SourcePort != "3306" || source[0].Protocol != "tcp" || source[0].Port != "" {
+		t.Fatalf("parsed = %#v", source[0])
+	}
+	if source[0].Comment != "MySQL" {
+		t.Fatalf("comment = %q", source[0].Comment)
+	}
+	legacy := Rule{Action: "ALLOW", Direction: "in", From: "10.1.2.3 3306/tcp"}
+	if source[0].ID != ufwStableID(legacy) {
+		t.Fatalf("id %s, legacy %s", source[0].ID, ufwStableID(legacy))
+	}
+	got = strings.Join(ufwDeleteArgs(source[0]), " ")
+	if got != "--force delete allow from 10.1.2.3 port 3306 proto tcp" {
+		t.Fatalf("source port delete = %q", got)
+	}
+
 	simple := parseUFWRules("[ 1] 22/tcp ALLOW IN Anywhere")
 	got = strings.Join(ufwDeleteArgs(simple[0]), " ")
 	if got != "--force delete allow 22/tcp" {
