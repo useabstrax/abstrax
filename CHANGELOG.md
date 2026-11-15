@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`cache status` installed and version** - Each driver reports `installed` and `version` (null when unknown), matching `mysql status`. The table also shows port and bind when they can be read from the config file.
+- **`cache config`** - Shows the effective settings for redis or memcached (`path`, `port`, `bind`, and for Redis `maxmemory`, `maxmemory_policy`, and whether `requirepass` is set). Flags `--port`, `--bind`, `--memory`, `--maxmemory-policy`, `--requirepass`, and `--clear-requirepass` update those settings and restart the service.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

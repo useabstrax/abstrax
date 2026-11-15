@@ -26,31 +26,7 @@ func applyDriverConfig(provider platform.Provider, opts InstallOptions) error {
 }
 
 func applyRedisConfig(configPath string, opts InstallOptions) error {
-	if opts.Port == 0 && opts.Bind == "" && opts.Memory == "" {
-		return nil
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("reading redis config: %w", err)
-	}
-
-	lines := strings.Split(string(data), "\n")
-	if opts.Port > 0 {
-		lines = setConfigLine(lines, "port", strconv.Itoa(opts.Port))
-	}
-	if opts.Bind != "" {
-		lines = setConfigLine(lines, "bind", opts.Bind)
-	}
-	if opts.Memory != "" {
-		lines = setConfigLine(lines, "maxmemory", opts.Memory)
-	}
-
-	content := strings.Join(lines, "\n")
-	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("writing redis config: %w", err)
-	}
-	return nil
+	return applyRedisConfigSettings(configPath, opts, false)
 }
 
 func applyMemcachedConfig(configPath string, opts InstallOptions) error {
