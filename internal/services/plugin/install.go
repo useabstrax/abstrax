@@ -353,16 +353,45 @@ func (s *Service) installBinary(ctx context.Context, opts installBinaryOpts) (*I
 	}, nil
 }
 
+// UpdateOptions configures a plugin update.
+type UpdateOptions struct {
+	Name string
+	// Path is a new local binary for SourceLocal plugins. When empty, the
+	// recorded SourcePath is reused if it still exists.
+	Path string
+}
+
 // Update reinstalls a plugin using the safe replacement flow.
-func (s *Service) Update(ctx context.Context, name string) (*InstallResult, error) {
-	rec, err := s.store.Load(name)
+// Registry and manifest plugins are fetched again. Local plugins are updated
+// by re-pointing the install symlink at Path (or the recorded SourcePath).
+func (s *Service) Update(ctx context.Context, opts UpdateOptions) (*InstallResult, error) {
+	if err := validate.PluginName(opts.Name); err != nil {
+		return nil, err
+	}
+	rec, err := s.store.Load(opts.Name)
 	if err != nil {
 		return nil, err
 	}
 	if rec.Source == SourceLocal {
-		return nil, fmt.Errorf("cannot update local plugin %q; reinstall with --path", name)
+		path := strings.TrimSpace(opts.Path)
+		if path == "" {
+			path = rec.SourcePath
+		}
+		if path == "" {
+			return nil, fmt.Errorf("cannot update local plugin %q; provide --path to a new binary", opts.Name)
+		}
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("cannot update local plugin %q; path %q not found (provide --path)", opts.Name, path)
+			}
+			return nil, fmt.Errorf("cannot update local plugin %q: %w", opts.Name, err)
+		}
+		return s.installFromPath(ctx, InstallOptions{Name: opts.Name, BinaryPath: path})
 	}
-	return s.installFromRegistry(ctx, InstallOptions{Name: name})
+	if strings.TrimSpace(opts.Path) != "" {
+		return nil, fmt.Errorf("--path is only valid when updating a local plugin")
+	}
+	return s.installFromRegistry(ctx, InstallOptions{Name: opts.Name})
 }
 
 // Remove deletes a plugin binary (or local symlink) and its installation record.

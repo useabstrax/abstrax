@@ -45,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`mysql grant` / `mysql revoke` local hosts** - `--host localhost` and `--host 127.0.0.1` now update both local accounts, the same way `mysql user add` and `mysql user password` do. Leaving `--host` out still targets the local pair.
 
+### Added
+
+- **`plugin update --path`** - Local plugins installed with `--path` can be updated in place. `plugin update <name> --path <binary>` re-points the install symlink at the new binary and refreshes metadata. Without `--path`, update reuses the recorded source path when that file still exists.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
