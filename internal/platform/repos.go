@@ -133,7 +133,28 @@ func ensureEPELRepo(ctx context.Context, provider Provider, opts RepoOptions, en
 	if err := enabler.Install(ctx, "epel-release"); err != nil {
 		return fmt.Errorf("installing epel-release: %w", err)
 	}
+	if err := pinEPELToOSMinor(ctx, provider, enabler); err != nil {
+		return err
+	}
 	_ = enabler.Run(ctx, "dnf", "makecache")
+	return nil
+}
+
+// pinEPELToOSMinor points EPEL at the OS minor version on EL10.
+// EPEL 10 packages are built per minor (10.2 vs 10.3). The stock repo file
+// substitutes $releasever as "10", so Alma/Rocky 10.2 otherwise pulls
+// packages that need newer AppStream libraries from 10.3.
+func pinEPELToOSMinor(ctx context.Context, provider Provider, enabler RepoEnabler) error {
+	maj, min, ok := parseVersionID(provider.Profile().VersionID)
+	if !ok || maj != 10 {
+		return nil
+	}
+	releasever := fmt.Sprintf("%d.%d", maj, min)
+	metalink := fmt.Sprintf("https://mirrors.fedoraproject.org/metalink?repo=epel-%s&arch=$basearch", releasever)
+	fmt.Printf("Pinning EPEL to OS minor version %s...\n", releasever)
+	if err := enabler.Run(ctx, "dnf", "config-manager", "--save", "--setopt=epel.metalink="+metalink); err != nil {
+		return fmt.Errorf("pinning EPEL metalink to %s: %w", releasever, err)
+	}
 	return nil
 }
 

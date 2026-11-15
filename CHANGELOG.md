@@ -74,6 +74,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`server reboot-required`** - When `needs-restarting` is missing on RHEL-family systems, `required` is `null` (not `false`) with a note, and the summary says the check could not run.
 
+### Fixed
+
+- **EPEL on EL10** - When enabling EPEL on AlmaLinux/Rocky/RHEL 10.x, Abstrax pins the EPEL metalink to the OS minor version (for example `epel-10.2` on AlmaLinux 10.2). That stops `ssl install` from pulling EPEL packages built for a newer minor that need AppStream libraries the host does not have.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
