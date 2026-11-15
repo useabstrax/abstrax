@@ -76,7 +76,16 @@ func parseUFWRuleLine(line string) (Rule, bool) {
 		IPv6:      toV6 || fromV6,
 	}
 	rule.ID = ufwStableID(rule)
+	rule.Group = ufwGroupID(rule)
 	return rule, true
+}
+
+// ufwGroupID is shared by the IPv4 and IPv6 copies of one rule. It is not the
+// same value as either copy's ID.
+func ufwGroupID(r Rule) string {
+	r.IPv6 = false
+	sum := sha256.Sum256([]byte("group|" + ufwStableID(r)))
+	return hex.EncodeToString(sum[:])[:8]
 }
 
 func stripUFWMarker(field, marker string) (string, bool) {
@@ -245,19 +254,77 @@ func (s *Service) ufwRuleRemove(ctx context.Context, id string, opts GuardOption
 	if err != nil {
 		return nil, err
 	}
-	match, byNumber := findUFWRule(status.Rules, id)
-	if match == nil {
+	matches, byNumber := findUFWRuleSet(status.Rules, id)
+	if len(matches) == 0 {
 		return nil, fmt.Errorf("rule not found, it may already have been removed")
 	}
-	check, err := s.guardSSH(opts.Force, status.Active, withoutIndex(status.Rules, indexOfRule(status.Rules, match)))
+	check, err := s.guardSSH(opts.Force, status.Active, withoutRuleIDs(status.Rules, matches))
 	if err != nil {
 		return nil, err
 	}
 	if byNumber {
 		fmt.Fprintf(os.Stderr, "WARNING: rule numbers can change when rules are added or removed; prefer the stable id from `abstrax firewall rule list`.\n")
-		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", match.Number)
+		_, err = s.runner.Run(ctx, "ufw", "--force", "delete", matches[0].Number)
 		return check, err
 	}
-	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(*match)...)
+	// One UFW delete removes the IPv4 rule and its IPv6 copy. Deleting the
+	// copy afterwards fails because it is already gone.
+	primary := matches[0]
+	for _, match := range matches {
+		if !match.IPv6 {
+			primary = match
+			break
+		}
+	}
+	_, err = s.runner.Run(ctx, "ufw", ufwDeleteArgs(primary)...)
 	return check, err
+}
+
+// findUFWRuleSet returns every copy of a rule. An id or a group matches the
+// IPv4 rule and its IPv6 copy. A numeric id is that single position.
+func findUFWRuleSet(rules []Rule, id string) (matched []Rule, byNumber bool) {
+	for i := range rules {
+		if rules[i].ID == id || (rules[i].Group != "" && rules[i].Group == id) {
+			return rulesSharingGroup(rules, rules[i]), false
+		}
+	}
+	if !isDecimalID(id) {
+		return nil, false
+	}
+	for i := range rules {
+		if rules[i].Number == id {
+			return []Rule{rules[i]}, true
+		}
+	}
+	return nil, false
+}
+
+func rulesSharingGroup(rules []Rule, rule Rule) []Rule {
+	if rule.Group == "" {
+		return []Rule{rule}
+	}
+	var out []Rule
+	for _, candidate := range rules {
+		if candidate.Group == rule.Group {
+			out = append(out, candidate)
+		}
+	}
+	if len(out) == 0 {
+		return []Rule{rule}
+	}
+	return out
+}
+
+func withoutRuleIDs(rules, drop []Rule) []Rule {
+	gone := make(map[string]bool, len(drop))
+	for _, rule := range drop {
+		gone[rule.ID] = true
+	}
+	out := make([]Rule, 0, len(rules))
+	for _, rule := range rules {
+		if !gone[rule.ID] {
+			out = append(out, rule)
+		}
+	}
+	return out
 }

@@ -298,3 +298,60 @@ func TestDenyIPComment(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestDenyPortComment(t *testing.T) {
+	runner := executil.New(true, false)
+	svc := &Service{runner: runner, backend: "ufw"}
+	if err := svc.addRule(context.Background(), "deny", AllowOptions{Port: "6379", Comment: "redis"}); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(runner.Commands()[0], " ")
+	if got != "ufw deny 6379 comment redis" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestUFWGroupRemovesBothFamilies(t *testing.T) {
+	status := "" +
+		"[ 1] 80/tcp ALLOW IN Anywhere\n" +
+		"[ 2] 80/tcp (v6) ALLOW IN Anywhere (v6)\n" +
+		"[ 3] 22/tcp ALLOW IN Anywhere\n"
+	rules := parseUFWRules(status)
+	if len(rules) != 3 {
+		t.Fatalf("len %d", len(rules))
+	}
+	if rules[0].Group == "" || rules[0].Group != rules[1].Group {
+		t.Fatalf("group v4 %q v6 %q", rules[0].Group, rules[1].Group)
+	}
+	if rules[0].Group == rules[2].Group || rules[0].ID == rules[1].ID {
+		t.Fatalf("groups collided: %#v %#v %#v", rules[0], rules[1], rules[2])
+	}
+	if rules[0].Group == rules[0].ID {
+		t.Fatalf("group matches id %s", rules[0].ID)
+	}
+
+	for _, id := range []string{rules[0].Group, rules[0].ID, rules[1].ID} {
+		t.Run(id, func(t *testing.T) {
+			runner := executil.New(true, false)
+			runner.SetCommandFunc(func(_ context.Context, name string, args []string) (executil.Result, bool, error) {
+				if name == "ufw" && len(args) >= 1 && args[0] == "status" {
+					return executil.Result{Stdout: "Status: active\n" + status}, true, nil
+				}
+				return executil.Result{}, false, nil
+			})
+			svc := &Service{runner: runner, backend: "ufw", sshPort: func() (int, error) { return 22, nil }}
+			if _, err := svc.RuleRemove(context.Background(), id, GuardOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			var deletes []string
+			for _, cmd := range runner.Commands() {
+				if len(cmd) > 2 && cmd[1] == "--force" && cmd[2] == "delete" {
+					deletes = append(deletes, strings.Join(cmd, " "))
+				}
+			}
+			if len(deletes) != 1 || deletes[0] != "ufw --force delete allow 80/tcp" {
+				t.Fatalf("deletes = %#v", deletes)
+			}
+		})
+	}
+}
