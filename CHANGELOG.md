@@ -78,6 +78,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **EPEL on EL10** - When enabling EPEL on AlmaLinux/Rocky/RHEL 10.x, Abstrax pins the EPEL metalink to the OS minor version (for example `epel-10.2` on AlmaLinux 10.2). That stops `ssl install` from pulling EPEL packages built for a newer minor that need AppStream libraries the host does not have.
 
+### Fixed
+
+- **Firewall rules while UFW is inactive** - `firewall rule list` and `firewall status` read stored rules from `ufw show added` when UFW is off, instead of returning no rules. Each rule is marked `pending` because it is not applied yet. The rule ID matches the ID `ufw status numbered` will use once UFW is enabled, so `firewall rule remove <id>` works while UFW is inactive.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
