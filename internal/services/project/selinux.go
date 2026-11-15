@@ -61,7 +61,7 @@ func applyProjectSELinuxLabels(projectPath string) (string, error) {
 	}
 
 	patterns := []struct {
-		pattern string
+		pattern  string
 		typeName string
 	}{
 		{fcontextPattern(projectPath), selinuxContentType},
