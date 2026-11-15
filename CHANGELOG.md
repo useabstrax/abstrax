@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Firewall command errors** - When `ufw` or `firewall-cmd` refuses a command, the error includes that program's message (`ufw: ERROR: Bad port`) instead of only `exit status 1`. Stderr is used when it has text; otherwise stdout is used.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

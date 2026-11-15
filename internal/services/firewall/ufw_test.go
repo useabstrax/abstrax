@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -279,6 +280,55 @@ func TestAllowIPCommentAndProtocol(t *testing.T) {
 	want := "ufw allow from 10.0.0.12 port 3306 proto tcp comment mysql from app"
 	if got != want {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestFirewallCommandErrorIncludesOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		backend string
+		command string
+		stderr  string
+		stdout  string
+		want    string
+	}{
+		{
+			name:    "ufw stderr",
+			backend: "ufw",
+			command: "ufw",
+			stderr:  "ERROR: Bad port",
+			want:    "ufw: ERROR: Bad port",
+		},
+		{
+			name:    "ufw stdout when stderr is empty",
+			backend: "ufw",
+			command: "ufw",
+			stdout:  "ERROR: Bad source address",
+			want:    "ufw: ERROR: Bad source address",
+		},
+		{
+			name:    "firewall-cmd stderr",
+			backend: "firewalld",
+			command: "firewall-cmd",
+			stderr:  "Error: INVALID_PORT: 99999",
+			want:    "firewall-cmd: Error: INVALID_PORT: 99999",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := executil.New(true, false)
+			runner.SetCommandFunc(func(_ context.Context, name string, _ []string) (executil.Result, bool, error) {
+				if name != tt.command {
+					return executil.Result{}, false, nil
+				}
+				return executil.Result{Stdout: tt.stdout, Stderr: tt.stderr, ExitCode: 1}, true, errors.New("exit status 1")
+			})
+			svc := &Service{runner: runner, backend: tt.backend}
+			err := svc.addRule(context.Background(), "allow", AllowOptions{Port: "not-a-port"})
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("err = %v", err)
+			}
+		})
 	}
 }
 
