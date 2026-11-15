@@ -49,6 +49,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`plugin update --path`** - Local plugins installed with `--path` can be updated in place. `plugin update <name> --path <binary>` re-points the install symlink at the new binary and refreshes metadata. Without `--path`, update reuses the recorded source path when that file still exists.
 
+### Fixed
+
+- **`user list` system accounts** - System vs regular users follow `UID_MIN` and `UID_MAX` from `/etc/login.defs` (defaults 1000 and 60000). UIDs outside that range, such as `nobody` (65534), are system accounts. Root stays outside the system filter, matching `user info`.
+- **`user list` locked** - Each listed user includes `locked` (and `expired` / `login_blocked`) from `passwd -S` and shadow expiry, the same fields as `user info`.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
