@@ -90,6 +90,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Firewall rule groups** - On UFW, the IPv4 and IPv6 copies of one rule share a `group` value in `firewall rule list`. `firewall rule remove` accepts that group, or either copy's id, and deletes both copies with one `ufw delete`. Removing by rule number still removes only that position.
 
+### Fixed
+
+- **`mysql remote` on MariaDB** - An empty `bind_address` (MariaDB's unset default) is treated as listening on every interface, so `remote status` works and `remote disable` writes `127.0.0.1` instead of erroring. Disable keeps Abstrax's local-only drop-in rather than removing it.
+- **`mysql user list`** - Hides MariaDB's built-in `mysql@localhost` account along with the other system users.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added
