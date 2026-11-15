@@ -41,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`mysql install` on small servers** - Hosts with 1 GiB of memory or less get an Abstrax drop-in that sets `innodb_buffer_pool_size=64M`, turns off `performance_schema`, and lowers `max_connections` before the package starts mysqld. That stops the OOM restart loop that left root login broken on 1 GB machines.
 - **`mysql status` auth** - When the server is running, status includes `auth`: `ok` if Abstrax can log in with the saved root password, and `failed` if that password is missing or rejected.
 
+### Fixed
+
+- **`mysql grant` / `mysql revoke` local hosts** - `--host localhost` and `--host 127.0.0.1` now update both local accounts, the same way `mysql user add` and `mysql user password` do. Leaving `--host` out still targets the local pair.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

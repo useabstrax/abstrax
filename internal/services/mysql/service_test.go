@@ -67,11 +67,11 @@ func TestLocalAppHosts(t *testing.T) {
 }
 
 func TestUsesLocalAppHosts(t *testing.T) {
-	if !usesLocalAppHosts("") || !usesLocalAppHosts("localhost") {
-		t.Fatal("expected empty and localhost to use local app hosts")
+	if !usesLocalAppHosts("") || !usesLocalAppHosts("localhost") || !usesLocalAppHosts("127.0.0.1") {
+		t.Fatal("expected empty, localhost, and 127.0.0.1 to use local app hosts")
 	}
-	if usesLocalAppHosts("127.0.0.1") || usesLocalAppHosts("%") {
-		t.Fatal("expected explicit host to skip local app host pair")
+	if usesLocalAppHosts("%") || usesLocalAppHosts("10.0.4.12") {
+		t.Fatal("expected remote hosts to skip local app host pair")
 	}
 }
 
