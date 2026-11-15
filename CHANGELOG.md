@@ -95,6 +95,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`mysql remote` on MariaDB** - An empty `bind_address` (MariaDB's unset default) is treated as listening on every interface, so `remote status` works and `remote disable` writes `127.0.0.1` instead of erroring. Disable keeps Abstrax's local-only drop-in rather than removing it.
 - **`mysql user list`** - Hides MariaDB's built-in `mysql@localhost` account along with the other system users.
 
+### Added
+
+- **`cache status` installed and version** - Each driver reports `installed` and `version` (null when unknown), matching `mysql status`. The table also shows port and bind when they can be read from the config file.
+- **`cache config`** - Shows the effective settings for redis or memcached (`path`, `port`, `bind`, and for Redis `maxmemory`, `maxmemory_policy`, and whether `requirepass` is set). Flags `--port`, `--bind`, `--memory`, `--maxmemory-policy`, `--requirepass`, and `--clear-requirepass` update those settings and restart the service.
+
 ## [3.4.0] - 2026-11-13
 
 ### Added

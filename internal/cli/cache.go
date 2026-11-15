@@ -190,8 +190,16 @@ func newCacheStatusCmd() *cobra.Command {
 				return nil
 			}
 
-			t := output.NewTable([]string{"DRIVER", "RUNNING", "ENABLED"})
+			t := output.NewTable([]string{"DRIVER", "INSTALLED", "VERSION", "RUNNING", "ENABLED", "PORT", "BIND"})
 			for _, s := range statuses {
+				installed := "no"
+				if s.Installed {
+					installed = "yes"
+				}
+				version := "-"
+				if s.Version != nil {
+					version = *s.Version
+				}
 				running := "no"
 				if s.Running {
 					running = "yes"
@@ -200,7 +208,15 @@ func newCacheStatusCmd() *cobra.Command {
 				if s.Enabled {
 					enabled = "yes"
 				}
-				t.Append([]string{string(s.Driver), running, enabled})
+				port := s.Port
+				if port == "" {
+					port = "-"
+				}
+				bind := s.Bind
+				if bind == "" {
+					bind = "-"
+				}
+				t.Append([]string{string(s.Driver), installed, version, running, enabled, port, bind})
 			}
 			t.Render()
 			return nil
@@ -209,25 +225,73 @@ func newCacheStatusCmd() *cobra.Command {
 }
 
 func newCacheConfigCmd() *cobra.Command {
-	return &cobra.Command{
+	opts := cache.ConfigOptions{}
+	var clearRequirePass bool
+
+	cmd := &cobra.Command{
 		Use:   "config <driver>",
-		Short: "Show configuration for a cache driver",
+		Short: "Show or update configuration for a cache driver",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			d := cache.Driver(args[0])
-			svc := cache.New(false, globals.Flags.Verbose)
-			cfg, err := svc.Config(cmd.Context(), d)
+			opts.Driver = cache.Driver(args[0])
+			opts.DryRun = globals.Flags.DryRun
+			opts.ClearRequirePass = clearRequirePass
+			svc := cache.New(opts.DryRun, globals.Flags.Verbose)
+
+			var (
+				cfg *cache.ConfigInfo
+				err error
+			)
+			if opts.Port > 0 || opts.Bind != "" || opts.Memory != "" || opts.MaxMemoryPolicy != "" || opts.RequirePass != "" || opts.ClearRequirePass {
+				if err := requireRootAndSupported(); err != nil {
+					return err
+				}
+				cfg, err = svc.ApplyConfig(cmd.Context(), opts)
+			} else {
+				cfg, err = svc.Config(cmd.Context(), opts.Driver)
+			}
 			if err != nil {
 				return err
 			}
 
 			if machineOutput() {
-				emitResult(output.Success(actions.CacheConfig, "", map[string]string{"config": cfg}))
+				emitResult(output.Success(actions.CacheConfig, "", cfg))
 				return nil
 			}
 
-			fmt.Println(cfg)
+			fmt.Printf("Driver: %s\n", cfg.Driver)
+			fmt.Printf("Path: %s\n", cfg.Path)
+			if cfg.Port != "" {
+				fmt.Printf("Port: %s\n", cfg.Port)
+			}
+			if cfg.Bind != "" {
+				fmt.Printf("Bind: %s\n", cfg.Bind)
+			}
+			if cfg.MaxMemory != "" {
+				fmt.Printf("Max memory: %s\n", cfg.MaxMemory)
+			}
+			if cfg.MaxMemoryPolicy != "" {
+				fmt.Printf("Max memory policy: %s\n", cfg.MaxMemoryPolicy)
+			}
+			if cfg.MemoryMB != "" {
+				fmt.Printf("Memory (MB): %s\n", cfg.MemoryMB)
+			}
+			if cfg.Driver == cache.DriverRedis {
+				if cfg.RequirePassSet {
+					fmt.Println("Requirepass: set")
+				} else {
+					fmt.Println("Requirepass: unset")
+				}
+			}
 			return nil
 		},
 	}
+
+	cmd.Flags().IntVar(&opts.Port, "port", 0, "Listen port")
+	cmd.Flags().StringVar(&opts.Bind, "bind", "", "Bind address")
+	cmd.Flags().StringVar(&opts.Memory, "memory", "", "Memory limit (Redis maxmemory or Memcached -m)")
+	cmd.Flags().StringVar(&opts.MaxMemoryPolicy, "maxmemory-policy", "", "Redis maxmemory-policy")
+	cmd.Flags().StringVar(&opts.RequirePass, "requirepass", "", "Redis requirepass password")
+	cmd.Flags().BoolVar(&clearRequirePass, "clear-requirepass", false, "Remove Redis requirepass")
+	return cmd
 }

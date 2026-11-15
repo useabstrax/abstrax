@@ -171,30 +171,18 @@ func (s *Service) Status(ctx context.Context, driver Driver) ([]StatusInfo, erro
 			continue
 		}
 
-		info := StatusInfo{Driver: d}
-		if st, err := s.svc.Status(ctx, svcName); err == nil {
-			info.Running = st.Active == "active"
-			info.Enabled = strings.Contains(st.Enabled, "enabled")
+		info := StatusInfo{Driver: d, Version: nil}
+		s.fillStatus(ctx, provider, d, &info)
+		if info.Installed {
+			if st, err := s.svc.Status(ctx, svcName); err == nil {
+				info.Running = st.Active == "active"
+				info.Enabled = strings.Contains(st.Enabled, "enabled")
+			}
 		}
 		statuses = append(statuses, info)
 	}
 
 	return statuses, nil
-}
-
-// Config shows basic configuration for a cache driver.
-func (s *Service) Config(_ context.Context, driver Driver) (string, error) {
-	provider := platform.Resolve()
-	switch driver {
-	case DriverRedis:
-		return fmt.Sprintf("Redis config file: %s\nTODO: structured config management", provider.RedisConfigPath()), nil
-	case DriverValkey:
-		return fmt.Sprintf("Valkey config file: %s\nTODO: structured config management", provider.ValkeyConfigPath()), nil
-	case DriverMemcached:
-		return fmt.Sprintf("Memcached config file: %s\nTODO: structured config management", provider.MemcachedConfigPath()), nil
-	default:
-		return "", fmt.Errorf("unsupported cache driver %q", driver)
-	}
 }
 
 func driverNames(provider platform.Provider, d Driver) (pkg, service string, err error) {

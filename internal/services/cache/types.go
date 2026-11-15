@@ -32,9 +32,11 @@ type RemoveOptions struct {
 
 // StatusInfo describes a cache driver status.
 type StatusInfo struct {
-	Driver  Driver `json:"driver"`
-	Running bool   `json:"running"`
-	Enabled bool   `json:"enabled"`
-	Port    string `json:"port,omitempty"`
-	Bind    string `json:"bind,omitempty"`
+	Driver    Driver  `json:"driver"`
+	Installed bool    `json:"installed"`
+	Version   *string `json:"version"`
+	Running   bool    `json:"running"`
+	Enabled   bool    `json:"enabled"`
+	Port      string  `json:"port,omitempty"`
+	Bind      string  `json:"bind,omitempty"`
 }
